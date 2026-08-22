@@ -4,6 +4,7 @@ import type { ValidationResult, Contradiction } from '../types/validation';
 import type { Revision } from '../types/ui';
 import { validateCueSheet } from '../validator';
 export { useStandbyWorkspaceStore } from './standbyWorkspaceStore';
+export { useReviewFlowStore, type ReviewMode } from './reviewFlowStore';
 
 interface CueSheetStore {
   // Data

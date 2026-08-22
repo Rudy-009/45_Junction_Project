@@ -10,7 +10,8 @@
     "start": "node --env-file-if-exists=.env dist/index.js",
     "typecheck": "tsc --noEmit",
     "build": "tsc -p tsconfig.build.json",
-    "test": "node --import tsx --test test/**/*.test.ts"
+    "test": "node --import tsx --test test/**/*.test.ts",
+    "smoke:production-agents": "node --import tsx scripts/live-production-agents.ts"
   },
   "dependencies": {
     "@fastify/cors": "^11.3.0",
