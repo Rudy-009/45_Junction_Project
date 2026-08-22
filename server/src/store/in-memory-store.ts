@@ -1,6 +1,15 @@
 import { extractControlledFixture } from "../domain/extraction.js";
 import { DomainError } from "../domain/errors.js";
-import { assertNormalizedFactSemantics, assertStageSpecSemantics } from "../contracts/semantic.js";
+import {
+  validateProductionAgentOutput,
+  type ProductionOutputAllowlist,
+  type StoryboardEntityRule,
+} from "../domain/production-agents.js";
+import {
+  NORMALIZED_FACT_TYPES,
+  assertNormalizedFactSemantics,
+  assertStageSpecSemantics,
+} from "../contracts/semantic.js";
 import type {
   CaseRecord,
   CellPatch,
@@ -9,9 +18,15 @@ import type {
   ExtractionAdapter,
   ExtractionRunRecord,
   FactCandidate,
+  FactReviewCommand,
+  FactNormalizationRecommendationMap,
+  FactNormalizerArtifactPayload,
   InternalReviewSnapshot,
   Operation,
   Origin,
+  ProductionAgentFrozenInput,
+  ProductionAgentRole,
+  ProductionArtifact,
   ReviewRecord,
   ReviewSnapshot,
   SourceRole,
@@ -22,6 +37,7 @@ import { compileEventGraph, workspaceEvents } from "../domain/compiler.js";
 import { verifyProduction } from "../domain/verifier.js";
 import { canonicalJson, hashJson, sha256 } from "../lib/hash.js";
 import type { ExtractionProvider } from "../providers/extraction-provider.js";
+import type { ProductionAgentProvider } from "../providers/production-agent-provider.js";
 
 const ROLES: SourceRole[] = ["SCRIPT", "MASTER_CUE", "STAGE_SPEC"];
 const REQUIRED_SOURCE_ROLES: SourceRole[] = ["MASTER_CUE"];
@@ -62,10 +78,17 @@ export class InMemoryStore {
   private readonly operations = new Map<string, Operation>();
   private readonly operationCaseIds = new Map<string, string>();
   private readonly extractionRuns = new Map<string, ExtractionRunRecord>();
+  private readonly productionArtifacts = new Map<string, ProductionArtifact>();
+  private readonly productionArtifactCaseIds = new Map<string, string>();
+  private readonly productionCache = new Map<string, string>();
+  private readonly latestFactNormalizerArtifactByCase = new Map<string, string>();
   private readonly idempotency = new Map<string, IdempotencyRecord>();
   private sequence = 0;
 
-  constructor(private readonly upstageProvider: ExtractionProvider | null = null) {}
+  constructor(
+    private readonly upstageProvider: ExtractionProvider | null = null,
+    private readonly productionAgentProvider: ProductionAgentProvider | null = null,
+  ) {}
 
   private id(prefix: string): string {
     this.sequence += 1;
@@ -240,6 +263,66 @@ export class InMemoryStore {
     return structuredClone(operation);
   }
 
+  startProductionAgent(input: {
+    caseId: string;
+    role: ProductionAgentRole;
+    eventId: string | null;
+  }): Operation {
+    const record = this.getCase(input.caseId);
+    if (!this.productionAgentProvider) {
+      throw new DomainError(
+        503,
+        "UPSTAGE_NOT_CONFIGURED",
+        "Production Agent adapter is not configured.",
+      );
+    }
+    const prepared = this.productionAgentInput(record, input.role, input.eventId);
+    const inputFingerprint = hashJson(prepared.input);
+    const configFingerprint = this.productionAgentProvider.configFingerprint(input.role);
+    const cacheKey = hashJson({
+      role: input.role,
+      input_fingerprint: inputFingerprint,
+      config_fingerprint: configFingerprint,
+    });
+    const cachedOperationId = this.productionCache.get(cacheKey);
+    if (cachedOperationId) {
+      const cachedOperation = this.operations.get(cachedOperationId);
+      if (cachedOperation && cachedOperation.status !== "FAILED") {
+        return structuredClone(cachedOperation);
+      }
+      this.productionCache.delete(cacheKey);
+    }
+
+    const artifactId = this.id("artifact");
+    const createdAt = this.now();
+    const operation: Operation = {
+      operation_id: this.id("operation"),
+      kind: "RUN_PRODUCTION_AGENT",
+      status: "QUEUED",
+      result_source: null,
+      resource_ref: { type: "production_artifact", id: artifactId },
+      error: null,
+      created_at: createdAt,
+      updated_at: createdAt,
+    };
+    this.operations.set(operation.operation_id, operation);
+    this.operationCaseIds.set(operation.operation_id, record.case_id);
+    this.productionCache.set(cacheKey, operation.operation_id);
+    queueMicrotask(() =>
+      void this.executeProductionAgent({
+        record,
+        operation,
+        artifactId,
+        role: input.role,
+        frozenInput: prepared.input,
+        allowlist: prepared.allowlist,
+        inputFingerprint,
+        cacheKey,
+      }),
+    );
+    return structuredClone(operation);
+  }
+
   getOperation(operationId: string): Operation {
     const operation = this.operations.get(operationId);
     if (!operation) {
@@ -252,6 +335,95 @@ export class InMemoryStore {
     const run = this.extractionRuns.get(runId);
     if (!run) throw new DomainError(404, "RESOURCE_NOT_FOUND", "Extraction run not found.");
     return structuredClone(run);
+  }
+
+  getProductionArtifact(artifactId: string): ProductionArtifact {
+    const artifact = this.productionArtifacts.get(artifactId);
+    if (!artifact) throw new DomainError(404, "RESOURCE_NOT_FOUND", "Production artifact not found.");
+    return structuredClone(artifact);
+  }
+
+  getFactNormalizationRecommendations(caseId: string): FactNormalizationRecommendationMap {
+    const record = this.getCase(caseId);
+    const artifactId = this.latestFactNormalizerArtifactByCase.get(caseId);
+    const artifact = artifactId ? this.productionArtifacts.get(artifactId) : null;
+    if (!artifact || artifact.role !== "FACT_NORMALIZER") {
+      throw new DomainError(
+        404,
+        "RESOURCE_NOT_FOUND",
+        "Fact normalization recommendations not found.",
+      );
+    }
+    const payload = artifact.payload as FactNormalizerArtifactPayload;
+    const recommendationsByFactId = Object.fromEntries(
+      payload.recommendations.map(({ fact_id: factId, ...recommendation }) => [
+        factId,
+        structuredClone(recommendation),
+      ]),
+    );
+    let isCurrent = false;
+    try {
+      const current = this.productionAgentInput(record, "FACT_NORMALIZER", null);
+      isCurrent = hashJson(current.input) === artifact.input_fingerprint;
+    } catch (error) {
+      if (!(error instanceof DomainError) || error.code !== "GATE_MISSING_INPUT") throw error;
+    }
+    return {
+      contract_version: "standby.fact-normalization-recommendations.v1",
+      artifact_id: artifact.artifact_id,
+      authority: "NON_AUTHORITATIVE",
+      input_fingerprint: artifact.input_fingerprint,
+      is_current: isCurrent,
+      recommendations_by_fact_id: recommendationsByFactId,
+    };
+  }
+
+  approveFactNormalizationRecommendations(input: {
+    caseId: string;
+    actorId: string;
+    factIds: string[];
+  }): { items: ReviewRecord[] } {
+    const record = this.getCase(input.caseId);
+    if (input.factIds.length === 0 || new Set(input.factIds).size !== input.factIds.length) {
+      throw new DomainError(
+        422,
+        "INVALID_ARGUMENT",
+        "fact_ids must be a non-empty unique list.",
+      );
+    }
+    const recommendationMap = this.getFactNormalizationRecommendations(input.caseId);
+    if (!recommendationMap.is_current) {
+      throw new DomainError(
+        409,
+        "NORMALIZATION_RECOMMENDATIONS_STALE",
+        "Fact normalization recommendations no longer match the current fact queue.",
+      );
+    }
+    const reviews = input.factIds.map((factId) => {
+      const recommendation = recommendationMap.recommendations_by_fact_id[factId];
+      const fact = record.facts.get(factId);
+      if (!recommendation || !fact || fact.review_status !== "UNREVIEWED") {
+        throw new DomainError(
+          422,
+          "NORMALIZATION_RECOMMENDATION_MISSING",
+          "Every bulk-approved fact must have a current normalized recommendation.",
+        );
+      }
+      return {
+        fact_id: factId,
+        decision: "REVIEWED" as const,
+        source: "UPSTAGE_RECOMMENDATION" as const,
+        corrected_value: {
+          normalized_fact_type: recommendation.normalized_fact_type,
+          value: structuredClone(recommendation.value),
+        },
+      };
+    });
+    return this.reviewFacts({
+      caseId: input.caseId,
+      actorId: input.actorId,
+      reviews,
+    });
   }
 
   assertCaseOwner(caseId: string, actorId: string): void {
@@ -273,6 +445,12 @@ export class InMemoryStore {
     this.assertCaseOwner(run.case_id, actorId);
   }
 
+  assertProductionArtifactOwner(artifactId: string, actorId: string): void {
+    const caseId = this.productionArtifactCaseIds.get(artifactId);
+    if (!caseId) throw new DomainError(404, "RESOURCE_NOT_FOUND", "Production artifact not found.");
+    this.assertCaseOwner(caseId, actorId);
+  }
+
   getReviewQueue(caseId: string): { items: FactCandidate[]; next_cursor: null } {
     const record = this.getCase(caseId);
     return { items: [...record.facts.values()], next_cursor: null };
@@ -281,26 +459,37 @@ export class InMemoryStore {
   reviewFacts(input: {
     caseId: string;
     actorId: string;
-    reviews: Array<{
-      fact_id: string;
-      decision: "REVIEWED" | "REJECTED";
-      corrected_value: unknown | null;
-    }>;
+    reviews: FactReviewCommand[];
   }): { items: ReviewRecord[] } {
     const record = this.getCase(input.caseId);
-    const created: ReviewRecord[] = [];
+    if (new Set(input.reviews.map((review) => review.fact_id)).size !== input.reviews.length) {
+      throw new DomainError(422, "DUPLICATE_FACT_REVIEW", "A fact can be reviewed only once per batch.");
+    }
     for (const review of input.reviews) {
-      if (review.decision === "REVIEWED") assertNormalizedFactSemantics(review.corrected_value);
-      const fact = record.facts.get(review.fact_id);
-      if (!fact) {
+      if (review.decision === "REVIEWED") {
+        assertNormalizedFactSemantics(review.corrected_value);
+      } else if (review.corrected_value !== null || review.source !== "HUMAN_REJECTION") {
+        throw new DomainError(
+          422,
+          "FACT_REVIEW_COMMAND_INVALID",
+          "Rejected facts cannot include a corrected value or review source.",
+        );
+      }
+      if (!record.facts.has(review.fact_id)) {
         throw new DomainError(404, "RESOURCE_NOT_FOUND", `Fact ${review.fact_id} not found.`);
       }
+    }
+    const created: ReviewRecord[] = [];
+    for (const review of input.reviews) {
+      const fact = record.facts.get(review.fact_id);
+      if (!fact) throw new Error("Prevalidated fact is missing.");
       fact.review_status = review.decision;
       fact.reviewed_value = review.corrected_value;
       const reviewRecord: ReviewRecord = {
         review_id: this.id("review"),
         fact_id: fact.fact_id,
         decision: review.decision,
+        source: review.source,
         corrected_value: review.corrected_value,
         actor_id: input.actorId,
         created_at: this.now(),
@@ -309,6 +498,42 @@ export class InMemoryStore {
       created.push(reviewRecord);
     }
     return { items: created };
+  }
+
+  commitFactReviewCommands(input: {
+    caseId: string;
+    actorId: string;
+    reviews: FactReviewCommand[];
+  }): { items: ReviewRecord[] } {
+    let recommendationMap: FactNormalizationRecommendationMap | null = null;
+    for (const review of input.reviews) {
+      if (review.decision !== "REVIEWED" || review.source !== "UPSTAGE_RECOMMENDATION") {
+        continue;
+      }
+      recommendationMap ??= this.getFactNormalizationRecommendations(input.caseId);
+      if (!recommendationMap.is_current) {
+        throw new DomainError(
+          409,
+          "NORMALIZATION_RECOMMENDATIONS_STALE",
+          "Fact normalization recommendations no longer match the current fact queue.",
+        );
+      }
+      const recommendation = recommendationMap.recommendations_by_fact_id[review.fact_id];
+      const expectedValue = recommendation
+        ? {
+            normalized_fact_type: recommendation.normalized_fact_type,
+            value: recommendation.value,
+          }
+        : null;
+      if (!expectedValue || hashJson(expectedValue) !== hashJson(review.corrected_value)) {
+        throw new DomainError(
+          422,
+          "NORMALIZATION_RECOMMENDATION_MISMATCH",
+          "The reviewed value does not match the current Upstage recommendation.",
+        );
+      }
+    }
+    return this.reviewFacts(input);
   }
 
   createReviewSnapshot(caseId: string, actorId: string): ReviewSnapshot {
@@ -439,6 +664,160 @@ export class InMemoryStore {
     };
   }
 
+  private productionAgentInput(
+    record: CaseRecord,
+    role: ProductionAgentRole,
+    eventId: string | null,
+  ): { input: ProductionAgentFrozenInput; allowlist: ProductionOutputAllowlist } {
+    const emptyAllowlist = (): ProductionOutputAllowlist => ({
+      fact_ids: new Set(),
+      event_ids: new Set(),
+      finding_ids: new Set(),
+      storyboard_event_id: null,
+      storyboard_entities: new Map(),
+    });
+
+    if (role === "FACT_NORMALIZER") {
+      if (eventId !== null) {
+        throw new DomainError(422, "INVALID_ARGUMENT", "FACT_NORMALIZER does not accept event_id.");
+      }
+      const facts = [...record.facts.values()]
+        .filter((fact) => fact.review_status === "UNREVIEWED")
+        .sort((left, right) => left.fact_id.localeCompare(right.fact_id))
+        .map((fact) => ({
+          fact_id: fact.fact_id,
+          fact_type: fact.fact_type,
+          raw_value: structuredClone(fact.raw_value),
+          source_role: fact.source_role,
+          source_id: fact.source_id,
+          locator: fact.locator,
+          quote: fact.quote,
+          origin: fact.origin,
+          confidence: fact.confidence,
+        }));
+      if (facts.length === 0) {
+        throw new DomainError(
+          409,
+          "GATE_MISSING_INPUT",
+          "Unreviewed extracted facts are required for normalization.",
+        );
+      }
+      const allowlist = emptyAllowlist();
+      allowlist.fact_ids = new Set(facts.map((fact) => fact.fact_id));
+      return {
+        input: {
+          contract_version: "standby.production-agent-input.v1",
+          role,
+          case_id: record.case_id,
+          review_snapshot_id: null,
+          source_snapshot_digest: this.sourceSnapshotDigest(record),
+          cue_revision_id: record.current_revision_id,
+          verification_result_hash: null,
+          payload: {
+            facts,
+            allowed_normalized_fact_types: [...NORMALIZED_FACT_TYPES],
+            output_authority: "NON_AUTHORITATIVE",
+          },
+        },
+        allowlist,
+      };
+    }
+
+    const workspace = this.getWorkspace(record.case_id);
+    const allowlist = emptyAllowlist();
+    allowlist.event_ids = new Set(workspace.events.map((event) => event.event_id));
+    allowlist.finding_ids = new Set(workspace.findings.map((finding) => finding.finding_id));
+    const base = {
+      contract_version: "standby.production-agent-input.v1" as const,
+      role,
+      case_id: record.case_id,
+      review_snapshot_id: workspace.review_snapshot_id,
+      source_snapshot_digest: workspace.source_snapshot_digest,
+      cue_revision_id: workspace.cue_revision_id,
+      verification_result_hash: workspace.verification.result_hash,
+    };
+
+    if (role === "REHEARSAL_BRIEF") {
+      if (eventId !== null) {
+        throw new DomainError(422, "INVALID_ARGUMENT", "REHEARSAL_BRIEF does not accept event_id.");
+      }
+      return {
+        input: {
+          ...base,
+          payload: {
+            title: workspace.title,
+            events: workspace.events,
+            findings: workspace.findings,
+            output_authority: "NON_AUTHORITATIVE",
+          },
+        },
+        allowlist,
+      };
+    }
+
+    if (!eventId) {
+      throw new DomainError(400, "INVALID_ARGUMENT", "event_id is required for STORYBOARD_RECOMPOSER.");
+    }
+    const eventIndex = workspace.events.findIndex((event) => event.event_id === eventId);
+    if (eventIndex < 0) {
+      throw new DomainError(422, "EVENT_ID_INVALID", "event_id is not in the frozen workspace.");
+    }
+    const selectedEvent = workspace.events[eventIndex];
+    if (!selectedEvent) throw new Error("Selected workspace event is missing.");
+    const previousEvent = workspace.events[eventIndex - 1] ?? null;
+    const nextEvent = workspace.events[eventIndex + 1] ?? null;
+    const previousSnapshot = previousEvent?.stage_snapshot ?? {};
+    const currentSnapshot = selectedEvent.stage_snapshot;
+    const entityIds = [...new Set([
+      ...Object.keys(previousSnapshot),
+      ...Object.keys(currentSnapshot),
+    ])].sort();
+    const storyboardEntities = new Map<string, StoryboardEntityRule>();
+    for (const entityId of entityIds) {
+      const previous = previousSnapshot[entityId];
+      const current = currentSnapshot[entityId];
+      let action: StoryboardEntityRule["action"];
+      if (current?.transition) action = current.transition;
+      else if (!current && previous) action = "EXIT";
+      else if (!previous && current) action = "HOLD";
+      else if (previous?.zone !== current?.zone) action = "MOVE";
+      else action = "HOLD";
+      storyboardEntities.set(entityId, {
+        action,
+        from_zone: previous?.zone ?? current?.zone ?? null,
+        to_zone: current?.zone ?? null,
+      });
+    }
+    allowlist.storyboard_event_id = selectedEvent.event_id;
+    allowlist.storyboard_entities = storyboardEntities;
+    const contextEventIds = new Set(
+      [previousEvent?.event_id, selectedEvent.event_id, nextEvent?.event_id].filter(
+        (value): value is string => Boolean(value),
+      ),
+    );
+    const eventGraphContext = workspace.event_graph.events.filter((event) =>
+      contextEventIds.has(event.event_id),
+    );
+    allowlist.fact_ids = new Set(
+      eventGraphContext.flatMap((event) => event.source_refs.map((source) => source.fact_id)),
+    );
+    return {
+      input: {
+        ...base,
+        payload: {
+          previous_event: previousEvent,
+          selected_event: selectedEvent,
+          next_event: nextEvent,
+          event_graph_context: eventGraphContext,
+          findings: workspace.findings.filter((finding) => finding.event_id === selectedEvent.event_id),
+          deterministic_transition_allowlist: Object.fromEntries(storyboardEntities),
+          output_authority: "NON_AUTHORITATIVE",
+        },
+      },
+      allowlist,
+    };
+  }
+
   private verifyCurrent(record: CaseRecord): void {
     const snapshot = this.currentSnapshot(record);
     const revision = this.findCurrentRevision(record);
@@ -448,6 +827,67 @@ export class InMemoryStore {
       snapshot,
       revision,
     });
+  }
+
+  private async executeProductionAgent(input: {
+    record: CaseRecord;
+    operation: Operation;
+    artifactId: string;
+    role: ProductionAgentRole;
+    frozenInput: ProductionAgentFrozenInput;
+    allowlist: ProductionOutputAllowlist;
+    inputFingerprint: string;
+    cacheKey: string;
+  }): Promise<void> {
+    input.operation.status = "RUNNING";
+    input.operation.updated_at = this.now();
+    try {
+      if (!this.productionAgentProvider) {
+        throw new DomainError(
+          503,
+          "UPSTAGE_NOT_CONFIGURED",
+          "Production Agent adapter is not configured.",
+        );
+      }
+      const result = await this.productionAgentProvider.run(input.role, input.frozenInput);
+      const payload = validateProductionAgentOutput(input.role, result.output, input.allowlist);
+      const artifact: ProductionArtifact = {
+        contract_version: "standby.production-artifact.v1",
+        artifact_id: input.artifactId,
+        case_id: input.record.case_id,
+        role: input.role,
+        authority: "NON_AUTHORITATIVE",
+        input_fingerprint: input.inputFingerprint,
+        review_snapshot_id: input.frozenInput.review_snapshot_id,
+        cue_revision_id: input.frozenInput.cue_revision_id,
+        provider: "UPSTAGE",
+        provider_job_id: result.provider_job_id,
+        agent_id: result.agent_id,
+        config_id: result.config_id,
+        adapter_version: result.adapter_version,
+        raw_response_sha256: result.raw_response_sha256,
+        payload,
+        created_at: this.now(),
+      };
+      this.productionArtifacts.set(artifact.artifact_id, artifact);
+      this.productionArtifactCaseIds.set(artifact.artifact_id, input.record.case_id);
+      if (artifact.role === "FACT_NORMALIZER") {
+        this.latestFactNormalizerArtifactByCase.set(input.record.case_id, artifact.artifact_id);
+      }
+      input.operation.status = "SUCCEEDED";
+      input.operation.result_source = "UPSTAGE";
+      input.operation.updated_at = this.now();
+    } catch (error) {
+      input.operation.status = "FAILED";
+      input.operation.error = {
+        code: error instanceof DomainError ? error.code : "PRODUCTION_AGENT_FAILED",
+        message: error instanceof DomainError ? error.message : "Production Agent failed.",
+      };
+      input.operation.updated_at = this.now();
+      if (this.productionCache.get(input.cacheKey) === input.operation.operation_id) {
+        this.productionCache.delete(input.cacheKey);
+      }
+    }
   }
 
   private async executeExtraction(

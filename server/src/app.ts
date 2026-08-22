@@ -5,9 +5,17 @@ import rateLimit from "@fastify/rate-limit";
 import Fastify, { type FastifyRequest } from "fastify";
 import { DomainError } from "./domain/errors.js";
 import { assertSourceFile, MAX_SOURCE_FILE_BYTES, sanitizeFilename } from "./domain/source-file.js";
-import type { CellPatch, ExtractionAdapter, Origin, SourceRole } from "./domain/types.js";
+import type {
+  CellPatch,
+  ExtractionAdapter,
+  FactReviewCommand,
+  Origin,
+  ProductionAgentRole,
+  SourceRole,
+} from "./domain/types.js";
 import { sha256 } from "./lib/hash.js";
 import type { ExtractionProvider } from "./providers/extraction-provider.js";
+import type { ProductionAgentProvider } from "./providers/production-agent-provider.js";
 import { InMemoryStore } from "./store/in-memory-store.js";
 
 declare module "fastify" {
@@ -22,6 +30,7 @@ export type ServerConfig = {
   allowedOrigins: string[];
   logger?: boolean;
   extractionProvider?: ExtractionProvider;
+  productionAgentProvider?: ProductionAgentProvider;
 };
 
 const SOURCE_ROLES = new Set<SourceRole>(["SCRIPT", "MASTER_CUE", "STAGE_SPEC"]);
@@ -30,6 +39,11 @@ const ORIGINS = new Set<Origin>([
   "USER_PROVIDED",
   "CONTROLLED_FIXTURE",
   "MUTATED_FIXTURE",
+]);
+const PRODUCTION_AGENT_ROLES = new Set<ProductionAgentRole>([
+  "FACT_NORMALIZER",
+  "STORYBOARD_RECOMPOSER",
+  "REHEARSAL_BRIEF",
 ]);
 
 function bodyRecord(request: FastifyRequest): Record<string, unknown> {
@@ -47,6 +61,13 @@ function requiredString(value: unknown, field: string): string {
   return value;
 }
 
+function assertAllowedFields(body: Record<string, unknown>, allowed: readonly string[]): void {
+  const allowlist = new Set(allowed);
+  if (Object.keys(body).some((key) => !allowlist.has(key))) {
+    throw new DomainError(400, "INVALID_ARGUMENT", "Request contains unsupported fields.");
+  }
+}
+
 function idempotencyKey(request: FastifyRequest): string {
   const value = request.headers["idempotency-key"];
   if (typeof value !== "string" || value.trim().length === 0) {
@@ -62,7 +83,10 @@ function revisionProjection<T extends { rows: unknown }>(revision: T): Omit<T, "
 
 export async function buildApp(
   config: ServerConfig,
-  store = new InMemoryStore(config.extractionProvider ?? null),
+  store = new InMemoryStore(
+    config.extractionProvider ?? null,
+    config.productionAgentProvider ?? null,
+  ),
 ) {
   const app = Fastify({
     logger: config.logger ?? false,
@@ -281,6 +305,76 @@ export async function buildApp(
     },
   );
 
+  app.post<{ Params: { caseId: string } }>(
+    "/v1/cases/:caseId/production-agent-runs",
+    { config: { rateLimit: { max: 60, timeWindow: "1 hour" } } },
+    async (request, reply) => {
+      store.assertCaseOwner(request.params.caseId, request.standbyActorId);
+      const body = bodyRecord(request);
+      assertAllowedFields(body, ["role", "event_id"]);
+      if (!PRODUCTION_AGENT_ROLES.has(body.role as ProductionAgentRole)) {
+        throw new DomainError(422, "ENUM_VALUE_INVALID", "Unknown Production Agent role.");
+      }
+      const eventId = body.event_id === undefined
+        ? null
+        : requiredString(body.event_id, "event_id");
+      const response = store.withIdempotency(
+        `POST:/v1/cases/${request.params.caseId}/production-agent-runs`,
+        idempotencyKey(request),
+        body,
+        () => store.startProductionAgent({
+          caseId: request.params.caseId,
+          role: body.role as ProductionAgentRole,
+          eventId,
+        }),
+      );
+      reply.header("Operation-Location", `/v1/operations/${response.operation_id}`);
+      return reply.status(202).send(response);
+    },
+  );
+
+  app.get<{ Params: { artifactId: string } }>(
+    "/v1/production-artifacts/:artifactId",
+    async (request) => {
+      store.assertProductionArtifactOwner(request.params.artifactId, request.standbyActorId);
+      return store.getProductionArtifact(request.params.artifactId);
+    },
+  );
+
+  app.get<{ Params: { caseId: string } }>(
+    "/v1/cases/:caseId/fact-normalization-recommendations",
+    async (request) => {
+      store.assertCaseOwner(request.params.caseId, request.standbyActorId);
+      return store.getFactNormalizationRecommendations(request.params.caseId);
+    },
+  );
+
+  app.post<{ Params: { caseId: string } }>(
+    "/v1/cases/:caseId/fact-normalization-recommendations:approve-batch",
+    async (request, reply) => {
+      store.assertCaseOwner(request.params.caseId, request.standbyActorId);
+      const body = bodyRecord(request);
+      assertAllowedFields(body, ["fact_ids"]);
+      if (!Array.isArray(body.fact_ids) || body.fact_ids.length === 0) {
+        throw new DomainError(400, "INVALID_ARGUMENT", "fact_ids must be a non-empty array.");
+      }
+      const factIds = body.fact_ids.map((value, index) =>
+        requiredString(value, `fact_ids[${index}]`),
+      );
+      const response = store.withIdempotency(
+        `POST:/v1/cases/${request.params.caseId}/fact-normalization-recommendations:approve-batch`,
+        idempotencyKey(request),
+        body,
+        () => store.approveFactNormalizationRecommendations({
+          caseId: request.params.caseId,
+          actorId: request.standbyActorId,
+          factIds,
+        }),
+      );
+      return reply.status(201).send(response);
+    },
+  );
+
   app.get<{ Params: { caseId: string } }>(
     "/v1/cases/:caseId/review-queue",
     async (request) => {
@@ -294,10 +388,11 @@ export async function buildApp(
     async (request, reply) => {
       store.assertCaseOwner(request.params.caseId, request.standbyActorId);
       const body = bodyRecord(request);
+      assertAllowedFields(body, ["reviews"]);
       if (!Array.isArray(body.reviews) || body.reviews.length === 0) {
         throw new DomainError(400, "INVALID_ARGUMENT", "reviews must be a non-empty array.");
       }
-      const reviews = body.reviews.map((value) => {
+      const reviews = body.reviews.map((value): FactReviewCommand => {
         if (value === null || typeof value !== "object" || Array.isArray(value)) {
           throw new DomainError(400, "INVALID_ARGUMENT", "review item must be an object.");
         }
@@ -306,10 +401,32 @@ export async function buildApp(
         if (decision !== "REVIEWED" && decision !== "REJECTED") {
           throw new DomainError(422, "ENUM_VALUE_INVALID", "Unknown review decision.");
         }
+        const factId = requiredString(item.fact_id, "fact_id");
+        if (decision === "REJECTED") {
+          assertAllowedFields(item, ["fact_id", "decision"]);
+          return {
+            fact_id: factId,
+            decision,
+            source: "HUMAN_REJECTION",
+            corrected_value: null,
+          };
+        }
+        assertAllowedFields(item, ["fact_id", "decision", "source", "corrected_value"]);
+        if (item.source !== "UPSTAGE_RECOMMENDATION" && item.source !== "CUSTOM") {
+          throw new DomainError(422, "ENUM_VALUE_INVALID", "Unknown reviewed fact source.");
+        }
+        if (!("corrected_value" in item)) {
+          throw new DomainError(
+            422,
+            "NORMALIZED_FACT_VALUE_REQUIRED",
+            "REVIEWED facts require corrected_value.",
+          );
+        }
         return {
-          fact_id: requiredString(item.fact_id, "fact_id"),
-          decision: decision as "REVIEWED" | "REJECTED",
-          corrected_value: (item.corrected_value ?? null) as unknown,
+          fact_id: factId,
+          decision,
+          source: item.source,
+          corrected_value: item.corrected_value,
         };
       });
       const response = store.withIdempotency(
@@ -317,7 +434,7 @@ export async function buildApp(
         idempotencyKey(request),
         body,
         () =>
-          store.reviewFacts({
+          store.commitFactReviewCommands({
             caseId: request.params.caseId,
             actorId: request.standbyActorId,
             reviews,

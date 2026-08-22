@@ -2,7 +2,7 @@ import { DomainError } from "../domain/errors.js";
 
 type ObjectValue = Record<string, unknown>;
 
-const NORMALIZED_FACT_TYPES = new Set([
+export const NORMALIZED_FACT_TYPES = [
   "SCRIPT_TIMING_ANCHOR",
   "QUICK_CHANGE_AVAILABLE_WINDOW",
   "ROUTE_TO_CHANGE",
@@ -16,7 +16,18 @@ const NORMALIZED_FACT_TYPES = new Set([
   "PROP_REQUIRED_AT",
   "PROP_MOVE",
   "EVENT_STATE",
+] as const;
+
+const NORMALIZED_FACT_TYPE_SET = new Set<string>(NORMALIZED_FACT_TYPES);
+const STAGE_ZONE_SET = new Set([
+  "STAGE_RIGHT_WING",
+  "STAGE",
+  "STAGE_LEFT_WING",
+  "STAGE_LEFT_CHANGE",
+  "STAGE_RIGHT_CHANGE",
 ]);
+const STAGE_ENTITY_KIND_SET = new Set(["PERSON", "PROP"]);
+const STAGE_TRANSITION_SET = new Set(["ENTER", "EXIT"]);
 
 function asObject(value: unknown, label: string): ObjectValue {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
@@ -109,16 +120,307 @@ export function assertVerificationSemantics(value: unknown): void {
 }
 
 export function assertNormalizedFactSemantics(value: unknown): void {
-  if (value === null) return;
+  if (value === null) {
+    normalizedValueInvalid("REVIEWED facts require a normalized fact envelope.");
+  }
   const envelope = asObject(value, "corrected_value");
-  if (envelope.normalized_fact_type === undefined) return;
   if (
     typeof envelope.normalized_fact_type !== "string" ||
-    !NORMALIZED_FACT_TYPES.has(envelope.normalized_fact_type)
+    !NORMALIZED_FACT_TYPE_SET.has(envelope.normalized_fact_type)
   ) {
     throw new DomainError(422, "NORMALIZED_FACT_TYPE_INVALID", "Unknown normalized fact type.");
   }
-  if (envelope.value === null || typeof envelope.value !== "object" || Array.isArray(envelope.value)) {
-    throw new DomainError(422, "NORMALIZED_FACT_VALUE_INVALID", "Normalized fact value must be an object.");
+  const envelopeKeys = Object.keys(envelope);
+  if (
+    envelopeKeys.length !== 2 ||
+    !envelopeKeys.includes("normalized_fact_type") ||
+    !envelopeKeys.includes("value")
+  ) {
+    normalizedValueInvalid(
+      "Normalized fact envelope must contain only normalized_fact_type and value.",
+    );
   }
+
+  const factType = envelope.normalized_fact_type as typeof NORMALIZED_FACT_TYPES[number];
+  const factValue = normalizedObject(envelope.value, `${factType}.value`);
+  validateNormalizedFactValue(factType, factValue);
+}
+
+function normalizedValueInvalid(message: string): never {
+  throw new DomainError(422, "NORMALIZED_FACT_VALUE_INVALID", message);
+}
+
+function normalizedObject(value: unknown, label: string): ObjectValue {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return normalizedValueInvalid(`${label} must be an object.`);
+  }
+  return value as ObjectValue;
+}
+
+function exactNormalizedObject(
+  value: unknown,
+  label: string,
+  requiredKeys: readonly string[],
+  optionalKeys: readonly string[] = [],
+): ObjectValue {
+  const object = normalizedObject(value, label);
+  const allowedKeys = new Set([...requiredKeys, ...optionalKeys]);
+  const missingKeys = requiredKeys.filter((key) => !(key in object));
+  const unexpectedKeys = Object.keys(object).filter((key) => !allowedKeys.has(key));
+  if (missingKeys.length > 0 || unexpectedKeys.length > 0) {
+    return normalizedValueInvalid(`${label} fields do not match the normalized fact contract.`);
+  }
+  return object;
+}
+
+function normalizedString(value: unknown, label: string, allowEmpty = false): string {
+  if (
+    typeof value !== "string" ||
+    value.length > 2_000 ||
+    (!allowEmpty && value.trim().length === 0)
+  ) {
+    return normalizedValueInvalid(`${label} must be a bounded string${allowEmpty ? "" : " with content"}.`);
+  }
+  return value;
+}
+
+function normalizedInteger(value: unknown, label: string, minimum = 0): number {
+  if (!Number.isSafeInteger(value) || (value as number) < minimum) {
+    return normalizedValueInvalid(`${label} must be a finite integer greater than or equal to ${minimum}.`);
+  }
+  return value as number;
+}
+
+function normalizedBoolean(value: unknown, label: string): boolean {
+  if (typeof value !== "boolean") {
+    return normalizedValueInvalid(`${label} must be a boolean.`);
+  }
+  return value;
+}
+
+function normalizedZone(value: unknown, label: string): string {
+  if (typeof value !== "string" || !STAGE_ZONE_SET.has(value)) {
+    return normalizedValueInvalid(`${label} must be a canonical stage zone.`);
+  }
+  return value;
+}
+
+function normalizedRange(value: unknown, label: string): { min_ms: number; max_ms: number } {
+  const range = exactNormalizedObject(value, label, ["min_ms", "max_ms"]);
+  const minMs = normalizedInteger(range.min_ms, `${label}.min_ms`);
+  const maxMs = normalizedInteger(range.max_ms, `${label}.max_ms`);
+  if (minMs > maxMs) {
+    return normalizedValueInvalid(`${label}.min_ms must not exceed max_ms.`);
+  }
+  return { min_ms: minMs, max_ms: maxMs };
+}
+
+function validateEventAction(value: unknown, label: string): void {
+  const action = normalizedObject(value, label);
+  const type = action.type;
+  if (type === "ENTER" || type === "EXIT") {
+    const exact = exactNormalizedObject(action, label, [
+      "type",
+      "entity_id",
+      "zone",
+      "sequence_index",
+      "offset_ms",
+    ]);
+    normalizedString(exact.entity_id, `${label}.entity_id`);
+    normalizedZone(exact.zone, `${label}.zone`);
+    normalizedInteger(exact.sequence_index, `${label}.sequence_index`);
+    normalizedInteger(exact.offset_ms, `${label}.offset_ms`);
+    return;
+  }
+  if (type === "MOVE") {
+    const exact = exactNormalizedObject(action, label, [
+      "type",
+      "entity_id",
+      "from",
+      "to",
+      "sequence_index",
+      "offset_ms",
+      "duration_ms",
+    ]);
+    normalizedString(exact.entity_id, `${label}.entity_id`);
+    normalizedZone(exact.from, `${label}.from`);
+    normalizedZone(exact.to, `${label}.to`);
+    normalizedInteger(exact.sequence_index, `${label}.sequence_index`);
+    normalizedInteger(exact.offset_ms, `${label}.offset_ms`);
+    normalizedRange(exact.duration_ms, `${label}.duration_ms`);
+    return;
+  }
+  if (type === "COSTUME_CHANGE") {
+    const exact = exactNormalizedObject(action, label, [
+      "type",
+      "actor_id",
+      "zone",
+      "sequence_index",
+      "offset_ms",
+      "duration_ms",
+    ]);
+    normalizedString(exact.actor_id, `${label}.actor_id`);
+    normalizedZone(exact.zone, `${label}.zone`);
+    normalizedInteger(exact.sequence_index, `${label}.sequence_index`);
+    normalizedInteger(exact.offset_ms, `${label}.offset_ms`);
+    normalizedRange(exact.duration_ms, `${label}.duration_ms`);
+    return;
+  }
+  normalizedValueInvalid(`${label}.type is not a supported event action.`);
+}
+
+function validateStageSnapshot(value: unknown, label: string): void {
+  const snapshot = normalizedObject(value, label);
+  if (Object.keys(snapshot).length > 500) {
+    normalizedValueInvalid(`${label} contains too many entities.`);
+  }
+  for (const [entityId, rawState] of Object.entries(snapshot)) {
+    normalizedString(entityId, `${label} entity_id`);
+    const state = exactNormalizedObject(rawState, `${label}.${entityId}`, ["kind", "zone"], [
+      "transition",
+    ]);
+    if (typeof state.kind !== "string" || !STAGE_ENTITY_KIND_SET.has(state.kind)) {
+      normalizedValueInvalid(`${label}.${entityId}.kind must be PERSON or PROP.`);
+    }
+    normalizedZone(state.zone, `${label}.${entityId}.zone`);
+    if (
+      state.transition !== undefined &&
+      (typeof state.transition !== "string" || !STAGE_TRANSITION_SET.has(state.transition))
+    ) {
+      normalizedValueInvalid(`${label}.${entityId}.transition must be ENTER or EXIT.`);
+    }
+  }
+}
+
+function validateNormalizedFactValue(
+  factType: typeof NORMALIZED_FACT_TYPES[number],
+  value: ObjectValue,
+): void {
+  if (factType === "SCRIPT_TIMING_ANCHOR") {
+    const exact = exactNormalizedObject(value, factType, ["exit_event", "next_entry_event"]);
+    normalizedString(exact.exit_event, `${factType}.exit_event`);
+    normalizedString(exact.next_entry_event, `${factType}.next_entry_event`);
+    return;
+  }
+
+  if (
+    factType === "QUICK_CHANGE_AVAILABLE_WINDOW" ||
+    factType === "ROUTE_TO_CHANGE" ||
+    factType === "ROUTE_TO_ENTRY"
+  ) {
+    const required = factType === "QUICK_CHANGE_AVAILABLE_WINDOW"
+      ? ["min_ms", "max_ms", "target"]
+      : ["min_ms", "max_ms"];
+    const exact = exactNormalizedObject(value, factType, required);
+    const minMs = normalizedInteger(exact.min_ms, `${factType}.min_ms`);
+    const maxMs = normalizedInteger(exact.max_ms, `${factType}.max_ms`);
+    if (minMs > maxMs) {
+      normalizedValueInvalid(`${factType}.min_ms must not exceed max_ms.`);
+    }
+    if (factType === "QUICK_CHANGE_AVAILABLE_WINDOW") {
+      const target = exactNormalizedObject(exact.target, `${factType}.target`, ["row_id", "column"]);
+      normalizedString(target.row_id, `${factType}.target.row_id`);
+      normalizedString(target.column, `${factType}.target.column`);
+    }
+    return;
+  }
+
+  if (factType === "MINIMUM_CHANGE_TIME") {
+    const exact = exactNormalizedObject(value, factType, ["min_ms"]);
+    normalizedInteger(exact.min_ms, `${factType}.min_ms`);
+    return;
+  }
+
+  if (factType === "BLOCKING_SEQUENCE_COMPLETE") {
+    const exact = exactNormalizedObject(value, factType, ["route_id", "event_id", "complete"]);
+    normalizedString(exact.route_id, `${factType}.route_id`);
+    normalizedString(exact.event_id, `${factType}.event_id`);
+    normalizedBoolean(exact.complete, `${factType}.complete`);
+    return;
+  }
+
+  if (factType === "ROUTE_CAPACITY") {
+    const exact = exactNormalizedObject(value, factType, ["route_id", "capacity"]);
+    normalizedString(exact.route_id, `${factType}.route_id`);
+    normalizedInteger(exact.capacity, `${factType}.capacity`, 1);
+    return;
+  }
+
+  if (factType === "ROUTE_OCCUPANCY") {
+    const exact = exactNormalizedObject(value, factType, [
+      "route_id",
+      "event_id",
+      "entity_id",
+      "start_ms",
+      "end_ms",
+    ]);
+    normalizedString(exact.route_id, `${factType}.route_id`);
+    normalizedString(exact.event_id, `${factType}.event_id`);
+    normalizedString(exact.entity_id, `${factType}.entity_id`);
+    const startMs = normalizedInteger(exact.start_ms, `${factType}.start_ms`);
+    const endMs = normalizedInteger(exact.end_ms, `${factType}.end_ms`);
+    if (startMs >= endMs) {
+      normalizedValueInvalid(`${factType}.start_ms must be less than end_ms.`);
+    }
+    return;
+  }
+
+  if (factType === "PROP_INITIAL_STATE") {
+    const exact = exactNormalizedObject(value, factType, ["prop_id", "zone"]);
+    normalizedString(exact.prop_id, `${factType}.prop_id`);
+    normalizedZone(exact.zone, `${factType}.zone`);
+    return;
+  }
+
+  if (factType === "PROP_SEQUENCE_COMPLETE") {
+    const exact = exactNormalizedObject(value, factType, ["prop_id", "through_event_id", "complete"]);
+    normalizedString(exact.prop_id, `${factType}.prop_id`);
+    normalizedString(exact.through_event_id, `${factType}.through_event_id`);
+    normalizedBoolean(exact.complete, `${factType}.complete`);
+    return;
+  }
+
+  if (factType === "PROP_REQUIRED_AT") {
+    const exact = exactNormalizedObject(value, factType, ["event_id", "prop_id", "zone"]);
+    normalizedString(exact.event_id, `${factType}.event_id`);
+    normalizedString(exact.prop_id, `${factType}.prop_id`);
+    normalizedZone(exact.zone, `${factType}.zone`);
+    return;
+  }
+
+  if (factType === "PROP_MOVE") {
+    const exact = exactNormalizedObject(value, factType, [
+      "event_id",
+      "sequence_index",
+      "prop_id",
+      "from_zone",
+      "to_zone",
+      "responsible_party",
+    ]);
+    normalizedString(exact.event_id, `${factType}.event_id`);
+    normalizedInteger(exact.sequence_index, `${factType}.sequence_index`);
+    normalizedString(exact.prop_id, `${factType}.prop_id`);
+    normalizedZone(exact.from_zone, `${factType}.from_zone`);
+    normalizedZone(exact.to_zone, `${factType}.to_zone`);
+    normalizedString(exact.responsible_party, `${factType}.responsible_party`, true);
+    return;
+  }
+
+  const exact = exactNormalizedObject(value, factType, [
+    "event_id",
+    "sequence_index",
+    "label",
+    "time_range_ms",
+    "actions",
+    "stage_snapshot",
+  ]);
+  normalizedString(exact.event_id, `${factType}.event_id`);
+  normalizedInteger(exact.sequence_index, `${factType}.sequence_index`);
+  normalizedString(exact.label, `${factType}.label`);
+  normalizedRange(exact.time_range_ms, `${factType}.time_range_ms`);
+  if (!Array.isArray(exact.actions) || exact.actions.length > 500) {
+    normalizedValueInvalid(`${factType}.actions must be a bounded array.`);
+  }
+  exact.actions.forEach((action, index) => validateEventAction(action, `${factType}.actions[${index}]`));
+  validateStageSnapshot(exact.stage_snapshot, `${factType}.stage_snapshot`);
 }

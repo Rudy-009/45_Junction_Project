@@ -35,6 +35,18 @@ function headers(idempotent = false): Record<string, string> {
   return result;
 }
 
+function customReview(fact: FactCandidate) {
+  return {
+    fact_id: fact.fact_id,
+    decision: "REVIEWED",
+    source: "CUSTOM",
+    corrected_value: {
+      normalized_fact_type: fact.fact_type,
+      value: fact.raw_value,
+    },
+  };
+}
+
 async function createHeroCase() {
   const create = await app.inject({
     method: "POST",
@@ -82,6 +94,63 @@ test("health is public but domain endpoints require a valid actor session", asyn
   assert.equal((unauthorized.json() as { error: { code: string } }).error.code, "UNAUTHENTICATED");
 });
 
+test("reviewed facts require normalized values and failed batches are atomic", async () => {
+  const { caseId } = await createHeroCase();
+  const queueResponse = await app.inject({
+    method: "GET",
+    url: `/v1/cases/${caseId}/review-queue`,
+    headers: headers(),
+  });
+  assert.equal(queueResponse.statusCode, 200, queueResponse.body);
+  const facts = (queueResponse.json() as { items: FactCandidate[] }).items;
+  const first = facts[0];
+  const second = facts[1];
+  assert.ok(first);
+  assert.ok(second);
+
+  const missingNormalizedValue = await app.inject({
+    method: "POST",
+    url: `/v1/cases/${caseId}/fact-reviews:batch`,
+    headers: headers(true),
+    payload: {
+      reviews: [{ fact_id: first.fact_id, decision: "REVIEWED", source: "CUSTOM" }],
+    },
+  });
+  assert.equal(missingNormalizedValue.statusCode, 422, missingNormalizedValue.body);
+  assert.equal(
+    (missingNormalizedValue.json() as { error: { code: string } }).error.code,
+    "NORMALIZED_FACT_VALUE_REQUIRED",
+  );
+
+  const failedBatch = await app.inject({
+    method: "POST",
+    url: `/v1/cases/${caseId}/fact-reviews:batch`,
+    headers: headers(true),
+    payload: {
+      reviews: [
+        customReview(first),
+        { fact_id: "fact_missing", decision: "REJECTED" },
+      ],
+    },
+  });
+  assert.equal(failedBatch.statusCode, 404, failedBatch.body);
+
+  const afterFailure = await app.inject({
+    method: "GET",
+    url: `/v1/cases/${caseId}/review-queue`,
+    headers: headers(),
+  });
+  assert.equal(afterFailure.statusCode, 200, afterFailure.body);
+  const statuses = new Map(
+    (afterFailure.json() as { items: FactCandidate[] }).items.map((fact) => [
+      fact.fact_id,
+      fact.review_status,
+    ]),
+  );
+  assert.equal(statuses.get(first.fact_id), "UNREVIEWED");
+  assert.equal(statuses.get(second.fact_id), "UNREVIEWED");
+});
+
 test("unreviewed facts abstain, reviewed facts violate, and a 70s revision clears E3", async () => {
   const { caseId, sources } = await createHeroCase();
 
@@ -125,10 +194,7 @@ test("unreviewed facts abstain, reviewed facts violate, and a 70s revision clear
     url: `/v1/cases/${caseId}/fact-reviews:batch`,
     headers: headers(true),
     payload: {
-      reviews: queue.items.map((fact) => ({
-        fact_id: fact.fact_id,
-        decision: "REVIEWED",
-      })),
+      reviews: queue.items.map(customReview),
     },
   });
   assert.equal(reviewsResponse.statusCode, 201, reviewsResponse.body);
@@ -221,7 +287,7 @@ test("unreviewed facts abstain, reviewed facts violate, and a 70s revision clear
     url: `/v1/cases/${caseId}/fact-reviews:batch`,
     headers: headers(true),
     payload: {
-      reviews: [{ fact_id: minimumChangeFact.fact_id, decision: "REVIEWED" }],
+      reviews: [customReview(minimumChangeFact)],
     },
   });
   assert.equal(restoreReviewResponse.statusCode, 201, restoreReviewResponse.body);

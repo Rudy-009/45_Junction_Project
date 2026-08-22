@@ -3,7 +3,7 @@ import { after, before, test } from "node:test";
 import type { FastifyInstance } from "fastify";
 import { buildApp } from "../src/app.js";
 import { DomainError } from "../src/domain/errors.js";
-import type { InternalSourceVersion, SourceRole } from "../src/domain/types.js";
+import type { FactCandidate, InternalSourceVersion, SourceRole } from "../src/domain/types.js";
 import { HERO_SOURCE_CONTENT } from "../src/fixtures/hero.js";
 import { sha256 } from "../src/lib/hash.js";
 import { UpstageAgentProvider } from "../src/providers/upstage-agent-provider.js";
@@ -103,8 +103,12 @@ test("MASTER_CUE JSON file reaches Upstage extraction and human review", async (
         assert.ok(current.bytes);
         return {
           fact_id: `fact_${role.toLowerCase()}`,
-          fact_type: `${role}_FACT`,
-          raw_value: { observed: true },
+          fact_type: "QUICK_CHANGE_AVAILABLE_WINDOW",
+          raw_value: {
+            min_ms: 58_000,
+            max_ms: 62_000,
+            target: { row_id: "R3", column: "환복시간" },
+          },
           reviewed_value: null,
           source_role: role,
           source_id: current.source_id,
@@ -196,7 +200,7 @@ test("MASTER_CUE JSON file reaches Upstage extraction and human review", async (
       url: `/v1/cases/${caseId}/review-queue`,
       headers: auth(),
     });
-    const facts = (queue.json() as { items: Array<{ fact_id: string; review_status: string }> }).items;
+    const facts = (queue.json() as { items: FactCandidate[] }).items;
     assert.equal(facts.length, 1);
     assert.ok(facts.every((fact) => fact.review_status === "UNREVIEWED"));
 
@@ -205,7 +209,15 @@ test("MASTER_CUE JSON file reaches Upstage extraction and human review", async (
       url: `/v1/cases/${caseId}/fact-reviews:batch`,
       headers: auth("review-live-facts"),
       payload: {
-        reviews: facts.map((fact) => ({ fact_id: fact.fact_id, decision: "REVIEWED" })),
+        reviews: facts.map((fact) => ({
+          fact_id: fact.fact_id,
+          decision: "REVIEWED",
+          source: "CUSTOM",
+          corrected_value: {
+            normalized_fact_type: fact.fact_type,
+            value: fact.raw_value,
+          },
+        })),
       },
     });
     assert.equal(reviews.statusCode, 201, reviews.body);
@@ -282,11 +294,24 @@ test("Upstage adapter extracts a master cue without script or stage spec", async
       return Response.json({ id: "job-cue" });
     }
     if (url.includes("job-cue")) {
-      assert.equal(url.endsWith("/v2/responses/job-cue"), true);
+      const pollUrl = new URL(url);
+      assert.equal(pollUrl.pathname.endsWith("/v2/responses/job-cue"), true);
+      assert.equal(pollUrl.searchParams.get("include[]"), "all");
       return Response.json({
         id: "job-cue",
         status: "completed",
-        output: [{ content: [{ type: "output_text", text: JSON.stringify({ cue_facts: [{ fact_type: "QUICK_CHANGE_AVAILABLE_WINDOW", locator: "Cue!C12", source_quote_raw: "58-62s", min_ms: 58000, max_ms: 62000 }] }) }] }],
+        output: [{ content: [{
+          type: "output_text",
+          additional_values: {
+            cue_facts: [{
+              fact_type: "QUICK_CHANGE_AVAILABLE_WINDOW",
+              locator: "Cue!C12",
+              source_quote_raw: "58-62s",
+              min_ms: 58000,
+              max_ms: 62000,
+            }],
+          },
+        }] }],
       });
     }
     throw new Error(`Unexpected URL: ${url}`);
@@ -337,12 +362,14 @@ test("Upstage adapter converts JSON master cues to a supported XLSX transport", 
     if (url.endsWith("/v2/responses") && init?.method === "POST") {
       return Response.json({ id: "job-json-cue" });
     }
+    const pollUrl = new URL(url);
+    assert.equal(pollUrl.searchParams.get("include[]"), "all");
     return Response.json({
       id: "job-json-cue",
       status: "completed",
       output: [{
         content: [{
-          text: JSON.stringify({
+          additional_values: JSON.stringify({
             cue_facts: [{
               fact_type: "CUE_TRIGGER",
               locator: "/cues/0/trigger",

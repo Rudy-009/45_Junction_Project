@@ -16,6 +16,9 @@ const masterCueAgentId = process.env.UPSTAGE_AGENT_ID_MASTER_CUE ?? sharedAgentI
 const agentIds = {
   ...(scriptAgentId ? { SCRIPT: scriptAgentId } : {}),
   ...(masterCueAgentId ? { MASTER_CUE: masterCueAgentId } : {}),
+  ...(process.env.UPSTAGE_AGENT_ID_STAGE_SPEC
+    ? { STAGE_SPEC: process.env.UPSTAGE_AGENT_ID_STAGE_SPEC }
+    : {}),
 };
 const configIds = {
   ...(process.env.UPSTAGE_CONFIG_ID_SCRIPT
@@ -24,13 +27,40 @@ const configIds = {
   ...(process.env.UPSTAGE_CONFIG_ID_MASTER_CUE
     ? { MASTER_CUE: process.env.UPSTAGE_CONFIG_ID_MASTER_CUE }
     : {}),
+  ...(process.env.UPSTAGE_CONFIG_ID_STAGE_SPEC
+    ? { STAGE_SPEC: process.env.UPSTAGE_CONFIG_ID_STAGE_SPEC }
+    : {}),
+};
+const productionAgentIds = {
+  ...(process.env.UPSTAGE_AGENT_ID_FACT_NORMALIZER
+    ? { FACT_NORMALIZER: process.env.UPSTAGE_AGENT_ID_FACT_NORMALIZER }
+    : {}),
+  ...(process.env.UPSTAGE_AGENT_ID_STORYBOARD_RECOMPOSER
+    ? { STORYBOARD_RECOMPOSER: process.env.UPSTAGE_AGENT_ID_STORYBOARD_RECOMPOSER }
+    : {}),
+  ...(process.env.UPSTAGE_AGENT_ID_REHEARSAL_BRIEF
+    ? { REHEARSAL_BRIEF: process.env.UPSTAGE_AGENT_ID_REHEARSAL_BRIEF }
+    : {}),
+};
+const productionConfigIds = {
+  ...(process.env.UPSTAGE_CONFIG_ID_FACT_NORMALIZER
+    ? { FACT_NORMALIZER: process.env.UPSTAGE_CONFIG_ID_FACT_NORMALIZER }
+    : {}),
+  ...(process.env.UPSTAGE_CONFIG_ID_STORYBOARD_RECOMPOSER
+    ? { STORYBOARD_RECOMPOSER: process.env.UPSTAGE_CONFIG_ID_STORYBOARD_RECOMPOSER }
+    : {}),
+  ...(process.env.UPSTAGE_CONFIG_ID_REHEARSAL_BRIEF
+    ? { REHEARSAL_BRIEF: process.env.UPSTAGE_CONFIG_ID_REHEARSAL_BRIEF }
+    : {}),
 };
 
-const extractionProvider = process.env.UPSTAGE_API_KEY
+const upstageProvider = process.env.UPSTAGE_API_KEY
   ? new UpstageAgentProvider({
       apiKey: process.env.UPSTAGE_API_KEY,
       agentIds,
       configIds,
+      productionAgentIds,
+      productionConfigIds,
       pollIntervalMs: Number(process.env.UPSTAGE_POLL_INTERVAL_MS ?? 2_000),
       timeoutMs: Number(process.env.UPSTAGE_TIMEOUT_MS ?? 600_000),
     })
@@ -41,6 +71,8 @@ const app = await buildApp({
   logger: true,
   allowAnonymous,
   ...(apiToken ? { apiToken } : {}),
-  ...(extractionProvider ? { extractionProvider } : {}),
+  ...(upstageProvider
+    ? { extractionProvider: upstageProvider, productionAgentProvider: upstageProvider }
+    : {}),
 });
 await app.listen({ host: "0.0.0.0", port });

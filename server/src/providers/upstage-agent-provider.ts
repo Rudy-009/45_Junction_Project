@@ -3,11 +3,17 @@ import { extractStageSpec } from "../domain/extraction.js";
 import type {
   FactCandidate,
   InternalSourceVersion,
+  ProductionAgentFrozenInput,
+  ProductionAgentRole,
   ProviderRunSummary,
   SourceRole,
 } from "../domain/types.js";
 import { canonicalJson, hashJson, sha256 } from "../lib/hash.js";
 import type { ExtractionProvider, ExtractionProviderResult } from "./extraction-provider.js";
+import type {
+  ProductionAgentProvider,
+  ProductionAgentProviderResult,
+} from "./production-agent-provider.js";
 import {
   jsonToUpstageXlsx,
   jsonTransportFilename,
@@ -23,8 +29,10 @@ type JsonObject = Record<string, unknown>;
 
 export type UpstageAgentProviderConfig = {
   apiKey: string;
-  agentIds: Partial<Record<"SCRIPT" | "MASTER_CUE", string>>;
-  configIds?: Partial<Record<"SCRIPT" | "MASTER_CUE", string>>;
+  agentIds: Partial<Record<SourceRole, string>>;
+  configIds?: Partial<Record<SourceRole, string>>;
+  productionAgentIds?: Partial<Record<ProductionAgentRole, string>>;
+  productionConfigIds?: Partial<Record<ProductionAgentRole, string>>;
   baseUrl?: string;
   pollIntervalMs?: number;
   timeoutMs?: number;
@@ -45,24 +53,60 @@ function nonEmptyString(value: unknown, label: string): string {
   return value.trim();
 }
 
-function responseTextCandidates(job: JsonObject): string[] {
+function responseObjectCandidates(job: JsonObject): JsonObject[] {
   const output = job.output;
   if (!Array.isArray(output)) return [];
-  const values: string[] = [];
+  const values: unknown[] = [];
   for (const step of output) {
     if (step === null || typeof step !== "object" || Array.isArray(step)) continue;
-    const content = (step as JsonObject).content;
-    if (!Array.isArray(content)) continue;
-    for (const item of content) {
+    const stepObject = step as JsonObject;
+    if (stepObject.additional_values !== undefined) values.push(stepObject.additional_values);
+    const content = stepObject.content;
+    const contentItems = Array.isArray(content)
+      ? content
+      : content !== null && typeof content === "object"
+        ? [content]
+        : [];
+    for (const item of contentItems) {
       if (item === null || typeof item !== "object" || Array.isArray(item)) continue;
-      const text = (item as JsonObject).text;
-      if (typeof text === "string" && text.trim()) values.push(text);
+      const itemObject = item as JsonObject;
+      if (typeof itemObject.text === "string" && itemObject.text.trim()) {
+        values.push(itemObject.text);
+      }
+      if (itemObject.additional_values !== undefined) {
+        values.push(itemObject.additional_values);
+      }
     }
   }
-  return values;
+
+  const objects: JsonObject[] = [];
+  let visited = 0;
+  const visit = (value: unknown, depth: number): void => {
+    if (depth > 10 || visited >= 10_000) return;
+    visited += 1;
+    if (typeof value === "string") {
+      if (!value.trim() || value.length > 2_000_000) return;
+      try {
+        visit(JSON.parse(value) as unknown, depth + 1);
+      } catch {
+        // Instruct steps may contain prose; only valid JSON can become a payload candidate.
+      }
+      return;
+    }
+    if (Array.isArray(value)) {
+      value.forEach((item) => visit(item, depth + 1));
+      return;
+    }
+    if (value === null || typeof value !== "object") return;
+    const object = value as JsonObject;
+    objects.push(object);
+    Object.values(object).forEach((child) => visit(child, depth + 1));
+  };
+  values.forEach((value) => visit(value, 0));
+  return objects;
 }
 
-function locateFact(role: "SCRIPT" | "MASTER_CUE", value: JsonObject): { locator: string; quote: string } {
+function locateFact(role: SourceRole, value: JsonObject): { locator: string; quote: string } {
   const quote = [value.source_quote_raw, value.source_quote, value.quote].find(
     (candidate): candidate is string => typeof candidate === "string" && candidate.trim().length > 0,
   );
@@ -84,11 +128,11 @@ function locateFact(role: "SCRIPT" | "MASTER_CUE", value: JsonObject): { locator
 }
 
 function decodeFacts(
-  role: "SCRIPT" | "MASTER_CUE",
+  role: SourceRole,
   source: InternalSourceVersion,
   payload: JsonObject,
 ): FactCandidate[] {
-  const key = role === "SCRIPT" ? "script_facts" : "cue_facts";
+  const key = roleFactKey(role);
   const rawFacts = payload[key];
   if (!Array.isArray(rawFacts)) {
     throw new DomainError(502, "UPSTAGE_RESPONSE_INVALID", `${key} must be an array.`);
@@ -118,27 +162,50 @@ function decodeFacts(
   });
 }
 
-function parseRolePayload(role: "SCRIPT" | "MASTER_CUE", job: JsonObject): JsonObject {
-  const key = role === "SCRIPT" ? "script_facts" : "cue_facts";
-  for (const text of responseTextCandidates(job).reverse()) {
-    try {
-      const parsed = JSON.parse(text) as unknown;
-      if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) {
-        const object = parsed as JsonObject;
-        if (Array.isArray(object[key])) return object;
-      }
-    } catch {
-      // Ignore non-JSON node output and keep looking for the final extraction payload.
-    }
+function roleFactKey(role: SourceRole): "script_facts" | "cue_facts" | "stage_facts" {
+  if (role === "SCRIPT") return "script_facts";
+  if (role === "MASTER_CUE") return "cue_facts";
+  return "stage_facts";
+}
+
+function parseRolePayload(role: SourceRole, job: JsonObject): JsonObject {
+  const key = roleFactKey(role);
+  for (const object of responseObjectCandidates(job).reverse()) {
+    if (Array.isArray(object[key])) return object;
   }
   throw new DomainError(502, "UPSTAGE_RESPONSE_INVALID", `No ${key} JSON output was found.`);
+}
+
+function parseProductionPayload(role: ProductionAgentRole, job: JsonObject): JsonObject {
+  for (const object of responseObjectCandidates(job).reverse()) {
+    if (role === "FACT_NORMALIZER" && Array.isArray(object.recommendations)) return object;
+    if (
+      role === "STORYBOARD_RECOMPOSER" &&
+      typeof object.event_id === "string" &&
+      Array.isArray(object.beats)
+    ) {
+      return object;
+    }
+    if (
+      role === "REHEARSAL_BRIEF" &&
+      typeof object.headline === "string" &&
+      Array.isArray(object.sections)
+    ) {
+      return object;
+    }
+  }
+  throw new DomainError(
+    502,
+    "UPSTAGE_RESPONSE_INVALID",
+    `No ${role} JSON output was found.`,
+  );
 }
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-export class UpstageAgentProvider implements ExtractionProvider {
+export class UpstageAgentProvider implements ExtractionProvider, ProductionAgentProvider {
   private readonly fetchImpl: FetchLike;
   private readonly baseUrl: string;
   private readonly pollIntervalMs: number;
@@ -165,12 +232,15 @@ export class UpstageAgentProvider implements ExtractionProvider {
       throw new DomainError(409, "SOURCE_FORMAT_INVALID", "STAGE_SPEC must be structured JSON.");
     }
 
-    const [scriptResult, cueResult] = await Promise.all([
+    const [scriptResult, cueResult, stageAgentResult] = await Promise.all([
       script ? this.extractFile("SCRIPT", script) : Promise.resolve(null),
       this.extractFile("MASTER_CUE", masterCue),
+      stageSpec && this.config.agentIds.STAGE_SPEC
+        ? this.extractFile("STAGE_SPEC", stageSpec)
+        : Promise.resolve(null),
     ]);
-    const stageFacts = stageSpec ? extractStageSpec(stageSpec) : [];
-    const stageRun: ProviderRunSummary | null = stageSpec
+    const stageFacts = stageAgentResult?.facts ?? (stageSpec ? extractStageSpec(stageSpec) : []);
+    const stageRun: ProviderRunSummary | null = stageAgentResult?.run ?? (stageSpec
       ? {
           source_id: stageSpec.source_id,
           role: "STAGE_SPEC",
@@ -182,7 +252,7 @@ export class UpstageAgentProvider implements ExtractionProvider {
           schema_version: "standby.extraction.v1",
           raw_response_sha256: hashJson({ source_sha256: stageSpec.sha256, facts: stageFacts }),
         }
-      : null;
+      : null);
 
     return {
       facts: [...(scriptResult?.facts ?? []), ...cueResult.facts, ...stageFacts],
@@ -191,6 +261,58 @@ export class UpstageAgentProvider implements ExtractionProvider {
         cueResult.run,
         ...(stageRun ? [stageRun] : []),
       ],
+    };
+  }
+
+  configFingerprint(role: ProductionAgentRole): string {
+    const agentId = this.config.productionAgentIds?.[role];
+    if (!agentId) {
+      throw new DomainError(
+        503,
+        "UPSTAGE_AGENT_NOT_CONFIGURED",
+        `${role} Agent ID is missing.`,
+      );
+    }
+    return hashJson({
+      adapter_version: ADAPTER_VERSION,
+      role,
+      agent_id: agentId,
+      config_id: this.config.productionConfigIds?.[role] ?? null,
+    });
+  }
+
+  async run(
+    role: ProductionAgentRole,
+    input: ProductionAgentFrozenInput,
+  ): Promise<ProductionAgentProviderResult> {
+    const agentId = this.config.productionAgentIds?.[role];
+    if (!agentId) {
+      throw new DomainError(
+        503,
+        "UPSTAGE_AGENT_NOT_CONFIGURED",
+        `${role} Agent ID is missing.`,
+      );
+    }
+    const inputFingerprint = hashJson(input);
+    const transport = await jsonToUpstageXlsx(
+      new TextEncoder().encode(canonicalJson(input)),
+    );
+    const fileId = await this.uploadBytes(
+      transport,
+      XLSX_MEDIA_TYPE,
+      `${role.toLowerCase().replaceAll("_", "-")}-${inputFingerprint.slice(0, 12)}.xlsx`,
+    );
+    const configId = this.config.productionConfigIds?.[role] ?? null;
+    const job = await this.createJob(agentId, fileId, configId);
+    const jobId = nonEmptyString(job.id, "Upstage job id");
+    const completedJob = await this.pollJob(jobId);
+    return {
+      output: parseProductionPayload(role, completedJob),
+      provider_job_id: jobId,
+      agent_id: agentId,
+      config_id: configId,
+      adapter_version: ADAPTER_VERSION,
+      raw_response_sha256: hashJson(completedJob),
     };
   }
 
@@ -206,7 +328,7 @@ export class UpstageAgentProvider implements ExtractionProvider {
   }
 
   private async extractFile(
-    role: "SCRIPT" | "MASTER_CUE",
+    role: SourceRole,
     source: InternalSourceVersion,
   ): Promise<{ facts: FactCandidate[]; run: ProviderRunSummary }> {
     const agentId = this.config.agentIds[role];
@@ -235,21 +357,34 @@ export class UpstageAgentProvider implements ExtractionProvider {
   }
 
   private async uploadFile(source: InternalSourceVersion): Promise<string> {
-    if (source.bytes === null) throw new Error("File source bytes are missing.");
+    const sourceBytes = source.bytes ?? new TextEncoder().encode(canonicalJson(source.content));
     const useJsonTransport =
-      source.media_type === "application/json" || source.original_filename?.toLowerCase().endsWith(".json");
-    const uploadBytes = useJsonTransport ? await jsonToUpstageXlsx(source.bytes) : source.bytes;
+      source.bytes === null ||
+      source.media_type === "application/json" ||
+      source.original_filename?.toLowerCase().endsWith(".json");
+    const uploadBytes = useJsonTransport ? await jsonToUpstageXlsx(sourceBytes) : sourceBytes;
     const uploadMediaType = useJsonTransport ? XLSX_MEDIA_TYPE : source.media_type ?? "application/octet-stream";
     const uploadFilename = useJsonTransport
-      ? jsonTransportFilename(source.original_filename, source.sha256)
+      ? jsonTransportFilename(
+          source.original_filename ?? `${source.role.toLowerCase()}.json`,
+          source.sha256,
+        )
       : source.original_filename ?? `${source.role.toLowerCase()}-${source.sha256.slice(0, 8)}`;
+    return this.uploadBytes(uploadBytes, uploadMediaType, uploadFilename);
+  }
+
+  private async uploadBytes(
+    bytes: Uint8Array,
+    mediaType: string,
+    filename: string,
+  ): Promise<string> {
     const form = new FormData();
     form.append(
       "file",
-      new Blob([Uint8Array.from(uploadBytes).buffer], {
-        type: uploadMediaType,
+      new Blob([Uint8Array.from(bytes).buffer], {
+        type: mediaType,
       }),
-      uploadFilename,
+      filename,
     );
     form.append("purpose", "user_data");
     const response = await this.upstageFetch("/v2/files", { method: "POST", body: form });
@@ -274,10 +409,13 @@ export class UpstageAgentProvider implements ExtractionProvider {
 
   private async pollJob(jobId: string): Promise<JsonObject> {
     const deadline = Date.now() + this.timeoutMs;
+    const query = new URLSearchParams();
+    query.append("include[]", "all");
     while (Date.now() <= deadline) {
-      const job = await this.upstageFetch(`/v2/responses/${encodeURIComponent(jobId)}`, {
-        method: "GET",
-      });
+      const job = await this.upstageFetch(
+        `/v2/responses/${encodeURIComponent(jobId)}?${query.toString()}`,
+        { method: "GET" },
+      );
       const status = nonEmptyString(job.status, "Upstage job status");
       if (status === "completed") return job;
       if (status === "failed") {
