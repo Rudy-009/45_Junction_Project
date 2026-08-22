@@ -122,18 +122,16 @@ Ctrl+F 검색 · JSON raw 뷰 · 실제 건축 도면 · 라이트모드 토글 
 
 | # | 작업 | 파일 | 비고 |
 |---|---|---|---|
-| **P0** | **Fact review UI** | `InputScreen` 또는 workspace 내부 | raw fact 확인·수정·REVIEWED/REJECTED·snapshot freeze |
-| **P0** | **실제 workspace 배선** | `standby-api.ts` `WorkspaceScreen` | 같은 case ID의 event_graph·finding·evidence를 표시 |
-| **P0** | **실제 reference normalization** | review UI + QA fixture | Upstage raw를 사람이 normalized envelope로 승인 |
-| **P0** | **UI 계약 복구** | `WorkspaceScreen` | 두 동일 높이 패널·finding popup·Evidence Trace·세 verdict |
-| **P0** | **운영 backend·인증 경계** | Railway API/worker + Supabase | Vercel은 공개 API URL·사용자 세션만, Upstage key는 worker에만 |
+| **P0** | **외부 운영 provision** | Railway + Supabase + Vercel | 코드·image는 완료. 프로젝트 생성, secret/public env, live smoke 필요 |
+| **P0** | **실제 reference fidelity** | QA gold fact | 한국어 대본·17열 Master Cue의 locator·critical token을 원문 대조 |
 | P1 | XLSX export | 새 adapter/서비스 | 원본 sheet·열·서식을 보존한 새 파일 |
 | P2 | refresh gate | source/store/workspace | 동일 hash 재호출 금지, 새 fact는 UNREVIEWED |
 | P2 | revision·영속성 | store/DB | 원본 hash 위 append-only patch와 복원 |
 | P2 | 재생 동기화·파급효과 | `WorkspaceScreen` | 실제 event graph가 연결된 뒤 구현 |
 
-M2 backend compiler/verifier는 통제 fixture 기준 완료됐다. 다음 순서는 M3-A 운영 backend·인증 경계,
-M3-B review→snapshot→workspace E2E다. 정적 Vercel SPA에 token을 넣어 이 순서를 우회하지 않는다.
+M3 코드 경계는 완료됐다. Supabase JWT·case owner 검사·Railway image/config와
+review→snapshot→workspace E2E가 연결됐다. 외부 Railway/Supabase provision과 실제 원본 fidelity는 아직 남아 있다.
+정적 Vercel SPA에 Upstage key나 정적 API token을 넣어 이 순서를 우회하지 않는다.
 완료 여부를 바꿀 때는 `project/FEATURE_SPEC_CURRENT.md`도 같은 PR에서 갱신한다.
 
 ### 이벤트별 무대 스냅샷 — P0 사양
@@ -216,5 +214,5 @@ export 규칙 — 자세한 계약은 `project/PRD_CLAUDE.md` §10:
   → 타임라인 사건 선택 → 같은 시점 큐·무대 상태 재현
 ```
 
-M3가 연결되기 전에는 이 흐름을 완성됐다고 소개하지 않는다. UI를 바꿨다면 브라우저에서 실제 API case로
-끝까지 실행하고, 승인 전에는 세 규칙 모두 `INSUFFICIENT_EVIDENCE`인지 확인한다.
+UI를 바꿨다면 브라우저에서 같은 case ID의 이 흐름을 끝까지 실행하고, 승인 전에는 세 규칙 모두
+`INSUFFICIENT_EVIDENCE`인지 확인한다. 운영 완료라고 소개하려면 Railway/Supabase live smoke 증거도 필요하다.
