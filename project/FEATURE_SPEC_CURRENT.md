@@ -14,7 +14,7 @@
 
 ## 1. 한 문장 현황
 
-현재 STANDBY는 **대본·Master Cue·구조화된 무대 사양을 한 case에 업로드하고, Upstage가 만든
+현재 STANDBY는 **Master Cue·구조화된 무대 사양을 한 case에 업로드하고, Upstage가 만든
 UNREVIEWED fact를 사람이 정규화·승인한 뒤, 불변 snapshot만 compiler/verifier에 전달해
 세 verdict·근거 3종·이벤트별 2D 무대를 실제 workspace에 표시**한다.
 
@@ -31,7 +31,7 @@ M3 애플리케이션 코드와 컨테이너 경계는 구현됐다. 외부 Rail
 | 두 화면 라우팅 | **구현** | `/` 입력, `/workspace` 워크스페이스만 존재 |
 | KOR/ENG i18n | **구현** | 헤더 선택 메뉴로 M3 입력·review·workspace·2D 무대 카피를 전환하고 선택을 localStorage에 보존 |
 | UI 카피 정리 | **구현** | 설명형 슬로건·면책을 제거하고 provenance와 hash는 요청 시 펼침 |
-| 세 입력 | **구현** | SCRIPT PDF/DOCX, MASTER_CUE XLSX/PDF, STAGE_SPEC 폼을 받음 |
+| 입력 | **구현** | MASTER_CUE XLSX/PDF/JSON 한 칸과 STAGE_SPEC 폼을 받음 |
 | 로컬 파일 방어 | **구현** | 확장자·signature·50 MiB·SHA-256 검사. 미리 정한 파일명 없음 |
 | 무대 사양 | **구현** | crossover, 환복 시간, route time, route ID/capacity, 인물·소품 초기 배치 |
 | Upstage 추출 | **구현** | 역할별 Agent/Config를 서버에서 호출하고 모든 후보를 UNREVIEWED로 격리 |
@@ -56,9 +56,9 @@ M3 애플리케이션 코드와 컨테이너 경계는 구현됐다. 외부 Rail
 
 ```text
 Supabase 로그인
-  → SCRIPT + MASTER_CUE 파일 선택
+  → MASTER_CUE XLSX/PDF/JSON 파일 선택
   → STAGE_SPEC route/time/capacity/initial state 입력
-  → case 생성 + 세 source 업로드
+  → case 생성 + Master Cue 및 유효한 Stage Spec 업로드
   → 서버의 Upstage Agent 추출
   → UNREVIEWED fact의 quote/locator/field 검토
   → REVIEWED/REJECTED와 normalized envelope 기록
@@ -124,7 +124,7 @@ clean control → finding 0건
 | M3-A 인증·운영 runtime | **코드 완료** | Supabase JWT/owner 경계와 Railway image/config |
 | M3-A 외부 provision | **대기** | Railway와 Supabase 로그인, URL/secret 설정, live smoke |
 | 다음 P0 | **reference fidelity** | 실제 한국어 대본·17열 Master Cue를 gold fact와 대조 |
-| 다음 P1 | **OAuth 인증 통합** | OAuth Provider(Apple/Google) 연동으로 사용자별 권한 경계를 보강하고, 테스트 JSON 우회를 정상 인증 플로우로 대체 |
+| 다음 P1 | **OAuth 인증 통합** | OAuth Provider(Apple/Google) 연동으로 사용자별 권한 경계를 보강하고 현재 magic-link 인증 흐름을 통합 |
 | 다음 P1 | **XLSX 왕복** | 원본 sheet·열·서식을 유지한 새 파일과 re-import 동일 fact |
 | 다음 P2 | **refresh/영속성** | 동일 hash 재호출 금지, DB 저장, 새 fact UNREVIEWED gate |
 
