@@ -13,6 +13,10 @@
 제품 정의를 바꾸지 않으며, 오래된 외부 재업로드/별도 Final 화면 흐름이 남아 있는
 `API_SPEC.md`와 `openapi.yaml`은 구현 전에 이 문서와 현재 PRD에 맞춰 축소해야 한다.
 
+> **2026-08-22 공개 MVP 예외:** 현재 데모 런타임은 로그인 UI를 제외하고 브라우저 UUID 세션,
+> 세션별 owner 격리, extraction IP rate limit으로 운영한다. 아래 Supabase Auth·Postgres·Storage
+> 설계는 고객 문서와 영속 데이터를 받는 운영 제품 전환안이며 현재 런타임을 설명하지 않는다.
+
 ---
 
 ## 0. 결정 요약
@@ -63,10 +67,11 @@ pooler를 사용한다. transaction-mode pooler는 long-lived queue worker에 �
 
 ### 공개 데모 정책
 
-- 로그인하지 않은 사용자는 `CONTROLLED_FIXTURE` 기반 read-only demo만 볼 수 있다.
-- 문서 업로드, fact review, 큐시트 저장, export는 인증된 사용자만 가능하다.
+- 현재 해커톤 데모는 로그인 없이 문서를 업로드할 수 있다.
+- 브라우저 UUID를 해시한 actor ID로 case를 격리하고 extraction을 IP당 시간당 20회로 제한한다.
+- UUID는 신원 인증이 아니므로 영속 저장·공유·복구가 필요한 운영 제품에는 사용하지 않는다.
 - Vercel preview는 Deployment Protection을 켠다.
-- Vercel production URL이 공개돼도 backend authorization은 절대 생략하지 않는다.
+- 운영 제품 전환 시 Supabase Auth와 workspace authorization을 다시 적용한다.
 
 ---
 
@@ -447,6 +452,7 @@ fact, locator, calculation처럼 shape가 진화하는 값은 JSONB로 저장하
 
 ### 10.1 인증과 권한
 
+- 아래 항목은 운영 제품 전환 목표다. 현재 공개 MVP는 상단의 익명 데모 예외를 따른다.
 - Supabase Auth JWT는 API가 issuer, audience, expiry, signature를 검증한다.
 - 권한은 `OWNER | EDITOR | REVIEWER | VIEWER` 네 개다.
 - workspace membership을 모든 case query에 강제한다.
@@ -509,7 +515,8 @@ fact, locator, calculation처럼 shape가 진화하는 값은 JSONB로 저장하
 
 ### 10.7 비용·남용 방지
 
-- 인증 사용자만 extraction을 시작할 수 있다.
+- 공개 MVP는 익명 세션과 IP당 시간당 20회 제한을 함께 적용한다.
+- 운영 제품에서는 인증 사용자만 extraction을 시작할 수 있다.
 - workspace별 동시 extraction 수, 일일 page/credit budget, 파일 수·크기 한도를 둔다.
 - hash cache hit이면 Upstage를 호출하지 않는다.
 - 같은 `Idempotency-Key`의 중복 요청은 기존 operation을 반환한다.
@@ -640,7 +647,7 @@ fact, locator, calculation처럼 shape가 진화하는 값은 JSONB로 저장하
 ## 15. 출시 전 보안 합격선
 
 - [ ] frontend bundle에 Upstage/DB/service-role secret 0개
-- [ ] 인증 없이 upload/extract/review/export 성공 0건
+- [ ] 유효한 익명 데모 세션 없이 upload/extract/review 성공 0건
 - [ ] cross-workspace source/finding 접근 0건
 - [ ] MIME 위장, zip bomb, macro fixture가 ingestion gate에서 차단됨
 - [ ] unreviewed fact로 hard verdict 0건
