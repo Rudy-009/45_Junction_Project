@@ -1,11 +1,19 @@
-import { useMemo, useRef, useEffect } from 'react';
+import { useMemo, useRef, useEffect, useState } from 'react';
 import { useCueSheetStore, useStandbyWorkspaceStore } from '@/store';
 import { PanelHeader } from '@/components/ui';
-import { StageSimulator, VerifiedWorkspace } from '@/components/domain';
+import {
+  ScriptSidebar,
+  StageSimulator,
+  VerifiedWorkspace,
+  type ScriptSidebarEntry,
+} from '@/components/domain';
+import type { StageMotion } from '@/components/domain/StageSimulator';
 import type { StageEntity } from '@/types';
 import type { CueSheet, CueEvent, Action, Direction } from '@/types/cue-sheet';
 import type { Contradiction } from '@/types/validation';
+import type { StoryboardAgentArtifact, StoryboardAgentState } from '@/types/standby';
 import { cn } from '@/lib/utils';
+import { createStandbyBrowserApi } from '@/lib/standby-api';
 import { useNavigate } from '@tanstack/react-router';
 import { useI18n } from '@/lib/i18n';
 
@@ -74,14 +82,117 @@ export function WorkspaceScreen() {
   const { t } = useI18n();
   const navigate = useNavigate();
   const verifiedWorkspace = useStandbyWorkspaceStore((state) => state.workspace);
+  const verifiedCaseId = useStandbyWorkspaceStore((state) => state.caseId);
   const cueSheet = useCueSheetStore((s) => s.cueSheet);
   const validationResult = useCueSheetStore((s) => s.validationResult);
   const selectedCueId = useCueSheetStore((s) => s.selectedCueId);
   const selectedEventId = useCueSheetStore((s) => s.selectedEventId);
   const selectCue = useCueSheetStore((s) => s.selectCue);
   const selectEvent = useCueSheetStore((s) => s.selectEvent);
+  const [stageMotion, setStageMotion] = useState<StageMotion>();
+  const [storyboardState, setStoryboardState] = useState<StoryboardAgentState>({ status: 'IDLE' });
+  const storyboardRequestVersion = useRef(0);
 
-  if (verifiedWorkspace) return <VerifiedWorkspace workspace={verifiedWorkspace} />;
+  const selectedCue = useMemo(
+    () => cueSheet?.cues.find((cue) => cue.cue_id === selectedCueId) ?? cueSheet?.cues[0] ?? null,
+    [cueSheet, selectedCueId],
+  );
+  const selectedEvt = selectedCue?.events.find((event) => event.event_id === selectedEventId) ?? null;
+  const timelineEvents = useMemo(
+    () => cueSheet?.cues.flatMap((cue) => cue.events.map((event) => ({ cueId: cue.cue_id, event }))) ?? [],
+    [cueSheet],
+  );
+  const scriptEntries = useMemo<ScriptSidebarEntry[]>(() => cueSheet?.cues.flatMap((cue) =>
+    cue.events.map((event) => {
+      const description = event.trigger.description?.trim();
+      const notes = event.notes?.trim();
+      const speaker = event.trigger.character_id
+        ? cueSheet.characters.find((character) => character.id === event.trigger.character_id)?.name
+        : undefined;
+      const triggerKind = event.trigger.type === 'dialogue'
+        ? 'DIALOGUE' as const
+        : event.trigger.type === 'scene_change'
+          ? 'STAGE_DIRECTION' as const
+          : 'TRIGGER' as const;
+      const lines: ScriptSidebarEntry['lines'] = [];
+
+      if (description) {
+        lines.push({
+          kind: triggerKind,
+          text: description,
+          ...(event.trigger.type === 'dialogue' && speaker ? { speaker } : {}),
+        });
+      }
+      if (notes && notes !== description) {
+        lines.push({ kind: 'NOTE', text: notes });
+      }
+
+      return {
+        eventId: event.event_id,
+        sceneLabel: cue.scene_number,
+        sourceLabel: 'MASTER_CUE TRIGGER',
+        lines,
+      };
+    }),
+  ) ?? [], [cueSheet]);
+  const entities = useMemo<StageEntity[]>(() => {
+    if (!cueSheet || !selectedCue) return [];
+    return buildStageEntities(cueSheet, selectedCue.cue_id, selectedEventId ?? undefined);
+  }, [cueSheet, selectedCue, selectedEventId]);
+
+  const requestStoryboard = async (eventId: string) => {
+    const requestVersion = ++storyboardRequestVersion.current;
+    const api = createStandbyBrowserApi();
+    if (!api || !verifiedCaseId) {
+      setStoryboardState({ status: 'FAILED', summary: 'Storyboard Agent is not connected.' });
+      return;
+    }
+    setStoryboardState({ status: 'RECONSTRUCTING', version: eventId });
+    try {
+      const operation = await api.startProductionAgent(
+        verifiedCaseId,
+        'STORYBOARD_RECOMPOSER',
+        eventId,
+      );
+      const completed = await api.waitForOperation(operation.operation_id);
+      if (requestVersion !== storyboardRequestVersion.current) return;
+      if (completed.resource_ref.type !== 'production_artifact') {
+        throw new Error('Storyboard Agent returned an invalid result reference.');
+      }
+      const artifact = await api.getProductionArtifact<StoryboardAgentArtifact>(
+        completed.resource_ref.id,
+      );
+      if (requestVersion !== storyboardRequestVersion.current) return;
+      if (artifact.payload.event_id !== eventId) {
+        throw new Error('Storyboard Agent returned a stale event.');
+      }
+      setStoryboardState({
+        status: 'READY',
+        summary: artifact.payload.summary,
+        version: `Config ${artifact.config_id ?? 'latest'}`,
+        eventId: artifact.payload.event_id,
+        authority: artifact.authority,
+        beats: artifact.payload.beats,
+        missingEvidence: artifact.payload.missing_evidence,
+      });
+    } catch (error) {
+      if (requestVersion !== storyboardRequestVersion.current) return;
+      setStoryboardState({
+        status: 'FAILED',
+        summary: error instanceof Error ? error.message : 'Storyboard reconstruction failed.',
+      });
+    }
+  };
+
+  if (verifiedWorkspace) {
+    return (
+      <VerifiedWorkspace
+        workspace={verifiedWorkspace}
+        storyboardState={storyboardState}
+        onStoryboardRequest={(eventId) => void requestStoryboard(eventId)}
+      />
+    );
+  }
 
   if (!cueSheet) {
     return (
@@ -99,16 +210,33 @@ export function WorkspaceScreen() {
     );
   }
 
-  const selectedCue = cueSheet.cues.find((c) => c.cue_id === selectedCueId) ?? cueSheet.cues[0];
-  const selectedEvt = selectedCue?.events.find((e) => e.event_id === selectedEventId) ?? null;
-
-  // Stage entities at selected event
-  const entities: StageEntity[] = useMemo(() => {
-    if (!selectedCue) return [];
-    return buildStageEntities(cueSheet, selectedCue.cue_id, selectedEventId ?? undefined);
-  }, [cueSheet, selectedCue, selectedEventId]);
-
   const crossoverValue = cueSheet.venue.has_backstage_crossover ? 'true' : 'false';
+
+  const handleSelectEvent = (cueId: string, eventId: string) => {
+    if (eventId === selectedEventId) return;
+
+    const selectedIndex = timelineEvents.findIndex((item) => item.event.event_id === selectedEventId);
+    const nextIndex = timelineEvents.findIndex((item) => item.event.event_id === eventId);
+    const adjacentForward = selectedIndex >= 0 && nextIndex === selectedIndex + 1;
+    const previousItem = timelineEvents[selectedIndex];
+    const nextItem = timelineEvents[nextIndex];
+    const previousEntities = adjacentForward && previousItem
+      ? buildStageEntities(cueSheet, previousItem.cueId, previousItem.event.event_id)
+      : [];
+    const nextEntities = adjacentForward && nextItem
+      ? buildStageEntities(cueSheet, nextItem.cueId, nextItem.event.event_id)
+      : [];
+
+    setStageMotion({
+      eventKey: eventId,
+      animate: adjacentForward,
+      changedEntityIds: adjacentForward
+        ? changedStageEntityIds(previousEntities, nextEntities)
+        : [],
+    });
+    selectCue(cueId);
+    selectEvent(eventId);
+  };
 
   return (
     <div className="flex h-[calc(100vh-56px)] flex-col">
@@ -132,76 +260,86 @@ export function WorkspaceScreen() {
         )}
       </div>
 
-      {/* Main area: vertical stack */}
-      <div className="flex min-h-0 flex-1 flex-col">
-        {/* Stage simulator */}
-        <div className="flex h-[260px] shrink-0 flex-col border-b border-border">
-          <PanelHeader
-            title={t('workspace.stagePanel')}
-            right={
-              <span className="mono text-[10px] text-muted-foreground">
-                {selectedCue?.scene_number}{selectedEvt ? ` · ${selectedEvt.event_id}` : ''}
-              </span>
-            }
-          />
-          <div className="min-h-0 flex-1">
-            <StageSimulator crossover={crossoverValue} entities={entities} />
-          </div>
-        </div>
+      <div className="flex min-h-0 flex-1">
+        <ScriptSidebar
+          entries={scriptEntries}
+          selectedEventId={selectedEventId}
+          onSelectEvent={(eventId) => {
+            const target = timelineEvents.find((item) => item.event.event_id === eventId);
+            if (target) handleSelectEvent(target.cueId, eventId);
+          }}
+        />
 
-        {/* Event detail */}
-        <div className="flex min-h-0 flex-1 flex-col border-b border-border">
-          <PanelHeader
-            title={selectedCue ? `${selectedCue.scene_number} · ${selectedCue.scene_type === 'number' ? '넘버' : selectedCue.scene_type === 'dark' ? '암전' : '씬'}` : '씬 선택'}
-            right={
-              selectedCue?.notes ? (
-                <span className="max-w-[400px] truncate text-[10px] text-muted-foreground">
-                  {selectedCue.notes}
-                </span>
-              ) : undefined
-            }
-          />
-          <div
-            className="min-h-0 flex-1 overflow-auto p-4"
-            role="region"
-            tabIndex={0}
-            aria-label={t('workspace.eventDetail')}
-          >
-            {selectedEvt ? (
-              <EventDetail
-                event={selectedEvt}
-                cueSheet={cueSheet}
-                contradictions={validationResult?.contradictions.filter(
-                  (c) => c.event_id === selectedEvt.event_id,
-                ) ?? []}
+        <div className="flex min-w-0 flex-1 flex-col">
+          {/* Main area: vertical stack */}
+          <div className="flex min-h-0 flex-1 flex-col">
+            {/* Stage simulator */}
+            <div className="flex h-[260px] shrink-0 flex-col border-b border-border">
+              <PanelHeader
+                title={t('workspace.stagePanel')}
+                right={
+                  <span className="mono text-[10px] text-muted-foreground">
+                    {selectedCue?.scene_number}{selectedEvt ? ` · ${selectedEvt.event_id}` : ''}
+                  </span>
+                }
               />
-            ) : selectedCue ? (
-              <CueOverview
-                cue={selectedCue}
-                cueSheet={cueSheet}
-                contradictions={validationResult?.contradictions.filter(
-                  (c) => c.cue_id === selectedCue.cue_id,
-                ) ?? []}
+              <div className="min-h-0 flex-1">
+                <StageSimulator crossover={crossoverValue} entities={entities} motion={stageMotion} />
+              </div>
+            </div>
+
+            {/* Event detail */}
+            <div className="flex min-h-0 flex-1 flex-col border-b border-border">
+              <PanelHeader
+                title={selectedCue ? `${selectedCue.scene_number} · ${selectedCue.scene_type === 'number' ? '넘버' : selectedCue.scene_type === 'dark' ? '암전' : '씬'}` : '씬 선택'}
+                right={
+                  selectedCue?.notes ? (
+                    <span className="max-w-[400px] truncate text-[10px] text-muted-foreground">
+                      {selectedCue.notes}
+                    </span>
+                  ) : undefined
+                }
               />
-            ) : (
-              <p className="text-sm text-muted-foreground">이벤트를 선택하세요.</p>
-            )}
+              <div
+                className="min-h-0 flex-1 overflow-auto p-4"
+                role="region"
+                tabIndex={0}
+                aria-label={t('workspace.eventDetail')}
+              >
+                {selectedEvt ? (
+                  <EventDetail
+                    event={selectedEvt}
+                    cueSheet={cueSheet}
+                    contradictions={validationResult?.contradictions.filter(
+                      (c) => c.event_id === selectedEvt.event_id,
+                    ) ?? []}
+                  />
+                ) : selectedCue ? (
+                  <CueOverview
+                    cue={selectedCue}
+                    cueSheet={cueSheet}
+                    contradictions={validationResult?.contradictions.filter(
+                      (c) => c.cue_id === selectedCue.cue_id,
+                    ) ?? []}
+                  />
+                ) : (
+                  <p className="text-sm text-muted-foreground">이벤트를 선택하세요.</p>
+                )}
+              </div>
+            </div>
           </div>
+
+          {/* Bottom: Timeline (horizontal scroll) */}
+          <Timeline
+            cueSheet={cueSheet}
+            selectedCueId={selectedCue?.cue_id ?? null}
+            selectedEventId={selectedEventId}
+            contradictions={validationResult?.contradictions ?? []}
+            onSelectCue={selectCue}
+            onSelectEvent={handleSelectEvent}
+          />
         </div>
       </div>
-
-      {/* Bottom: Timeline (horizontal scroll) */}
-      <Timeline
-        cueSheet={cueSheet}
-        selectedCueId={selectedCue?.cue_id ?? null}
-        selectedEventId={selectedEventId}
-        contradictions={validationResult?.contradictions ?? []}
-        onSelectCue={selectCue}
-        onSelectEvent={(cueId, eventId) => {
-          selectCue(cueId);
-          selectEvent(eventId);
-        }}
-      />
     </div>
   );
 }
@@ -230,7 +368,7 @@ function Timeline({
   useEffect(() => {
     if (!selectedEventId || !scrollRef.current) return;
     const el = scrollRef.current.querySelector(`[data-event="${selectedEventId}"]`);
-    el?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+    el?.scrollIntoView({ block: 'nearest', inline: 'center' });
   }, [selectedEventId]);
 
   return (
@@ -327,12 +465,13 @@ function EventCell({
       data-event={event.event_id}
       onClick={onClick}
       className={cn(
-        'flex w-[120px] shrink-0 flex-col justify-between border p-1.5 text-left transition-all',
+        'timeline-event-cell relative flex w-[120px] shrink-0 flex-col justify-between overflow-hidden border p-1.5 text-left transition-[border-color,background-color,color] duration-150',
         isSelected
-          ? 'border-foreground bg-foreground/10 ring-1 ring-foreground'
+          ? 'is-selected border-foreground bg-foreground/10 ring-1 ring-foreground'
           : cn('hover:bg-muted', cellBorderColor(contradictions)),
       )}
     >
+      <span className="timeline-playhead" aria-hidden="true" />
       {/* Top: trigger */}
       <div className="flex items-center gap-1">
         <span className="text-[11px]">{triggerIcon(event.trigger.type)}</span>
@@ -635,6 +774,7 @@ function buildStageEntities(
         kind: 'prop',
         zone: '무대',
         transition: state.transition,
+        lastDirection: state.last_direction ?? undefined,
         carriedBy: state.carried_by ?? undefined,
       });
     } else if (state.last_direction) {
@@ -644,9 +784,25 @@ function buildStageEntities(
         kind: 'prop',
         zone: state.last_direction === 'stage_left' ? '상수윙' : '하수윙',
         transition: state.transition,
+        lastDirection: state.last_direction,
       });
     }
   }
 
   return entities;
+}
+
+function changedStageEntityIds(previous: StageEntity[], next: StageEntity[]): string[] {
+  const beforeById = new Map(previous.map((entity) => [entity.id, entity]));
+  const afterById = new Map(next.map((entity) => [entity.id, entity]));
+
+  return [...new Set([...beforeById.keys(), ...afterById.keys()])].filter((entityId) => {
+    const before = beforeById.get(entityId);
+    const after = afterById.get(entityId);
+    return !before
+      || !after
+      || before.kind !== after.kind
+      || before.zone !== after.zone
+      || before.carriedBy !== after.carriedBy;
+  });
 }

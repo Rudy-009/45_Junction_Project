@@ -1,7 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, CircleHelp, ShieldAlert } from 'lucide-react';
-import { StageSimulator } from './StageSimulator';
-import type { Finding, FindingVerdict, StageZone, WorkspaceSnapshot } from '@/types/standby';
+import { StageSimulator, type StageMotion } from './StageSimulator';
+import { ScriptSidebar, type ScriptSidebarEntry } from './ScriptSidebar';
+import type {
+  Finding,
+  FindingVerdict,
+  StageZone,
+  StoryboardAgentState,
+  WorkspaceSnapshot,
+} from '@/types/standby';
 import type { StageEntity, Zone } from '@/types/ui';
 import { cn } from '@/lib/utils';
 import { useI18n, type MessageKey } from '@/lib/i18n';
@@ -38,23 +45,91 @@ function findingSummaryKey(finding: Finding): MessageKey {
   return 'workspace.propContinuity';
 }
 
-export function VerifiedWorkspace({ workspace }: { workspace: WorkspaceSnapshot }) {
+export function VerifiedWorkspace({
+  workspace,
+  storyboardState,
+  onStoryboardRequest,
+}: {
+  workspace: WorkspaceSnapshot;
+  storyboardState?: StoryboardAgentState;
+  onStoryboardRequest?: (eventId: string) => void;
+}) {
   const { t } = useI18n();
   const initialEventId = workspace.findings[0]?.event_id ?? workspace.events[0]?.event_id ?? null;
   const [selectedEventId, setSelectedEventId] = useState<string | null>(initialEventId);
+  const [stageMotion, setStageMotion] = useState<StageMotion>();
+  const selectedEventIndex = workspace.events.findIndex((event) => event.event_id === selectedEventId);
   const selectedEvent = workspace.events.find((event) => event.event_id === selectedEventId) ?? null;
+  const previousEvent = selectedEventIndex > 0 ? workspace.events[selectedEventIndex - 1] : null;
   const selectedFinding = workspace.findings.find((finding) =>
     finding.event_id === selectedEventId,
   ) ?? null;
   const entities = useMemo<StageEntity[]>(() => Object.entries(selectedEvent?.stage_snapshot ?? {}).map(
-    ([entityId, state]) => ({
-      id: entityId,
-      label: entityId,
-      kind: state.kind === 'PROP' ? 'prop' : 'person',
-      zone: ZONE_LABEL[state.zone],
-      ...(state.transition ? { transition: state.transition } : {}),
-    }),
-  ), [selectedEvent]);
+    ([entityId, state]) => {
+      const priorState = previousEvent?.stage_snapshot[entityId];
+      const directionZone = state.transition === 'ENTER' ? priorState?.zone : state.zone;
+      const lastDirection = directionFromZone(directionZone);
+      return {
+        id: entityId,
+        label: entityId,
+        kind: state.kind === 'PROP' ? 'prop' : 'person',
+        zone: ZONE_LABEL[state.zone],
+        ...(state.transition ? { transition: state.transition } : {}),
+        ...(lastDirection ? { lastDirection } : {}),
+      };
+    },
+  ), [previousEvent, selectedEvent]);
+  const scriptEntries = useMemo<ScriptSidebarEntry[]>(() => workspace.events.map((event) => {
+    const scriptEvidence = workspace.findings
+      .filter((finding) => finding.event_id === event.event_id)
+      .flatMap((finding) => finding.evidence)
+      .filter((evidence) => evidence.role === 'SCRIPT' && evidence.quote?.trim());
+    const seen = new Set<string>();
+    const evidenceLines = scriptEvidence.flatMap((evidence) => {
+      const text = evidence.quote?.trim();
+      if (!text) return [];
+      const key = `${evidence.locator ?? ''}\u0000${text}`;
+      if (seen.has(key)) return [];
+      seen.add(key);
+      return [{
+        kind: 'SCRIPT_EVIDENCE' as const,
+        text,
+        ...(evidence.locator ? { locator: evidence.locator } : {}),
+      }];
+    });
+    const graphEvent = workspace.event_graph.events.find((item) => item.event_id === event.event_id);
+    const reviewedLabel = graphEvent?.source_refs.length && graphEvent.label.trim()
+      ? [{ kind: 'EVENT_LABEL' as const, text: graphEvent.label.trim() }]
+      : [];
+
+    return {
+      eventId: event.event_id,
+      sceneLabel: event.label,
+      sourceLabel: evidenceLines.length > 0
+        ? 'SCRIPT EVIDENCE'
+        : reviewedLabel.length > 0
+          ? 'REVIEWED EVENT'
+          : 'NO LINKED TEXT',
+      lines: evidenceLines.length > 0 ? evidenceLines : reviewedLabel,
+    };
+  }), [workspace.event_graph.events, workspace.events, workspace.findings]);
+
+  const handleSelectEvent = (eventId: string) => {
+    if (eventId === selectedEventId) return;
+
+    const nextIndex = workspace.events.findIndex((event) => event.event_id === eventId);
+    const adjacentForward = selectedEventIndex >= 0 && nextIndex === selectedEventIndex + 1;
+    const nextEvent = workspace.events[nextIndex];
+    setStageMotion({
+      eventKey: eventId,
+      animate: adjacentForward,
+      changedEntityIds: adjacentForward && selectedEvent && nextEvent
+        ? changedSnapshotEntityIds(selectedEvent.stage_snapshot, nextEvent.stage_snapshot)
+        : [],
+    });
+    setSelectedEventId(eventId);
+    onStoryboardRequest?.(eventId);
+  };
 
   return (
     <div className="flex h-[calc(100vh-56px)] flex-col overflow-hidden">
@@ -64,41 +139,152 @@ export function VerifiedWorkspace({ workspace }: { workspace: WorkspaceSnapshot 
           <span className="mono ml-3 text-[10px] text-muted-foreground">{workspace.case_id}</span>
         </div>
         <div className="flex items-center gap-3 mono text-[10px]">
+          {storyboardState && storyboardState.status !== 'IDLE' && (
+            <StoryboardAgentStatus state={storyboardState} />
+          )}
           <span>{workspace.verification.ruleset_version}</span>
           <span className="text-muted-foreground">{workspace.verification.result_hash.slice(0, 12)}…</span>
         </div>
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col">
-        <section className="flex min-h-0 flex-1 basis-0 flex-col border-b border-border">
-          <PanelTitle title={t('workspace.stageTitle')} right={selectedEvent ? `${selectedEvent.event_id} · ${selectedEvent.label}` : t('workspace.noEvent')} />
-          <div className="min-h-0 flex-1">
-            {selectedEvent && entities.length > 0 ? (
-              <StageSimulator crossover="UNKNOWN" entities={entities} />
-            ) : (
-              <div className="flex h-full items-center justify-center bg-background p-6 text-center">
-                <div>
-                  <CircleHelp className="mx-auto text-insufficient" size={26} />
-                  <p className="mt-3 text-sm">{t('workspace.noSnapshot')}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">{t('workspace.noSnapshotHelp')}</p>
-                </div>
-              </div>
-            )}
-          </div>
-        </section>
+      {storyboardState?.status === 'READY' && (
+        <StoryboardArtifactPanel state={storyboardState} />
+      )}
 
-        <section className="flex min-h-0 flex-1 basis-0 flex-col">
-          <PanelTitle title={t('workspace.findingTitle')} right={selectedFinding ? `${selectedFinding.rule_id} / ${selectedFinding.target_locator.row_id}:${selectedFinding.target_locator.column}` : 'CONSISTENT'} />
-          <div className="min-h-0 flex-1 overflow-auto">
-            {selectedFinding ? <FindingDetail finding={selectedFinding} /> : (
-              <div className="flex h-full items-center justify-center text-sm text-consistent">{t('workspace.consistent')}</div>
-            )}
+      <div className="flex min-h-0 flex-1">
+        <ScriptSidebar
+          entries={scriptEntries}
+          selectedEventId={selectedEventId}
+          onSelectEvent={handleSelectEvent}
+        />
+
+        <div className="flex min-w-0 flex-1 flex-col">
+          <div className="flex min-h-0 flex-1 flex-col">
+            <section className="flex min-h-0 flex-1 basis-0 flex-col border-b border-border">
+              <PanelTitle title={t('workspace.stageTitle')} right={selectedEvent ? `${selectedEvent.event_id} · ${selectedEvent.label}` : t('workspace.noEvent')} />
+              <div className="min-h-0 flex-1">
+                {selectedEvent && entities.length > 0 ? (
+                  <StageSimulator crossover="UNKNOWN" entities={entities} motion={stageMotion} />
+                ) : (
+                  <div className="flex h-full items-center justify-center bg-background p-6 text-center">
+                    <div>
+                      <CircleHelp className="mx-auto text-insufficient" size={26} />
+                      <p className="mt-3 text-sm">{t('workspace.noSnapshot')}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">{t('workspace.noSnapshotHelp')}</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </section>
+
+            <section className="flex min-h-0 flex-1 basis-0 flex-col">
+              <PanelTitle title={t('workspace.findingTitle')} right={selectedFinding ? `${selectedFinding.rule_id} / ${selectedFinding.target_locator.row_id}:${selectedFinding.target_locator.column}` : 'CONSISTENT'} />
+              <div className="min-h-0 flex-1 overflow-auto">
+                {selectedFinding ? <FindingDetail finding={selectedFinding} /> : (
+                  <div className="flex h-full items-center justify-center text-sm text-consistent">{t('workspace.consistent')}</div>
+                )}
+              </div>
+            </section>
           </div>
-        </section>
+
+          <VerifiedTimeline workspace={workspace} selectedEventId={selectedEventId} onSelect={handleSelectEvent} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function directionFromZone(zone?: StageZone): StageEntity['lastDirection'] {
+  if (zone === 'STAGE_RIGHT_WING' || zone === 'STAGE_RIGHT_CHANGE') return 'stage_left';
+  if (zone === 'STAGE_LEFT_WING' || zone === 'STAGE_LEFT_CHANGE') return 'stage_right';
+  return undefined;
+}
+
+function changedSnapshotEntityIds(
+  previous: WorkspaceSnapshot['events'][number]['stage_snapshot'],
+  next: WorkspaceSnapshot['events'][number]['stage_snapshot'],
+): string[] {
+  return [...new Set([...Object.keys(previous), ...Object.keys(next)])].filter((entityId) => {
+    const before = previous[entityId];
+    const after = next[entityId];
+    return !before || !after || before.kind !== after.kind || before.zone !== after.zone;
+  });
+}
+
+function StoryboardAgentStatus({ state }: { state: StoryboardAgentState }) {
+  const label = state.status === 'RECONSTRUCTING'
+    ? 'RECONSTRUCTING'
+    : state.status === 'READY'
+      ? 'READY'
+      : 'UNAVAILABLE';
+
+  return (
+    <div
+      className="storyboard-agent-status flex max-w-[320px] items-center gap-1.5 border border-border px-2 py-1"
+      data-status={state.status}
+      title={state.summary}
+    >
+      <span className="storyboard-agent-status__signal h-1.5 w-1.5 bg-muted-foreground" aria-hidden="true" />
+      <span className="text-muted-foreground">UPSTAGE STORYBOARD</span>
+      <span aria-hidden="true">·</span>
+      <span>{label}</span>
+      {state.version && <span className="truncate text-muted-foreground">{state.version}</span>}
+      {state.status === 'READY' && (
+        <span className="text-muted-foreground">
+          {(state.beats ?? []).length} BEATS / {(state.missingEvidence ?? []).length} MISSING
+        </span>
+      )}
+      {state.summary && state.status === 'READY' && (
+        <span className="max-w-28 truncate text-muted-foreground">{state.summary}</span>
+      )}
+    </div>
+  );
+}
+
+function StoryboardArtifactPanel({ state }: { state: StoryboardAgentState }) {
+  const { t } = useI18n();
+  const beats = state.beats ?? [];
+  const missingEvidence = state.missingEvidence ?? [];
+
+  return (
+    <section className="shrink-0 border-b border-border bg-surface" aria-label={t('workspace.storyboardTitle')}>
+      <div className="flex h-7 items-center justify-between gap-4 border-b border-border px-3">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="text-[10px] font-semibold tracking-[0.08em]">{t('workspace.storyboardTitle')}</span>
+          {state.authority && <span className="mono text-[9px] text-edited">{state.authority}</span>}
+          {state.eventId && <span className="mono text-[9px] text-muted-foreground">{state.eventId}</span>}
+        </div>
+        {state.summary && <p className="truncate text-[10px] text-muted-foreground">{state.summary}</p>}
       </div>
 
-      <VerifiedTimeline workspace={workspace} selectedEventId={selectedEventId} onSelect={setSelectedEventId} />
-    </div>
+      <div className="flex min-h-14 gap-1 overflow-x-auto p-2">
+        {beats.length === 0 && (
+          <div className="flex min-w-48 items-center border border-border bg-background px-2 text-xs text-muted-foreground">
+            {t('workspace.storyboardNoBeats')}
+          </div>
+        )}
+        {beats.map((beat, index) => (
+          <article key={`${beat.entity_id}-${index}`} className="min-w-52 border border-border bg-background px-2 py-1.5">
+            <div className="flex items-center justify-between gap-3">
+              <span className="mono truncate text-[10px] font-semibold">{beat.entity_id}</span>
+              <span className="mono text-[9px] text-edited">{beat.action}</span>
+            </div>
+            <p className="mono mt-1 text-[9px] text-muted-foreground">
+              {beat.from_zone ?? '—'} → {beat.to_zone ?? '—'}
+            </p>
+            <p className="mt-1 break-all text-[9px] text-muted-foreground">
+              {t('workspace.storyboardFacts')}: {beat.evidence_fact_ids.length > 0 ? beat.evidence_fact_ids.join(', ') : '—'}
+            </p>
+          </article>
+        ))}
+        {missingEvidence.map((item, index) => (
+          <article key={`${item}-${index}`} className="min-w-52 border border-insufficient bg-insufficient/10 px-2 py-1.5">
+            <div className="text-[9px] font-semibold text-insufficient">{t('workspace.storyboardMissing')}</div>
+            <p className="mt-1 break-words text-[10px] leading-4">{item}</p>
+          </article>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -190,7 +376,8 @@ function VerifiedTimeline({ workspace, selectedEventId, onSelect }: {
               ?? findings.find((finding) => finding.verdict === 'REVIEW')
               ?? findings[0];
             return (
-              <button key={event.event_id} data-event={event.event_id} type="button" onClick={() => onSelect(event.event_id)} className={cn('flex w-40 shrink-0 flex-col justify-between border p-2 text-left', selectedEventId === event.event_id ? 'border-foreground bg-foreground/10' : strongest ? verdictClass(strongest.verdict) : 'border-border bg-background')}>
+              <button key={event.event_id} data-event={event.event_id} type="button" onClick={() => onSelect(event.event_id)} className={cn('timeline-event-cell relative flex w-40 shrink-0 flex-col justify-between overflow-hidden border p-2 text-left', selectedEventId === event.event_id ? 'is-selected border-foreground bg-foreground/10' : strongest ? verdictClass(strongest.verdict) : 'border-border bg-background')}>
+                <span className="timeline-playhead" aria-hidden="true" />
                 <div><span className="mono text-[10px]">{event.event_id}</span><p className="mt-1 truncate text-xs">{event.label}</p></div>
                 <div className="flex items-center justify-between mono text-[9px]"><span>{event.aggregate}</span><span>{findings.length > 0 ? `${findings.length} FINDING` : t('workspace.clean')}</span></div>
               </button>
