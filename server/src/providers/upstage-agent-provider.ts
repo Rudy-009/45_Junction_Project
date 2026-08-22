@@ -221,7 +221,7 @@ function parseRolePayload(role: SourceRole, job: JsonObject): JsonObject {
   throw new DomainError(502, "UPSTAGE_RESPONSE_INVALID", `No ${key} JSON output was found.`);
 }
 
-function parseProductionPayload(role: ProductionAgentRole, job: JsonObject): JsonObject {
+function parseProductionPayload(role: ProductionAgentRole, job: JsonObject): JsonObject | null {
   const payload = findResponseObject(job, (object) => {
     if (role === "FACT_NORMALIZER" && Array.isArray(object.recommendations)) return true;
     if (
@@ -240,12 +240,40 @@ function parseProductionPayload(role: ProductionAgentRole, job: JsonObject): Jso
     }
     return false;
   });
-  if (payload) return payload;
-  throw new DomainError(
-    502,
-    "UPSTAGE_RESPONSE_INVALID",
-    `No ${role} JSON output was found.`,
-  );
+  return payload;
+}
+
+function productionFallback(role: ProductionAgentRole, input: ProductionAgentFrozenInput): JsonObject {
+  if (role === "FACT_NORMALIZER") {
+    const facts = Array.isArray(input.payload.facts) ? input.payload.facts : [];
+    return {
+      recommendations: facts.map((value) => {
+        const fact = value as JsonObject;
+        return {
+          fact_id: fact.fact_id,
+          normalized_fact_type: fact.fact_type,
+          value: fact.raw_value,
+          confidence: "NOT_PROVIDED",
+          authority: "NON_AUTHORITATIVE",
+        };
+      }),
+      missing_evidence: [],
+    };
+  }
+  if (role === "STORYBOARD_RECOMPOSER") {
+    const selected = input.payload.selected_event as JsonObject | undefined;
+    return {
+      event_id: selected?.event_id,
+      beats: [],
+      summary: "Static verified snapshot retained because the Agent response was rejected.",
+      missing_evidence: [],
+    };
+  }
+  return {
+    headline: "Deterministic findings retained because the Agent response was rejected.",
+    sections: [],
+    missing_evidence: [],
+  };
 }
 
 function delay(ms: number): Promise<void> {
@@ -366,13 +394,15 @@ export class UpstageAgentProvider implements
     const job = await this.createJob(agentId, fileId, configId);
     const jobId = nonEmptyString(job.id, "Upstage job id");
     const completedJob = await this.pollJob(jobId);
+    const parsed = parseProductionPayload(role, completedJob);
     return {
-      output: parseProductionPayload(role, completedJob),
+      output: parsed ?? productionFallback(role, input),
       provider_job_id: jobId,
       agent_id: agentId,
       config_id: configId,
       adapter_version: ADAPTER_VERSION,
       raw_response_sha256: hashJson(completedJob),
+      ...(parsed ? {} : { fallback_reason: "UPSTAGE_RESPONSE_REJECTED" as const }),
     };
   }
 

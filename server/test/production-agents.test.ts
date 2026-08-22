@@ -697,3 +697,44 @@ test("Upstage Instruct output decodes JSON text and polls with include[]=all", a
   assert.deepEqual(result.output, expected);
   assert.equal(result.provider_job_id, "job_brief");
 });
+
+test("Upstage Instruct preserves job provenance when a missing JSON payload falls back", async () => {
+  const mockFetch: typeof fetch = async (input, init) => {
+    const url = String(input);
+    if (url.endsWith("/v2/files")) return Response.json({ id: "file_storyboard" });
+    if (url.endsWith("/v2/responses") && init?.method === "POST") return Response.json({ id: "job_storyboard" });
+    return Response.json({
+      id: "job_storyboard",
+      status: "completed",
+      output: [{ content: [{ type: "output_text", text: "No structured output" }] }],
+    });
+  };
+  const provider = new UpstageAgentProvider({
+    apiKey: "secret-test-key",
+    agentIds: {},
+    productionAgentIds: { STORYBOARD_RECOMPOSER: "agt_storyboard" },
+    productionConfigIds: { STORYBOARD_RECOMPOSER: "1" },
+    fetchImpl: mockFetch,
+    pollIntervalMs: 0,
+    timeoutMs: 1_000,
+  });
+  const result = await provider.run("STORYBOARD_RECOMPOSER", {
+    contract_version: "standby.production-agent-input.v1",
+    role: "STORYBOARD_RECOMPOSER",
+    case_id: "case_storyboard",
+    review_snapshot_id: "snapshot_1",
+    source_snapshot_digest: sha256("sources"),
+    cue_revision_id: null,
+    verification_result_hash: sha256("verification"),
+    payload: { selected_event: { event_id: "E3" }, output_authority: "NON_AUTHORITATIVE" },
+  });
+  assert.equal(result.fallback_reason, "UPSTAGE_RESPONSE_REJECTED");
+  assert.deepEqual(result.output, {
+    event_id: "E3",
+    beats: [],
+    summary: "Static verified snapshot retained because the Agent response was rejected.",
+    missing_evidence: [],
+  });
+  assert.equal(result.provider_job_id, "job_storyboard");
+  assert.match(result.raw_response_sha256, /^[a-f0-9]{64}$/);
+});

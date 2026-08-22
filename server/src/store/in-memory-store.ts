@@ -1221,7 +1221,7 @@ export class InMemoryStore {
         );
       }
       const result = await this.productionAgentProvider.run(input.role, input.frozenInput);
-      let fallbackReason: ProductionArtifact["fallback_reason"];
+      let fallbackReason: ProductionArtifact["fallback_reason"] = result.fallback_reason;
       let payload: ProductionArtifact["payload"];
       try {
         payload = validateProductionAgentOutput(input.role, result.output, input.allowlist);
