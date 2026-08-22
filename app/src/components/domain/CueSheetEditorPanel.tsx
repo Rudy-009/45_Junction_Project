@@ -90,6 +90,26 @@ function statusFor(contradictions: Contradiction[]) {
   };
 }
 
+function aiCurationFor(contradictions: Contradiction[], locale: 'ko' | 'en'): string {
+  const suggestions = contradictions.map((item) => {
+    if (locale === 'en') {
+      if (item.rule === 'duplicate_enter') return 'Confirm whether the previous entrance should be removed.';
+      if (item.rule === 'no_backstage_crossover') return 'Align the entrance side or confirm an approved crossover route.';
+      if (item.rule === 'prop_location_contradiction') return 'Assign a crew handoff or align the prop entrance side.';
+      if (item.rule === 'prop_already_on_stage') return 'Remove the duplicate prop entry or confirm the previous removal.';
+      if (item.rule === 'prop_not_on_stage') return 'Add the missing prop preset or confirm its current location.';
+      return 'Confirm the matching entrance event before this exit.';
+    }
+    if (item.rule === 'duplicate_enter') return '이전 등장 큐를 유지할지 확인하세요.';
+    if (item.rule === 'no_backstage_crossover') return '등장 방향을 맞추거나 승인된 백스테이지 통로를 확인하세요.';
+    if (item.rule === 'prop_location_contradiction') return '소품 전달 담당자를 지정하거나 반입 방향을 맞추세요.';
+    if (item.rule === 'prop_already_on_stage') return '중복 반입을 제거하거나 이전 반출 여부를 확인하세요.';
+    if (item.rule === 'prop_not_on_stage') return '누락된 소품 프리셋을 추가하거나 현재 위치를 확인하세요.';
+    return '이 퇴장 전에 대응하는 등장 큐가 있는지 확인하세요.';
+  });
+  return [...new Set(suggestions)].join(' ');
+}
+
 function entityValue(action: Action | null): string {
   if (!action) return '';
   if (action.type === 'prop_in' || action.type === 'prop_out') return action.prop_id ?? '';
@@ -189,6 +209,7 @@ export function CueSheetEditorPanel({
     entity: '인물 / 소품',
     direction: '방향',
     notes: '비고',
+    aiCuration: 'AI 큐레이션 수정안',
     empty: '액션 없음',
   } : {
     title: 'CUE SHEET',
@@ -205,6 +226,7 @@ export function CueSheetEditorPanel({
     entity: 'Person / prop',
     direction: 'Direction',
     notes: 'Notes',
+    aiCuration: 'AI curated edit',
     empty: 'No action',
   };
 
@@ -353,6 +375,7 @@ export function CueSheetEditorPanel({
                 [copy.entity, 'w-44'],
                 [copy.direction, 'w-32'],
                 [copy.notes, 'w-72'],
+                [copy.aiCuration, 'w-80'],
               ].map(([label, width], index) => (
                 <th key={label} className={cn(
                   'mono border border-border bg-muted px-2 py-1.5 text-[10px] font-normal text-muted-foreground',
@@ -369,6 +392,7 @@ export function CueSheetEditorPanel({
               const selected = row.event.event_id === selectedEventId;
               const focused = row.event.event_id === focusTarget?.eventId;
               const action = row.action;
+              const aiCuration = aiCurationFor(rowContradictions, locale);
               const entityOptions = actionEntityOptions(cueSheet, action);
               const routeOptions = [
                 { value: 'stage_left>stage_right', label: directionLabel('stage_left>stage_right', locale) },
@@ -441,6 +465,16 @@ export function CueSheetEditorPanel({
                     disabled: !action || action.type === 'costume_change',
                   })}
                   {cell({ row, field: 'event_notes', value: row.event.notes ?? '', widthClass: 'w-72' })}
+                  <td className="w-80 border border-border bg-edited-bg/20 px-2 py-1.5 align-top">
+                    {aiCuration ? (
+                      <>
+                        <span className="border border-edited/60 px-1.5 py-0.5 text-[8px] text-edited">NON_AUTHORITATIVE</span>
+                        <p className="mt-2 text-xs leading-4">{aiCuration}</p>
+                      </>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">—</span>
+                    )}
+                  </td>
                 </tr>
               );
             })}
