@@ -14,12 +14,19 @@ const publishableKey =
 export const authBypassEnabled = parseBoolean(import.meta.env.VITE_STANDBY_AUTH_BYPASS) ||
   parseBoolean(import.meta.env.VITE_STANDBY_AUTH_BYPASS_MODE) ||
   parseBoolean(import.meta.env.VITE_DEMO_BYPASS);
+
 export const authConfigured = Boolean(supabaseUrl && publishableKey);
 export const supabase = supabaseUrl && publishableKey
   ? createClient(supabaseUrl, publishableKey)
   : null;
 
-export async function getStandbyAccessToken(): Promise<string> {
+export async function getStandbyAccessToken(options: { allowUnauthenticatedTestJson?: boolean } = {}): Promise<string> {
+  if (options.allowUnauthenticatedTestJson) {
+    return (
+      (import.meta.env.VITE_STANDBY_API_TOKEN as string | undefined)
+      ?? 'standby-demo-bypass'
+    );
+  }
   if (import.meta.env.DEV) {
     return (import.meta.env.VITE_STANDBY_API_TOKEN as string | undefined) ?? 'local-dev-token';
   }
