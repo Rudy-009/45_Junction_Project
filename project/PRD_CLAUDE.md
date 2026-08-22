@@ -9,6 +9,9 @@
 | MVP 범위 | 한 장면과 전후 전환 · 화면 2개 |
 | 제품 원칙 | Verifier first · Evidence always · Human decides |
 
+> **문서 역할:** 이 문서는 제품 목표와 acceptance를 정의한다. 현재 구현 완료 여부는
+> [FEATURE_SPEC_CURRENT.md](FEATURE_SPEC_CURRENT.md)에서 코드 기준으로 관리한다.
+
 ---
 
 ## 0. 이 문서가 PRD.md에서 바꾸는 것

@@ -48,20 +48,25 @@ app/                    ← 실제 코드. 대부분의 작업이 여기서 일�
   src/styles.css        디자인 토큰 (다크 전용)
 
 project/PRD_CLAUDE.md   ← 현재 제품 정의. 스펙 충돌 시 이 문서가 우선
+project/FEATURE_SPEC_CURRENT.md ← 현재 실제 구현 상태. 완료/미구현 판단의 기준
 project/UPSTAGE_PLAYBOOK.md  Upstage Studio 적용법 · smoke test
 project/SCRIPT_INTEGRATION.md 대본↔큐시트 연결 검증 결과
 project/DOMAIN.md       공연 현업 워크플로우 근거
 Lo-Fi/standby/DESIGN.md ← UI 계약. 화면 구성은 이 문서를 따른다
+server/                 ← 독립 Fastify backend fixture. 아직 app과 연결되지 않음
+contracts/              ← strict JSON Schema 계약과 fixture
 ```
 
-**스펙을 고치기 전에 반드시 `project/PRD_CLAUDE.md`와 `Lo-Fi/standby/DESIGN.md`를 읽어라.**
+**스펙이나 기능을 고치기 전에 반드시 `project/PRD_CLAUDE.md`,
+`project/FEATURE_SPEC_CURRENT.md`, `Lo-Fi/standby/DESIGN.md`를 읽어라.**
 
 ---
 
 ## 3. 스택과 명령
 
-Vite + React 19 + TypeScript + Tailwind v4 + TanStack Router (code-based routes).
-서버 없음. 전부 클라이언트 목 상태다.
+프런트는 Vite + React 19 + TypeScript + Tailwind v4 + TanStack Router (code-based routes)다.
+`app/`은 하드코딩 fixture와 인메모리 상태로 동작한다. 별도 `server/` 수직 슬라이스가 있지만
+프런트와 연결되지 않았고 실제 Upstage 호출도 아직 없다.
 
 ```bash
 cd app
@@ -69,6 +74,14 @@ npm install
 npm run dev        # http://localhost:5173
 npm run typecheck  # tsc --noEmit
 npm run build      # tsc -b && vite build
+```
+
+```bash
+cd server
+npm install
+npm run typecheck
+npm test
+npm run build
 ```
 
 배포: `npx vercel deploy --prod --yes` (프로젝트 루트가 아니라 `app/`에서)
@@ -106,7 +119,6 @@ Ctrl+F 검색 · JSON raw 뷰 · 실제 건축 도면 · 라이트모드 토글 
 
 | # | 작업 | 파일 | 비고 |
 |---|---|---|---|
-| **P0** | **이벤트별 무대 스냅샷** | `standby-data.ts` `StageSimulator` | 현재 `BASE_ENTITIES` 고정. 아래 모델 참조 |
 | **P0** | **재생 동기화** | `WorkspaceScreen` | 재생 시 타임라인·큐시트 스크롤·무대가 함께 진행 |
 | P1 | 이벤트 **더블클릭 = 해당 셀로 이동** | `TimelinePanel` | 단일 클릭은 팝업 유지. `이 위치로 이동` 버튼도 유지 |
 | P1 | 큐시트가 **위 패널일 때 팝업 유지** | `WorkspaceScreen` | 아래가 무대면 닫을 이유가 없다. 패널 전환 강제 금지 |
@@ -117,7 +129,8 @@ Ctrl+F 검색 · JSON raw 뷰 · 실제 건축 도면 · 라이트모드 토글 
 | P2 | 재검증(refresh) 버튼 | `WorkspaceScreen` | 원본 hash 비교 후 바뀐 문서만 재추출 |
 | P2 | 파급효과 표시 | `WorkspaceScreen` | 셀 편집 시 영향받는 이벤트 카드에 표시 |
 
-**P0 두 개가 데모의 핵심**이다. 이벤트를 눌렀을 때 무대가 안 바뀌면 "시뮬레이터"라고 부를 수 없다.
+이벤트별 무대 스냅샷은 구현 완료됐다. 현재 남은 P0는 재생 동기화이며,
+완료 여부를 바꿀 때는 `project/FEATURE_SPEC_CURRENT.md`도 함께 갱신한다.
 
 ### 이벤트별 무대 스냅샷 — P0 사양
 
@@ -186,7 +199,7 @@ export 규칙 — 자세한 계약은 `project/PRD_CLAUDE.md` §10:
 
 ### 역할 분담 제안
 
-- **Claude Code** — 상태 모델·상호작용 로직 (P0 두 개, P1 팝업/전환 규칙)
+- **Claude Code** — 상태 모델·상호작용 로직 (재생 동기화, P1 팝업/전환 규칙)
 - **Codex** — 표현 계층 (라벨 편집, 히스토리 복원 UI, 타임라인 인터랙션)
 
 겹치는 파일은 `WorkspaceScreen.tsx`뿐이다. **이 파일은 Claude Code가 소유**하고,
