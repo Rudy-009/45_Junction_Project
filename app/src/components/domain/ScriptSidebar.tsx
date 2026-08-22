@@ -19,6 +19,7 @@ export function ScriptSidebar({
   script,
   unlinkedSegments,
   busy,
+  connectionAvailable = true,
   error,
   selectedEventId,
   onSelectEvent,
@@ -29,6 +30,7 @@ export function ScriptSidebar({
   script: ScriptProjection | null;
   unlinkedSegments: ScriptProjectionSegment[];
   busy: boolean;
+  connectionAvailable?: boolean;
   error: string | null;
   selectedEventId: string | null;
   onSelectEvent: (eventId: string) => void;
@@ -112,8 +114,8 @@ export function ScriptSidebar({
         <div className="flex items-center gap-1">
           <button
             type="button"
-            disabled={busy}
-            className="flex h-7 w-7 items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground disabled:cursor-wait disabled:opacity-40"
+            disabled={busy || !connectionAvailable}
+            className="flex h-7 w-7 items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
             onClick={() => inputRef.current?.click()}
             aria-label={script ? t('workspace.scriptReplace') : t('workspace.scriptConnect')}
             title={script ? t('workspace.scriptReplace') : t('workspace.scriptConnect')}
@@ -139,15 +141,19 @@ export function ScriptSidebar({
           <div className="flex min-h-full flex-col items-center justify-center px-5 py-8 text-center">
             <FileText size={22} className="text-muted-foreground" aria-hidden="true" />
             <p className="mt-3 text-sm">{t('workspace.scriptUnconnected')}</p>
-            <p className="mt-1 text-xs leading-5 text-muted-foreground">{t('workspace.scriptFormat')}</p>
-            <button
-              type="button"
-              className="mt-4 flex items-center gap-2 border border-foreground bg-foreground px-3 py-2 text-xs text-background hover:bg-muted-foreground"
-              onClick={() => inputRef.current?.click()}
-            >
-              <Upload size={13} aria-hidden="true" />
-              {t('workspace.scriptConnect')}
-            </button>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+              {t(connectionAvailable ? 'workspace.scriptFormat' : 'workspace.scriptRequiresExtraction')}
+            </p>
+            {connectionAvailable && (
+              <button
+                type="button"
+                className="mt-4 flex items-center gap-2 border border-foreground bg-foreground px-3 py-2 text-xs text-background hover:bg-muted-foreground"
+                onClick={() => inputRef.current?.click()}
+              >
+                <Upload size={13} aria-hidden="true" />
+                {t('workspace.scriptConnect')}
+              </button>
+            )}
             {error && <p className="mt-3 text-xs leading-5 text-violation" role="alert">{error}</p>}
           </div>
         ) : script ? (

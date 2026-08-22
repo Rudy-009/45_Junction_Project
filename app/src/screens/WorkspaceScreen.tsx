@@ -539,6 +539,7 @@ export function WorkspaceScreen() {
           script={script}
           unlinkedSegments={unlinkedSegments}
           busy={scriptBusy}
+          connectionAvailable={Boolean(verifiedCaseId)}
           error={scriptError}
           selectedEventId={selectedEventId}
           onScriptFile={(file) => void connectScript(file)}

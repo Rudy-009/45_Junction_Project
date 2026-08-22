@@ -38,7 +38,7 @@ UUID 세션으로 case 소유권을 분리한다. 이 값은 사용자 신원을
 | 입력 | **구현** | MASTER_CUE XLSX/PDF/JSON 한 칸과 STAGE_SPEC 폼을 받음 |
 | Script Sidebar | **case 통합 구현** | DOCX 우선·PDF 보조 파일을 현재 case의 `SCRIPT` source로 업로드한다. Upstage projection의 raw facts는 같은 review queue에 `UNREVIEWED`로 합류하고 기존 snapshot은 무효화된다. 재검토·freeze 후 세 source digest가 workspace에 반영된다 |
 | 로컬 파일 방어 | **구현** | 확장자·signature·50 MiB·SHA-256 검사. 미리 정한 파일명 없음 |
-| RAW JSON 입력 | **직접 Editor 경로 구현** | MASTER_CUE와 별도인 `RAW JSON` 섹션에서 STANDBY CueSheet JSON을 받는다. 브라우저 strict 구조 검사를 통과하면 Upstage를 호출하지 않고 즉시 로컬 CueSheet Editor와 결정론적 validator로 연다. 공개 CueSheet JSON에는 duration 추정 필드 없음 |
+| RAW JSON 입력 | **직접 Editor 경로 구현** | MASTER_CUE와 별도인 `RAW JSON` 섹션에서 STANDBY CueSheet JSON을 받는다. 브라우저 strict 구조 검사를 통과하면 Upstage를 호출하지 않고 즉시 로컬 CueSheet Editor와 결정론적 validator로 연다. 서버 case가 없는 이 경로에서는 Script 연결을 오류로 표시하지 않고 MASTER_CUE 추출 워크스페이스 기능임을 안내한다. 공개 CueSheet JSON에는 duration 추정 필드 없음 |
 | 비정형 JSON 전달 | **서버 호환 유지** | 서버 API로 직접 들어오는 비정형 JSON source는 원본 bytes/hash를 보존하고, Upstage가 필요한 경로에서만 JSON Pointer 행의 임시 XLSX로 변환한다. 입력 화면이 허용하는 STANDBY CueSheet JSON에는 이 경로를 쓰지 않는다 |
 | 무대 사양 | **구현** | crossover, 환복 시간, route time, route ID/capacity, 인물·소품 초기 배치 |
 | Upstage 추출 | **구현** | Agent 결과를 모두 UNREVIEWED/NON_AUTHORITATIVE로 격리한다. Sidebar 대본도 현재 case의 source·review queue·snapshot으로 수렴하며, 읽기 전용 projection은 같은 case ID를 명시한다 |
