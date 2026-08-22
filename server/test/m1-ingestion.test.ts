@@ -91,10 +91,10 @@ test("SCRIPT multipart upload hashes bytes and never echoes file contents", asyn
   assert.equal((replay.json() as { source_id: string }).source_id, source.source_id);
 });
 
-test("real-file API flow reaches human review snapshot before M2 compilation", async () => {
+test("real-file API flow reaches human review snapshot without SCRIPT", async () => {
   const provider: ExtractionProvider = {
     async extract(sources) {
-      const roles = ["SCRIPT", "MASTER_CUE", "STAGE_SPEC"] as const;
+      const roles = ["MASTER_CUE", "STAGE_SPEC"] as const;
       const facts = roles.map((role) => {
         const current = sources.get(role);
         assert.ok(current);
@@ -105,7 +105,7 @@ test("real-file API flow reaches human review snapshot before M2 compilation", a
           reviewed_value: null,
           source_role: role,
           source_id: current.source_id,
-          locator: role === "MASTER_CUE" ? "Cue!A1" : role === "SCRIPT" ? "p.1" : "stage.route",
+          locator: role === "MASTER_CUE" ? "Cue!A1" : "stage.route",
           quote: `${role} evidence`,
           origin: current.origin,
           confidence: "NOT_PROVIDED" as const,
@@ -147,12 +147,6 @@ test("real-file API flow reaches human review snapshot before M2 compilation", a
     const caseId = (create.json() as { case_id: string }).case_id;
 
     for (const upload of [
-      {
-        role: "SCRIPT",
-        filename: "script.pdf",
-        mediaType: "application/pdf",
-        bytes: Buffer.from("%PDF-1.7\nfixture\n%%EOF"),
-      },
       {
         role: "MASTER_CUE",
         filename: "master.xlsx",
@@ -208,7 +202,7 @@ test("real-file API flow reaches human review snapshot before M2 compilation", a
       headers: auth(),
     });
     const facts = (queue.json() as { items: Array<{ fact_id: string; review_status: string }> }).items;
-    assert.equal(facts.length, 3);
+    assert.equal(facts.length, 2);
     assert.ok(facts.every((fact) => fact.review_status === "UNREVIEWED"));
 
     const reviews = await liveApp.inject({
@@ -227,7 +221,7 @@ test("real-file API flow reaches human review snapshot before M2 compilation", a
       payload: {},
     });
     assert.equal(snapshot.statusCode, 201, snapshot.body);
-    assert.equal((snapshot.json() as { reviewed_fact_ids: string[] }).reviewed_fact_ids.length, 3);
+    assert.equal((snapshot.json() as { reviewed_fact_ids: string[] }).reviewed_fact_ids.length, 2);
 
     const workspace = await liveApp.inject({
       method: "GET",
@@ -269,31 +263,20 @@ function source(
   };
 }
 
-test("Upstage adapter uploads one file per role, polls jobs, and returns only UNREVIEWED facts", async () => {
+test("Upstage adapter extracts a master cue without a separate script", async () => {
   const createBodies: Array<Record<string, unknown>> = [];
   const mockFetch: typeof fetch = async (input, init) => {
     assert.equal(new Headers(init?.headers).get("authorization"), "Bearer secret-test-key");
     const url = String(input);
     if (url.endsWith("/v2/files")) {
-      const form = init?.body as FormData;
-      const file = form.get("file") as File;
-      return Response.json({ id: file.name.endsWith(".pdf") ? "file-script" : "file-cue" });
+      return Response.json({ id: "file-cue" });
     }
     if (url.endsWith("/v2/responses") && init?.method === "POST") {
       const body = JSON.parse(String(init.body)) as Record<string, unknown>;
       createBodies.push(body);
-      assert.equal(
-        body.config_id,
-        body.model === "agt_script" ? "cfg_script" : "cfg_cue",
-      );
-      return Response.json({ id: body.model === "agt_script" ? "job-script" : "job-cue" });
-    }
-    if (url.includes("job-script")) {
-      return Response.json({
-        id: "job-script",
-        status: "completed",
-        output: [{ content: [{ type: "output_text", text: JSON.stringify({ script_facts: [{ fact_type: "SCRIPT_TIMING_ANCHOR", locator: "p.3", source_quote_raw: "퇴장 후 재등장", exit_event: "E2", next_entry_event: "E4" }] }) }] }],
-      });
+      assert.equal(body.config_id, "cfg_cue");
+      assert.equal(body.model, "agt_cue");
+      return Response.json({ id: "job-cue" });
     }
     if (url.includes("job-cue")) {
       return Response.json({
@@ -306,25 +289,24 @@ test("Upstage adapter uploads one file per role, polls jobs, and returns only UN
   };
 
   const sources = new Map<SourceRole, InternalSourceVersion>([
-    ["SCRIPT", source("SCRIPT", { bytes: new TextEncoder().encode("%PDF-fixture"), content: null, mediaType: "application/pdf" })],
     ["MASTER_CUE", source("MASTER_CUE", { bytes: Uint8Array.from([0x50, 0x4b, 1, 2]), content: null, mediaType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" })],
     ["STAGE_SPEC", source("STAGE_SPEC", { bytes: null, content: HERO_SOURCE_CONTENT.STAGE_SPEC, mediaType: "application/json" })],
   ]);
   const provider = new UpstageAgentProvider({
     apiKey: "secret-test-key",
-    agentIds: { SCRIPT: "agt_script", MASTER_CUE: "agt_cue" },
-    configIds: { SCRIPT: "cfg_script", MASTER_CUE: "cfg_cue" },
+    agentIds: { MASTER_CUE: "agt_cue" },
+    configIds: { MASTER_CUE: "cfg_cue" },
     fetchImpl: mockFetch,
     pollIntervalMs: 0,
     timeoutMs: 1_000,
   });
   const result = await provider.extract(sources);
-  assert.equal(createBodies.length, 2);
-  assert.equal(result.facts.length, 7);
+  assert.equal(createBodies.length, 1);
+  assert.equal(result.facts.length, 6);
   assert.ok(result.facts.some((fact) => fact.fact_type === "ROUTE_CAPACITY"));
   assert.ok(result.facts.some((fact) => fact.fact_type === "PROP_INITIAL_STATE"));
   assert.ok(result.facts.every((fact) => fact.review_status === "UNREVIEWED"));
-  assert.deepEqual(result.sourceRuns.map((run) => run.provider), ["UPSTAGE", "UPSTAGE", "STANDBY_FORM"]);
+  assert.deepEqual(result.sourceRuns.map((run) => run.provider), ["UPSTAGE", "STANDBY_FORM"]);
   assert.ok(result.sourceRuns.every((run) => /^[a-f0-9]{64}$/.test(run.raw_response_sha256)));
 });
 

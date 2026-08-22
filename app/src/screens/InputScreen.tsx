@@ -34,8 +34,7 @@ const ZONES = [
   ['STAGE_LEFT_CHANGE', '하수 환복소'],
 ] as const;
 
-type SourceInputKind = 'SCRIPT' | 'MASTER_CUE_FILE' | 'MASTER_CUE_JSON';
-type MasterCueInputKind = Exclude<SourceInputKind, 'SCRIPT'>;
+type SourceInputKind = 'MASTER_CUE_FILE' | 'MASTER_CUE_JSON';
 type Crossover = 'UNKNOWN' | 'AVAILABLE' | 'UNAVAILABLE';
 type SubmitPhase = 'IDLE' | 'UPLOADING' | 'EXTRACTING' | 'REVIEW' | 'VERIFYING' | 'SUCCEEDED' | 'FAILED';
 
@@ -67,11 +66,6 @@ const SOURCE_CONFIG: Record<SourceInputKind, {
   accept: string;
   extensions: string[];
 }> = {
-  SCRIPT: {
-    label: 'SCRIPT',
-    accept: '.pdf,.docx',
-    extensions: ['pdf', 'docx'],
-  },
   MASTER_CUE_FILE: {
     label: 'MASTER CUE',
     accept: '.xlsx,.pdf',
@@ -159,9 +153,8 @@ export function InputScreen() {
   const navigate = useNavigate();
   const setWorkspace = useStandbyWorkspaceStore((state) => state.setWorkspace);
   const clearWorkspace = useStandbyWorkspaceStore((state) => state.clear);
-  const [script, setScript] = useState<SelectedSource | null>(null);
   const [masterCue, setMasterCue] = useState<SelectedSource | null>(null);
-  const [masterCueInputKind, setMasterCueInputKind] = useState<MasterCueInputKind | null>(null);
+  const [masterCueInputKind, setMasterCueInputKind] = useState<SourceInputKind | null>(null);
   const [sourceErrors, setSourceErrors] = useState<Partial<Record<SourceInputKind, string>>>({});
   const [crossover, setCrossover] = useState<Crossover>('UNKNOWN');
   const [minimumChangeSeconds, setMinimumChangeSeconds] = useState('60');
@@ -266,19 +259,15 @@ export function InputScreen() {
     setSourceErrors((current) => ({ ...current, [kind]: undefined }));
     try {
       const selected = await inspectSourceFile(kind, file, locale);
-      if (kind === 'SCRIPT') setScript(selected);
-      else {
-        setMasterCue(selected);
-        setMasterCueInputKind(kind);
-        setSourceErrors((current) => ({
-          ...current,
-          MASTER_CUE_FILE: undefined,
-          MASTER_CUE_JSON: undefined,
-        }));
-      }
+      setMasterCue(selected);
+      setMasterCueInputKind(kind);
+      setSourceErrors((current) => ({
+        ...current,
+        MASTER_CUE_FILE: undefined,
+        MASTER_CUE_JSON: undefined,
+      }));
     } catch (error) {
-      if (kind === 'SCRIPT') setScript(null);
-      else if (masterCueInputKind === kind) {
+      if (masterCueInputKind === kind) {
         setMasterCue(null);
         setMasterCueInputKind(null);
       }
@@ -289,7 +278,7 @@ export function InputScreen() {
     }
   };
 
-  const ready = Boolean(script && masterCue && stageErrors.length === 0);
+  const ready = Boolean(masterCue && stageErrors.length === 0);
   const authenticated = Boolean(authEmail);
 
   const apiClient = () => {
@@ -300,7 +289,7 @@ export function InputScreen() {
   };
 
   const startExtraction = async () => {
-    if (!script || !masterCue || stageErrors.length > 0) return;
+    if (!masterCue || stageErrors.length > 0) return;
 
     if (!authenticated) {
       setPhase('FAILED');
@@ -322,7 +311,6 @@ export function InputScreen() {
       setMessage(t('input.status.upload'));
       const createdCase = await api.createCase(`STANDBY ${new Date().toLocaleString('ko-KR')}`);
       await Promise.all([
-        api.uploadSourceFile(createdCase.case_id, 'SCRIPT', script.file, script.origin),
         api.uploadSourceFile(createdCase.case_id, 'MASTER_CUE', masterCue.file, masterCue.origin),
         api.uploadStageSpec(createdCase.case_id, stageSpec, SOURCE_ORIGIN),
       ]);
@@ -403,13 +391,7 @@ export function InputScreen() {
           />
         )}
 
-        <section className="mt-6 grid items-start gap-4 lg:grid-cols-[1fr_2fr_1fr]">
-          <SourceCard
-            kind="SCRIPT"
-            source={script}
-            error={sourceErrors.SCRIPT}
-            onFile={(file) => void selectSource('SCRIPT', file)}
-          />
+        <section className="mt-6 grid items-start gap-4 lg:grid-cols-[2fr_1fr]">
           <div className="grid gap-4 sm:grid-cols-2">
             <SourceCard
               kind="MASTER_CUE_FILE"
@@ -535,11 +517,9 @@ function SourceCard({
   const [detailsOpen, setDetailsOpen] = useState(false);
   const config = SOURCE_CONFIG[kind];
   const Icon = kind === 'MASTER_CUE_FILE' ? FileSpreadsheet : FileText;
-  const helper = kind === 'SCRIPT'
-    ? t('input.script.helper')
-    : kind === 'MASTER_CUE_FILE'
-      ? t('input.cue.fileHelper')
-      : t('input.cue.jsonHelper');
+  const helper = kind === 'MASTER_CUE_FILE'
+    ? t('input.cue.fileHelper')
+    : t('input.cue.jsonHelper');
 
   return (
     <article className="border border-border bg-surface">
