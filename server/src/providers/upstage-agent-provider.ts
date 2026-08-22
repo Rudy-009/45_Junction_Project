@@ -135,7 +135,11 @@ function locateFact(role: SourceRole, value: JsonObject): { locator: string; quo
   const quote = [value.source_quote_raw, value.source_quote, value.quote].find(
     (candidate): candidate is string => typeof candidate === "string" && candidate.trim().length > 0,
   );
-  const rawLocator = value.locator ?? value.locator_copy ?? value.source_locator;
+  const rawLocator =
+    value.locator ??
+    value.locator_copy ??
+    value.source_locator ??
+    value.source_locator_raw;
   const locator =
     typeof rawLocator === "string" && rawLocator.trim()
       ? rawLocator.trim()

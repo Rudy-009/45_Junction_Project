@@ -390,6 +390,53 @@ test("Upstage adapter reaches Extract output after a large XLSX Parse payload", 
   assert.equal(result.facts[0]?.locator, "전체 큐시트!A6");
 });
 
+test("Upstage adapter accepts the raw locator field from the frozen cue schema", async () => {
+  const mockFetch: typeof fetch = async (input, init) => {
+    const url = String(input);
+    if (url.endsWith("/v2/files")) return Response.json({ id: "file-raw-locator" });
+    if (url.endsWith("/v2/responses") && init?.method === "POST") {
+      return Response.json({ id: "job-raw-locator" });
+    }
+    return Response.json({
+      id: "job-raw-locator",
+      status: "completed",
+      output: [{
+        type: "extract",
+        content: [{
+          type: "output_text",
+          additional_values: {
+            cue_facts: [{
+              record_kind: "ACTION",
+              source_locator_raw: "cue:sheet0:r0046:c0013",
+              source_quote_raw: "노래 시작하면 전체 on",
+            }],
+          },
+        }],
+      }],
+    });
+  };
+  const provider = new UpstageAgentProvider({
+    apiKey: "secret-test-key",
+    agentIds: { MASTER_CUE: "agt_cue" },
+    fetchImpl: mockFetch,
+    pollIntervalMs: 0,
+    timeoutMs: 1_000,
+  });
+
+  const result = await provider.extract(new Map<SourceRole, InternalSourceVersion>([
+    ["MASTER_CUE", source("MASTER_CUE", {
+      bytes: Uint8Array.from([0x50, 0x4b, 1, 2]),
+      content: null,
+      mediaType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    })],
+  ]));
+
+  assert.equal(result.facts.length, 1);
+  assert.equal(result.facts[0]?.fact_type, "ACTION");
+  assert.equal(result.facts[0]?.locator, "cue:sheet0:r0046:c0013");
+  assert.equal(result.facts[0]?.quote, "노래 시작하면 전체 on");
+});
+
 test("Upstage adapter converts JSON master cues to a supported XLSX transport", async () => {
   const originalBytes = new TextEncoder().encode(JSON.stringify({
     cues: [{ cue_id: "E1", trigger: "LIGHT GO" }],
