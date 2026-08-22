@@ -37,6 +37,11 @@ interface CueSheetStore {
   
   // Revision
   saveRevision: (author: string) => void;
+  commitCueSheet: (
+    data: CueSheet,
+    changes: Revision['changes'],
+    author: string,
+  ) => void;
   loadRevision: (revisionId: string) => void;
 }
 
@@ -157,12 +162,39 @@ export const useCueSheetStore = create<CueSheetStore>((set, get) => ({
       savedAt: new Date().toLocaleTimeString('ko-KR', { hour12: false }),
       author,
       changes: [],
+      snapshot: structuredClone(cueSheet),
     };
     set({ revisions: [revision, ...revisions] });
   },
 
-  // Load revision (placeholder - needs snapshot support)
-  loadRevision: (_revisionId) => {
-    // TODO: implement revision snapshot loading
+  commitCueSheet: (data, changes, author) => {
+    const { revisions, selectedCueId, selectedEventId } = get();
+    const nextCueId = data.cues.some((cue) => cue.cue_id === selectedCueId)
+      ? selectedCueId
+      : data.cues[0]?.cue_id ?? null;
+    const nextEventId = data.cues.some((cue) => cue.events.some((event) => event.event_id === selectedEventId))
+      ? selectedEventId
+      : data.cues.find((cue) => cue.cue_id === nextCueId)?.events[0]?.event_id ?? null;
+    const revision: Revision = {
+      id: `rev-${revisions.length + 1}`,
+      savedAt: new Date().toLocaleTimeString('ko-KR', { hour12: false }),
+      author,
+      changes: structuredClone(changes),
+      snapshot: structuredClone(data),
+    };
+    set({
+      cueSheet: structuredClone(data),
+      validationResult: validateCueSheet(data),
+      selectedCueId: nextCueId,
+      selectedEventId: nextEventId,
+      revisions: [revision, ...revisions],
+    });
+  },
+
+  loadRevision: (revisionId) => {
+    const revision = get().revisions.find((candidate) => candidate.id === revisionId);
+    if (!revision) return;
+    const cueSheet = structuredClone(revision.snapshot);
+    set({ cueSheet, validationResult: validateCueSheet(cueSheet) });
   },
 }));
