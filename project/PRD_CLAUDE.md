@@ -2,7 +2,7 @@
 
 | 항목 | 내용 |
 |---|---|
-| 문서 상태 | v1.0 — 2026-08-22 팀 설계 검토 반영 |
+| 문서 상태 | v1.1 — 2026-08-23 중간 멘토링·Upstage 확장 방향 반영 |
 | 관계 | [PRD.md](PRD.md)의 verifier-first 원칙을 계승하되, **UI 모델과 무대 입력 범위를 대체**한다 |
 | 트랙 | Upstage — Automate Paperwork |
 | 1차 사용자 | 테크 리허설 전 실행 계획을 취합·검증하는 무대감독 |
@@ -48,13 +48,20 @@
 
 ---
 
-## 2. 세 입력
+## 2. 세 논리 역할과 현재 MVP 입력
+
+제품 검증 모델은 `SCRIPT`·`CUESHEET`·`STAGE_SPEC` 세 역할을 구분한다. 다만 현재 MVP의 물리 입력 슬롯은
+`MASTER_CUE` 파일과 `STAGE_SPEC` 폼 두 개다. **입력 화면에 세 번째 SCRIPT 카드를 다시 만들지 않는다.**
+workspace의 대본 보기는 패널 안에서 DOCX(우선) 또는 PDF(보조)를 연결해 Upstage가 구조화한 실제
+대사·지문만 사용한다. 사용자에게 대본 JSON을 요구하지 않는다.
 
 ### 2-1. 대본 (SCRIPT)
 
 - 대사, 지시문, 등·퇴장, 씬 구분
 - 씬별 길이와 누적 타임코드 (레퍼런스 대본에 이미 존재)
 - 화자는 **배역명**으로 기재됨 → 큐시트의 배우명과 매핑 필요
+- 위 원문 대본은 입력 화면의 세 번째 카드가 아니라 Script Sidebar에서 연결한다. 서버의 Script Extractor가
+  `standby.script-projection.v1`을 만들며, exact event ID가 없는 구간은 사람이 현재 event에 연결한다
 
 ### 2-2. 큐시트 (CUESHEET)
 
@@ -210,10 +217,10 @@ E6에서 퇴장한 배우를 E9에서 무대로 끌어오면 그것은 **새 이
 
 `initial_state`도 큐시트에서 도출한다. 시뮬레이터에서 손으로 세팅하지 않는다.
 
-### 이벤트별 무대 상태 모델
+### 이벤트별 무대 상태 모델과 절제된 의미 전환
 
-**이동 애니메이션을 만들지 않는다.** 연출자가 알고 싶은 것은 결과 상태이지 이동 과정이 아니다.
-각 이벤트는 그 시점의 **정적 스냅샷**이다.
+각 이벤트의 정본은 그 시점의 **정적 스냅샷**이다. 애니메이션은 새 상태를 만들거나 실제 blocking
+경로를 추정하는 기능이 아니라, 검증된 두 스냅샷 사이에서 **무엇이 바뀌었는지 읽게 하는 짧은 전환**이다.
 
 다만 정적 스냅샷만으로는 *"언제 퇴장했는지"*를 알 수 없으므로,
 **그 이벤트에서 일어난 동작**을 노드 상태로 표시한다.
@@ -243,6 +250,71 @@ type StageSnapshots = Record<EventId, Record<EntityId, EntityStateAtEvent>>;
 `ENTER`/`EXIT`는 `--enter: #22c55e` / `--exit: #ef4444`를 쓴다. MVP에서 색각 대응은 범위 밖이다.
 verdict 색은 저채도 파스텔이라 정상 시야에서 구분되지만, **방향과 라벨이 여전히 주 신호**다.
 (접근성을 다룰 때는 단일 색 + 방향·채움·라벨 3중 인코딩으로 되돌린다 — 측정상 보색 쌍은 존재하지 않는다.)
+
+#### 허용되는 motion
+
+- 시간순으로 **인접한 검증 event**를 앞/뒤로 이동할 때만, 두 snapshot에서 zone이 달라진 entity를
+  180–360ms로 이동·등장·퇴장시킨다. 한 전환의 총 motion은 600ms를 넘지 않는다.
+- AI가 좌표·곡선·보행 경로를 만들지 않는다. UI가 `from_zone → to_zone`의 schematic 차이만 표현한다.
+- 여러 event를 건너뛰거나 과거로 크게 점프하면 이동 경로를 꾸미지 않고 정적 교체 또는 180ms 이하
+  crossfade만 사용한다.
+- 반복·bounce·particle·상시 pulse는 금지한다. 바뀐 entity와 현재 playhead만 움직인다.
+- `prefers-reduced-motion`에서는 모든 전환을 정적 교체로 바꾼다.
+
+### Upstage Agent 확장 — Studio 설정·서버 배선 구현, live smoke 대기
+
+기존 Script/Master Cue 추출 외에 **네 Agent**를 추가한다. Studio에는 아래 Agent가 모두 Config `#1`로
+저장됐고 서버 provider·strict contract·API 배선도 구현됐다. 아직 각 Agent의 실제 Agents API 응답을 확인하는
+live smoke는 끝나지 않았으므로 운영 검증 또는 배포 완료라고 발표하지 않는다.
+
+| Agent | Agent ID | Config | 현재 상태 |
+|---|---|---:|---|
+| Stage Spec Extractor | `agt_PxbxmhXXT8iqdzs5WmHfUz` | `1` | Studio 설정 · 서버 배선 구현 · live smoke 대기 |
+| Fact Normalizer | `agt_6tn639gGApNdV9SdRfAjnE` | `1` | Studio 설정 · 서버 배선 구현 · live smoke 대기 |
+| Storyboard Recomposer | `agt_go8aoJTVDvEwK8mwXh5gEi` | `1` | Studio 설정 · 서버 배선 구현 · live smoke 대기 |
+| Rehearsal Brief | `agt_9iLkb7fqwdEtaBv48t9tQA` | `1` | Studio 설정 · 서버 배선 구현 · live smoke 대기 |
+
+| Agent | 입력 | 출력 | trigger | cache | trust boundary |
+|---|---|---|---|---|---|
+| **Stage Spec Extractor** | 사용자가 확인한 stage-spec 문서 또는 폼 JSON의 임시 전송본 | locator·quote가 붙은 `stage_facts` 후보 | source extraction 시작 시 | source SHA-256 + Agent/Config ID + request-body hash | 전부 `UNREVIEWED`. route·시간·capacity·초기 상태를 추출할 뿐 verdict·좌표·경로를 만들지 않음 |
+| **Fact Normalizer** | Script/Master Cue/Stage Spec의 raw extracted fact와 allowlist된 normalized schema | `NON_AUTHORITATIVE` normalized type·value 추천과 source fact ref | extraction 성공 뒤 review queue를 열기 전 | raw fact-set digest + schema version + Agent/Config ID + input hash | 추천은 자동 승인되지 않음. duration을 추정하지 않고 명시된 시간 범위만 보존. strict semantic validation 뒤에도 사람이 승인/거절해야 함. verdict·review state 변경 금지 |
+| **Storyboard Recomposer** | reviewed event graph, 인접한 두 snapshot, allowlist된 action·source ref | event별 읽기 전용 `NON_AUTHORITATIVE` `beats`·요약·`missing_evidence` | reviewed workspace에서 timeline event가 바뀔 때 비동기 실행; 동일 frozen input은 서버 cache 사용 | review snapshot + revision + from/to event + Agent/Config ID + input hash | event/entity/zone/fact ID를 서버가 strict 검증. 검증 실패·timeout이면 정적 snapshot으로 fallback. deterministic snapshot·verdict·source 변경 금지 |
+| **Rehearsal Brief** | reviewed graph와 결정론적 finding·calculation·missing fact·evidence ref | 무대감독용 요약, event/department별 확인 질문, unknown 목록 | verifier result가 새로 만들어질 때 | verifier result hash + locale + Agent/Config ID + input hash | 새 finding·severity·안전 결론을 만들지 않음. 기존 근거를 짧게 설명하는 읽기 전용 산출물 |
+
+Fact review gate는 목록 전체에 적용되는 `추천값`과 `사용자화` 두 mode를 가진다. fact card마다 mode를
+반복하지 않는다. 추천 mode는 Fact Normalizer의 type·value를 읽기 전용으로 보여 준다. 사용자화 mode에서도
+normalized type은 Agent가 고른 allowlist 값으로 고정하고 필드 값만 사람이 고친다. 정규화 type selector는
+두지 않으며, type이 잘못되면 다른 type을 임의 선택하지 않고 해당 추천을 거절한다. `일괄 승인`은 검증을
+통과한 사용자화 draft에만 사람이 명시적으로 누르는 bulk action이며, 각 fact의 개별 review record를 남긴다.
+어떤 mode도 자동 승인하거나 review snapshot을 자동 freeze하지 않는다.
+
+Storyboard는 timeline 클릭마다 긴 Upstage job을 동기 대기하지 않는다. 클릭 순간 target snapshot을 먼저
+보여 주고, frozen input으로 비동기 재구성을 요청한다. 동일 요청은 서버 cache가 처리한다. 현재 구현은
+인접 pair 사전 생성이 아니라 **선택 시 lazy 실행**이며, 늦게 도착한 이전 event 응답은 현재 선택을 덮을 수 없다. 화면에 보이는 `beats`와
+`missing_evidence`는 읽기 전용 보조 결과이며, 정적 snapshot과 deterministic verdict가 언제나 정본이다.
+
+구조화 JSON Editor 직행은 계속 즉시 열린다. 이 로컬 경로는 reviewed case가 없어 Storyboard Agent를
+호출하지 않지만, 대본 DOCX/PDF는 case-independent Script projection endpoint로 구조화할 수 있다.
+정적 snapshot·인접 semantic motion은 그대로 제공한다.
+향후 preview Agent를 붙이더라도 `PREVIEW / NON_AUTHORITATIVE`이며 verified workspace나 세 근거를 갖춘 finding으로 승격하지 않는다.
+공개 CueSheet JSON에는 `estimated_duration_sec`와 `costume_change_duration_sec`를 두지 않는다. 시간 관련
+verdict는 Agent가 장면 길이를 추정해서 만드는 대신, reviewed fact의 명시적 min/max 근거가 있을 때만 계산한다.
+
+추출을 기다리는 동안에는 JetBrains Mono의 `S T A N D B Y` 글자가 `S`부터 `Y`까지 순서대로 밝아지는
+loading scene을 사용한다. 이 loop는 실제 진행률이 아니며 상태·실패·timeout 문구를 대체하지 않는다.
+본문과 조작 UI는 시스템 서체를 사용하고, JetBrains Mono는 로고와 loading wordmark에만 남긴다.
+`prefers-reduced-motion`에서는 순차 밝기 변화를 중지하고 고정 wordmark를 표시한다.
+
+### Script Sidebar — 읽기 전용 timeline 연결
+
+- 워크스페이스 내부 좌측에서 접고 펼치는 보조 패널이다. 전역 내비게이션이나 세 번째 화면이 아니다
+- 입력 화면에 SCRIPT 카드를 추가하지 않는다. 패널에서 DOCX(우선) 또는 PDF(보조)를 연결하고, 서버가
+  Upstage Script Extractor 결과를 strict `standby.script-projection.v1`으로 투영한다
+- exact `event_id`가 있는 실제 `DIALOGUE`·`STAGE_DIRECTION`만 자동으로 event별 발췌에 묶고,
+  나머지는 사람이 선택한 현재 event에 연결한다
+- MASTER_CUE trigger·note, finding evidence, reviewed event label을 대본 fallback으로 표시하지 않는다
+- timeline event 선택은 해당 발췌를 스크롤·강조하고, 발췌 선택은 동일 event로 이동한다
+- 발췌는 수정할 수 없고 localStorage에 남지 않으며 fact·review·snapshot·verdict를 만들거나 바꾸지 않는다
 
 
 ---
@@ -285,7 +357,7 @@ Git 비유가 정확하다.
 
 | # | 항목 | 합격 기준 |
 |---|---|---|
-| A1 | 세 입력 수용 | script / cuesheet PDF·XLSX + stage spec 폼 |
+| A1 | 현재 MVP 입력 수용 | MASTER_CUE PDF·XLSX·JSON + stage spec 폼. workspace에서 SCRIPT DOCX 우선·PDF 보조 연결 |
 | A2 | Upstage 추출 | Parse → Classify → 유형별 Extract가 hero fact와 source quote 반환 |
 | A3 | 사람 검토 | 핵심 fact와 event link를 사람이 승인. 미승인 값은 판정에 쓰이지 않음 |
 | A4 | hero 판정 | `VR-01`이 `AVAILABLE 58–62s` vs `REQUIRED 66–68s`로 `VIOLATION` |
@@ -298,6 +370,10 @@ Git 비유가 정확하다.
 | A11 | 히스토리 | 저장 이력 조회 + 변경 셀 미리보기 |
 | A12 | 결정론 | 같은 입력 3회에서 verdict와 calculation 동일 |
 | A13 | fallback | API 장애 시 캐시된 성공 응답으로 데모 지속 |
+| A14 | Agent coverage | Stage Spec Extractor·Fact Normalizer·Storyboard Recomposer·Rehearsal Brief가 각자 고정 input/output contract와 provenance를 남김 |
+| A15 | 절제된 motion | 인접 verified snapshot만 의미 전환, jump/back·reduced-motion은 정적/crossfade, Agent 실패 시 snapshot fallback |
+| A16 | Agent 관측성 | file upload·job submit·poll·decode·review-ready와 후처리 Agent별 duration/cache/outcome을 원문 없이 추적하고 timeout 병목을 구분 가능 |
+| A17 | Script 연동 | timeline 선택이 MASTER_CUE 기반 읽기 전용 발췌를 스크롤·강조하고, 발췌 선택이 같은 event로 이동 |
 
 **A4·A5·A6·A7이 최우선이다.** 나머지가 반쯤 되어도 이 넷이 되면 발표가 성립한다.
 
@@ -312,7 +388,7 @@ Git 비유가 정확하다.
 - 부서별 큐시트 자동 생성 (숙련 무대감독은 엑셀 링크로 이미 자동화)
 - 마스터 vs 여러 부서 사본 동시 비교
 - 손글씨 의미 추출
-- 연속 scrub 애니메이션 · Ctrl+F 검색 · JSON raw 뷰
+- 연속 scrub·비인접 event 경로 애니메이션 · 장식 motion · Ctrl+F 검색 · JSON raw 뷰
 
 ---
 
@@ -326,6 +402,8 @@ Git 비유가 정확하다.
 | 편집→재검증 미완성 | A10을 내리고 A4~A7로 데모 구성 |
 | API 장애 | 성공 응답 캐시 (A13) |
 | 회색이 비활성으로 보임 | `INSUFFICIENT_EVIDENCE` 팝업에 결측 fact 명시 (A5) |
+| Storyboard가 실제 동선을 꾸밈 | reviewed snapshot/action allowlist 밖 출력 거절, jump/back은 정적 교체 |
+| Agent latency가 timeline을 막음 | snapshot 선반영 + frozen-input cache, miss/timeout은 비차단 정적 fallback |
 
 ---
 

@@ -48,7 +48,6 @@
       "cue_id": "cue_001",
       "scene_number": "N#1",
       "scene_type": "number",
-      "estimated_duration_sec": 0,
       "events": [
         {
           "event_id": "evt_001",
@@ -66,7 +65,6 @@
               "carried_by": "",
               "from": "",
               "to": "",
-              "costume_change_duration_sec": 0,
               "costume_description": ""
             },
             {
@@ -77,7 +75,6 @@
               "carried_by": "",
               "from": "",
               "to": "",
-              "costume_change_duration_sec": 0,
               "costume_description": ""
             }
           ],
@@ -99,7 +96,6 @@
               "carried_by": "",
               "from": "",
               "to": "",
-              "costume_change_duration_sec": 0,
               "costume_description": ""
             },
             {
@@ -110,7 +106,6 @@
               "carried_by": "",
               "from": "",
               "to": "",
-              "costume_change_duration_sec": 0,
               "costume_description": ""
             },
             {
@@ -121,7 +116,6 @@
               "carried_by": "",
               "from": "",
               "to": "",
-              "costume_change_duration_sec": 0,
               "costume_description": ""
             },
             {
@@ -132,7 +126,6 @@
               "carried_by": "",
               "from": "",
               "to": "",
-              "costume_change_duration_sec": 0,
               "costume_description": ""
             },
             {
@@ -143,7 +136,6 @@
               "carried_by": "",
               "from": "",
               "to": "",
-              "costume_change_duration_sec": 0,
               "costume_description": ""
             },
             {
@@ -154,7 +146,6 @@
               "carried_by": "",
               "from": "",
               "to": "",
-              "costume_change_duration_sec": 0,
               "costume_description": ""
             }
           ],
@@ -167,7 +158,6 @@
       "cue_id": "cue_002",
       "scene_number": "S#1",
       "scene_type": "scene",
-      "estimated_duration_sec": 0,
       "events": [
         {
           "event_id": "evt_003",
@@ -185,7 +175,6 @@
               "carried_by": "",
               "from": "",
               "to": "",
-              "costume_change_duration_sec": 0,
               "costume_description": ""
             }
           ],
@@ -198,7 +187,6 @@
       "cue_id": "cue_003",
       "scene_number": "N#2",
       "scene_type": "number",
-      "estimated_duration_sec": 0,
       "events": [
         {
           "event_id": "evt_004",
@@ -216,7 +204,6 @@
               "carried_by": "",
               "from": "",
               "to": "",
-              "costume_change_duration_sec": 0,
               "costume_description": ""
             }
           ],
@@ -229,7 +216,6 @@
       "cue_id": "cue_004",
       "scene_number": "S#2",
       "scene_type": "scene",
-      "estimated_duration_sec": 0,
       "events": [
         {
           "event_id": "evt_005",
@@ -247,7 +233,6 @@
               "carried_by": "char_eunbi",
               "from": "",
               "to": "",
-              "costume_change_duration_sec": 0,
               "costume_description": ""
             }
           ],
@@ -260,7 +245,6 @@
       "cue_id": "cue_005",
       "scene_number": "S#3",
       "scene_type": "scene",
-      "estimated_duration_sec": 0,
       "events": [
         {
           "event_id": "evt_006",
@@ -278,7 +262,6 @@
               "carried_by": "",
               "from": "",
               "to": "",
-              "costume_change_duration_sec": 0,
               "costume_description": ""
             },
             {
@@ -289,7 +272,6 @@
               "carried_by": "char_minseo",
               "from": "",
               "to": "",
-              "costume_change_duration_sec": 0,
               "costume_description": ""
             },
             {
@@ -300,7 +282,6 @@
               "carried_by": "",
               "from": "",
               "to": "",
-              "costume_change_duration_sec": 35,
               "costume_description": "의사가운 걸치기 / 상의만 환복"
             }
           ],
@@ -313,7 +294,6 @@
       "cue_id": "cue_006",
       "scene_number": "S#4",
       "scene_type": "scene",
-      "estimated_duration_sec": 0,
       "events": [
         {
           "event_id": "evt_007",
@@ -331,7 +311,6 @@
               "carried_by": "char_minseo",
               "from": "",
               "to": "",
-              "costume_change_duration_sec": 0,
               "costume_description": ""
             },
             {
@@ -342,7 +321,6 @@
               "carried_by": "",
               "from": "",
               "to": "",
-              "costume_change_duration_sec": 0,
               "costume_description": ""
             },
             {
@@ -353,7 +331,6 @@
               "carried_by": "",
               "from": "",
               "to": "",
-              "costume_change_duration_sec": 0,
               "costume_description": ""
             },
             {
@@ -364,7 +341,6 @@
               "carried_by": "",
               "from": "",
               "to": "",
-              "costume_change_duration_sec": 0,
               "costume_description": ""
             },
             {
@@ -375,7 +351,6 @@
               "carried_by": "",
               "from": "",
               "to": "",
-              "costume_change_duration_sec": 0,
               "costume_description": ""
             },
             {
@@ -386,7 +361,6 @@
               "carried_by": "",
               "from": "",
               "to": "",
-              "costume_change_duration_sec": 0,
               "costume_description": ""
             },
             {
@@ -397,7 +371,6 @@
               "carried_by": "",
               "from": "",
               "to": "",
-              "costume_change_duration_sec": 0,
               "costume_description": "의사가운 벗기"
             }
           ],
@@ -410,7 +383,6 @@
       "cue_id": "cue_007",
       "scene_number": "N#3",
       "scene_type": "number",
-      "estimated_duration_sec": 0,
       "events": [
         {
           "event_id": "evt_008",
@@ -428,7 +400,6 @@
               "carried_by": "",
               "from": "",
               "to": "",
-              "costume_change_duration_sec": 0,
               "costume_description": ""
             },
             {
@@ -439,7 +410,6 @@
               "carried_by": "",
               "from": "",
               "to": "",
-              "costume_change_duration_sec": 0,
               "costume_description": ""
             }
           ],
@@ -461,7 +431,6 @@
               "carried_by": "",
               "from": "",
               "to": "",
-              "costume_change_duration_sec": 0,
               "costume_description": ""
             },
             {
@@ -472,7 +441,6 @@
               "carried_by": "",
               "from": "",
               "to": "",
-              "costume_change_duration_sec": 0,
               "costume_description": ""
             },
             {
@@ -483,7 +451,6 @@
               "carried_by": "",
               "from": "",
               "to": "",
-              "costume_change_duration_sec": 0,
               "costume_description": ""
             },
             {
@@ -494,7 +461,6 @@
               "carried_by": "",
               "from": "",
               "to": "",
-              "costume_change_duration_sec": 0,
               "costume_description": ""
             },
             {
@@ -505,7 +471,6 @@
               "carried_by": "",
               "from": "",
               "to": "",
-              "costume_change_duration_sec": 0,
               "costume_description": ""
             },
             {
@@ -516,7 +481,6 @@
               "carried_by": "",
               "from": "",
               "to": "",
-              "costume_change_duration_sec": 0,
               "costume_description": ""
             },
             {
@@ -527,7 +491,6 @@
               "carried_by": "",
               "from": "",
               "to": "",
-              "costume_change_duration_sec": 0,
               "costume_description": ""
             },
             {
@@ -538,7 +501,6 @@
               "carried_by": "",
               "from": "",
               "to": "",
-              "costume_change_duration_sec": 0,
               "costume_description": ""
             },
             {
@@ -549,7 +511,6 @@
               "carried_by": "",
               "from": "",
               "to": "",
-              "costume_change_duration_sec": 0,
               "costume_description": ""
             }
           ],
@@ -562,7 +523,6 @@
       "cue_id": "cue_008",
       "scene_number": "S#5",
       "scene_type": "scene",
-      "estimated_duration_sec": 0,
       "events": [
         {
           "event_id": "evt_010",
@@ -580,7 +540,6 @@
               "carried_by": "char_jungwon",
               "from": "",
               "to": "",
-              "costume_change_duration_sec": 0,
               "costume_description": ""
             },
             {
@@ -591,7 +550,6 @@
               "carried_by": "char_hyewon",
               "from": "",
               "to": "",
-              "costume_change_duration_sec": 0,
               "costume_description": ""
             },
             {
@@ -602,7 +560,6 @@
               "carried_by": "",
               "from": "",
               "to": "",
-              "costume_change_duration_sec": 0,
               "costume_description": "가디건 걸치기"
             }
           ],
@@ -624,7 +581,6 @@
               "carried_by": "",
               "from": "",
               "to": "",
-              "costume_change_duration_sec": 0,
               "costume_description": ""
             },
             {
@@ -635,7 +591,6 @@
               "carried_by": "",
               "from": "",
               "to": "",
-              "costume_change_duration_sec": 0,
               "costume_description": ""
             },
             {
@@ -646,7 +601,6 @@
               "carried_by": "",
               "from": "",
               "to": "",
-              "costume_change_duration_sec": 0,
               "costume_description": ""
             }
           ],
@@ -659,7 +613,6 @@
       "cue_id": "cue_009",
       "scene_number": "S#6",
       "scene_type": "scene",
-      "estimated_duration_sec": 0,
       "events": [
         {
           "event_id": "evt_012",
@@ -677,7 +630,6 @@
               "carried_by": "",
               "from": "",
               "to": "",
-              "costume_change_duration_sec": 0,
               "costume_description": ""
             }
           ],
@@ -690,7 +642,6 @@
       "cue_id": "cue_010",
       "scene_number": "N#4",
       "scene_type": "number",
-      "estimated_duration_sec": 0,
       "events": [
         {
           "event_id": "evt_013",
@@ -708,7 +659,6 @@
               "carried_by": "",
               "from": "",
               "to": "",
-              "costume_change_duration_sec": 0,
               "costume_description": ""
             }
           ],
@@ -730,7 +680,6 @@
               "carried_by": "",
               "from": "",
               "to": "",
-              "costume_change_duration_sec": 0,
               "costume_description": ""
             },
             {
@@ -741,7 +690,6 @@
               "carried_by": "",
               "from": "",
               "to": "",
-              "costume_change_duration_sec": 0,
               "costume_description": ""
             },
             {
@@ -752,7 +700,6 @@
               "carried_by": "",
               "from": "",
               "to": "",
-              "costume_change_duration_sec": 0,
               "costume_description": ""
             },
             {
@@ -763,7 +710,6 @@
               "carried_by": "",
               "from": "",
               "to": "",
-              "costume_change_duration_sec": 0,
               "costume_description": ""
             },
             {
@@ -774,7 +720,6 @@
               "carried_by": "",
               "from": "",
               "to": "",
-              "costume_change_duration_sec": 260,
               "costume_description": "배역의상에 상의만 긴팔 흰셔츠(퀵체)"
             },
             {
@@ -785,7 +730,6 @@
               "carried_by": "",
               "from": "",
               "to": "",
-              "costume_change_duration_sec": 260,
               "costume_description": "배역의상 유지 / 넘버 중퇴환복"
             }
           ],
@@ -798,7 +742,6 @@
       "cue_id": "cue_011",
       "scene_number": "S#7",
       "scene_type": "scene",
-      "estimated_duration_sec": 0,
       "events": [
         {
           "event_id": "evt_015",
@@ -816,7 +759,6 @@
               "carried_by": "char_hyewon",
               "from": "",
               "to": "",
-              "costume_change_duration_sec": 0,
               "costume_description": ""
             }
           ],
@@ -829,7 +771,6 @@
       "cue_id": "cue_012",
       "scene_number": "N#5",
       "scene_type": "number",
-      "estimated_duration_sec": 0,
       "events": [
         {
           "event_id": "evt_016",
@@ -847,7 +788,6 @@
               "carried_by": "char_hyewon",
               "from": "",
               "to": "",
-              "costume_change_duration_sec": 0,
               "costume_description": ""
             }
           ],
@@ -860,7 +800,6 @@
       "cue_id": "cue_013",
       "scene_number": "S#8",
       "scene_type": "scene",
-      "estimated_duration_sec": 0,
       "events": [
         {
           "event_id": "evt_017",
@@ -878,7 +817,6 @@
               "carried_by": "",
               "from": "",
               "to": "",
-              "costume_change_duration_sec": 0,
               "costume_description": ""
             },
             {
@@ -889,7 +827,6 @@
               "carried_by": "",
               "from": "",
               "to": "",
-              "costume_change_duration_sec": 0,
               "costume_description": ""
             }
           ],
@@ -902,7 +839,6 @@
       "cue_id": "cue_014",
       "scene_number": "S#9",
       "scene_type": "scene",
-      "estimated_duration_sec": 0,
       "events": [
         {
           "event_id": "evt_018",
@@ -920,7 +856,6 @@
               "carried_by": "",
               "from": "",
               "to": "",
-              "costume_change_duration_sec": 0,
               "costume_description": ""
             },
             {
@@ -931,7 +866,6 @@
               "carried_by": "",
               "from": "",
               "to": "",
-              "costume_change_duration_sec": 0,
               "costume_description": ""
             },
             {
@@ -942,7 +876,6 @@
               "carried_by": "",
               "from": "",
               "to": "",
-              "costume_change_duration_sec": 0,
               "costume_description": ""
             }
           ],
@@ -955,7 +888,6 @@
       "cue_id": "cue_015",
       "scene_number": "N#6",
       "scene_type": "number",
-      "estimated_duration_sec": 0,
       "events": [
         {
           "event_id": "evt_019",
@@ -973,7 +905,6 @@
               "carried_by": "",
               "from": "",
               "to": "",
-              "costume_change_duration_sec": 0,
               "costume_description": ""
             }
           ],
@@ -986,7 +917,6 @@
       "cue_id": "cue_016",
       "scene_number": "S#10",
       "scene_type": "scene",
-      "estimated_duration_sec": 0,
       "events": [],
       "notes": "S#10 우현의 시한부 고백 [2](#docchat-group-doc1p1h46--doc1p2h368)"
     },
@@ -994,7 +924,6 @@
       "cue_id": "cue_017",
       "scene_number": "N#7",
       "scene_type": "number",
-      "estimated_duration_sec": 0,
       "events": [],
       "notes": "N#7 하나의 답 [2](#docchat-group-doc1p2h403--doc1p4h1)"
     },
@@ -1002,7 +931,6 @@
       "cue_id": "cue_018",
       "scene_number": "S#11",
       "scene_type": "scene",
-      "estimated_duration_sec": 0,
       "events": [
         {
           "event_id": "evt_020",
@@ -1020,7 +948,6 @@
               "carried_by": "char_hyewon",
               "from": "",
               "to": "",
-              "costume_change_duration_sec": 0,
               "costume_description": ""
             },
             {
@@ -1031,7 +958,6 @@
               "carried_by": "",
               "from": "",
               "to": "",
-              "costume_change_duration_sec": 0,
               "costume_description": ""
             },
             {
@@ -1042,7 +968,6 @@
               "carried_by": "",
               "from": "",
               "to": "",
-              "costume_change_duration_sec": 0,
               "costume_description": ""
             },
             {
@@ -1053,7 +978,6 @@
               "carried_by": "",
               "from": "",
               "to": "",
-              "costume_change_duration_sec": 0,
               "costume_description": ""
             },
             {
@@ -1064,7 +988,6 @@
               "carried_by": "",
               "from": "",
               "to": "",
-              "costume_change_duration_sec": 0,
               "costume_description": ""
             }
           ],
@@ -1077,7 +1000,6 @@
       "cue_id": "cue_019",
       "scene_number": "N#8",
       "scene_type": "number",
-      "estimated_duration_sec": 0,
       "events": [],
       "notes": "N#8 Larger than life [1](#docchat-1-2-403)"
     },
@@ -1085,7 +1007,6 @@
       "cue_id": "cue_020",
       "scene_number": "S#12",
       "scene_type": "scene",
-      "estimated_duration_sec": 0,
       "events": [
         {
           "event_id": "evt_021",
@@ -1103,7 +1024,6 @@
               "carried_by": "",
               "from": "",
               "to": "",
-              "costume_change_duration_sec": 0,
               "costume_description": ""
             }
           ],
@@ -1116,7 +1036,6 @@
       "cue_id": "cue_021",
       "scene_number": "S#13",
       "scene_type": "scene",
-      "estimated_duration_sec": 0,
       "events": [],
       "notes": "S#13 놀이공원에 온 가족들 [2](#docchat-group-doc1p1h46--doc1p2h426)"
     },
@@ -1124,7 +1043,6 @@
       "cue_id": "cue_022",
       "scene_number": "N#9",
       "scene_type": "number",
-      "estimated_duration_sec": 0,
       "events": [],
       "notes": "N#9 한 페이지가 될 수 있게 [2](#docchat-group-doc1p2h464--doc1p4h1)"
     },
@@ -1132,7 +1050,6 @@
       "cue_id": "cue_023",
       "scene_number": "S#14",
       "scene_type": "scene",
-      "estimated_duration_sec": 0,
       "events": [
         {
           "event_id": "evt_022",
@@ -1150,7 +1067,6 @@
               "carried_by": "",
               "from": "stage_right",
               "to": "stage_left",
-              "costume_change_duration_sec": 0,
               "costume_description": ""
             },
             {
@@ -1161,7 +1077,6 @@
               "carried_by": "",
               "from": "stage_right",
               "to": "stage_left",
-              "costume_change_duration_sec": 0,
               "costume_description": ""
             }
           ],
@@ -1174,7 +1089,6 @@
       "cue_id": "cue_024",
       "scene_number": "N#10",
       "scene_type": "number",
-      "estimated_duration_sec": 0,
       "events": [],
       "notes": "N#10 기쁨, 슬픔 reprise [1](#docchat-1-2-509)"
     },
@@ -1182,7 +1096,6 @@
       "cue_id": "cue_025",
       "scene_number": "S#15",
       "scene_type": "scene",
-      "estimated_duration_sec": 0,
       "events": [],
       "notes": "S#15 마루와 수연의 대화 [1](#docchat-1-2-516)"
     },
@@ -1190,7 +1103,6 @@
       "cue_id": "cue_026",
       "scene_number": "N#11",
       "scene_type": "number",
-      "estimated_duration_sec": 0,
       "events": [
         {
           "event_id": "evt_023",
@@ -1208,7 +1120,6 @@
               "carried_by": "",
               "from": "stage_left",
               "to": "stage_right",
-              "costume_change_duration_sec": 0,
               "costume_description": ""
             }
           ],
@@ -1221,7 +1132,6 @@
       "cue_id": "cue_027",
       "scene_number": "S#16",
       "scene_type": "scene",
-      "estimated_duration_sec": 60,
       "events": [],
       "notes": "긴 암전 약 1분 [1](#docchat-1-2-546)"
     },
@@ -1229,7 +1139,6 @@
       "cue_id": "cue_028",
       "scene_number": "S#17",
       "scene_type": "scene",
-      "estimated_duration_sec": 0,
       "events": [],
       "notes": "S#17 우주비행사가 된 마루 [1](#docchat-1-2-560)"
     },
@@ -1237,7 +1146,6 @@
       "cue_id": "cue_029",
       "scene_number": "N#12",
       "scene_type": "number",
-      "estimated_duration_sec": 0,
       "events": [
         {
           "event_id": "evt_024",
@@ -1255,7 +1163,6 @@
               "carried_by": "",
               "from": "",
               "to": "",
-              "costume_change_duration_sec": 0,
               "costume_description": ""
             }
           ],
@@ -1268,7 +1175,6 @@
       "cue_id": "cue_030",
       "scene_number": "N#13",
       "scene_type": "number",
-      "estimated_duration_sec": 0,
       "events": [],
       "notes": "N#13 Goodbye reprise (커튼콜) [2](#docchat-group-doc1p2h572--doc1p4h1)"
     }

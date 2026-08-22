@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import {
   AlertTriangle,
   Check,
@@ -10,13 +10,13 @@ import {
   X,
 } from 'lucide-react';
 import {
-  StandbyApi,
   StandbyApiError,
+  createStandbyBrowserApi,
   type SourceOrigin,
 } from '@/lib/standby-api';
 import { FactReviewPanel, type FactReviewCommand } from '@/components/domain';
 import { useCueSheetStore, useStandbyWorkspaceStore } from '@/store';
-import type { FactCandidate } from '@/types/standby';
+import type { FactCandidate, FactNormalizerArtifact } from '@/types/standby';
 import type { CueSheet } from '@/types/cue-sheet';
 import { parseCueSheetJson } from '@/lib/cue-sheet-json';
 import { useI18n, type Locale } from '@/lib/i18n';
@@ -25,8 +25,6 @@ import { useNavigate } from '@tanstack/react-router';
 
 const MAX_SOURCE_BYTES = 50 * 1024 * 1024;
 const SOURCE_ORIGIN: SourceOrigin = 'USER_PROVIDED';
-const DEMO_SESSION_KEY = 'standby.demo-session.v1';
-const UUID_V4_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 const ZONES = [
   ['STAGE', '무대'],
@@ -38,7 +36,7 @@ const ZONES = [
 
 type SourceInputKind = 'MASTER_CUE';
 type Crossover = 'UNKNOWN' | 'AVAILABLE' | 'UNAVAILABLE';
-type SubmitPhase = 'IDLE' | 'UPLOADING' | 'EXTRACTING' | 'REVIEW' | 'VERIFYING' | 'SUCCEEDED' | 'FAILED';
+type SubmitPhase = 'IDLE' | 'UPLOADING' | 'EXTRACTING' | 'NORMALIZING' | 'REVIEW' | 'VERIFYING' | 'SUCCEEDED' | 'FAILED';
 
 type SelectedSource = {
   file: File;
@@ -113,14 +111,6 @@ async function sha256(bytes: BufferSource) {
   return bytesToHex(await crypto.subtle.digest('SHA-256', bytes));
 }
 
-function getDemoSessionId() {
-  const current = localStorage.getItem(DEMO_SESSION_KEY);
-  if (current && UUID_V4_PATTERN.test(current)) return current;
-  const created = crypto.randomUUID();
-  localStorage.setItem(DEMO_SESSION_KEY, created);
-  return created;
-}
-
 async function inspectSourceFile(kind: SourceInputKind, file: File, locale: Locale): Promise<SelectedSource> {
   const config = SOURCE_CONFIG[kind];
   const extension = extensionOf(file.name);
@@ -169,6 +159,7 @@ export function InputScreen() {
   const [message, setMessage] = useState<string | null>(null);
   const [caseId, setCaseId] = useState<string | null>(null);
   const [facts, setFacts] = useState<FactCandidate[]>([]);
+  const [normalizerArtifact, setNormalizerArtifact] = useState<FactNormalizerArtifact | null>(null);
 
   const stageSpec = useMemo(() => ({
     contract_version: 'standby.stage-spec.v1',
@@ -238,6 +229,7 @@ export function InputScreen() {
     setMessage(null);
     setCaseId(null);
     setFacts([]);
+    setNormalizerArtifact(null);
     clearWorkspace();
     clearCueSheet();
     setSourceErrors((current) => ({ ...current, [kind]: undefined }));
@@ -261,10 +253,7 @@ export function InputScreen() {
   const ready = Boolean(masterCue);
 
   const apiClient = () => {
-    const baseUrl = import.meta.env.VITE_STANDBY_API_BASE_URL as string | undefined;
-    return baseUrl
-      ? new StandbyApi({ baseUrl, getSessionId: getDemoSessionId })
-      : null;
+    return createStandbyBrowserApi();
   };
 
   const startExtraction = async () => {
@@ -299,6 +288,17 @@ export function InputScreen() {
 
       setCaseId(createdCase.case_id);
       setFacts(queue.items);
+      setPhase('NORMALIZING');
+      setMessage(t('input.status.normalize'));
+      const normalizerOperation = await api.startProductionAgent(createdCase.case_id, 'FACT_NORMALIZER');
+      const completedNormalizer = await api.waitForOperation(normalizerOperation.operation_id);
+      if (completedNormalizer.resource_ref.type !== 'production_artifact') {
+        throw new Error(locale === 'ko'
+          ? 'Fact Normalizer 결과 위치가 올바르지 않습니다.'
+          : 'The Fact Normalizer returned an invalid result reference.');
+      }
+      const artifact = await api.getFactNormalizerArtifact(completedNormalizer.resource_ref.id);
+      setNormalizerArtifact(artifact);
       setPhase('REVIEW');
       setMessage(t('input.status.review', { count: queue.items.length }));
     } catch (error) {
@@ -321,7 +321,7 @@ export function InputScreen() {
     try {
       setPhase('VERIFYING');
       setMessage(t('input.status.verify'));
-      if (reviews.length > 0) await api.reviewFacts(caseId, reviews);
+      await api.reviewFacts(caseId, reviews);
       await api.freezeReviewSnapshot(caseId);
       const workspace = await api.getWorkspace(caseId);
       setWorkspace(caseId, workspace);
@@ -338,7 +338,7 @@ export function InputScreen() {
     }
   };
 
-  if (phase === 'UPLOADING' || phase === 'EXTRACTING') {
+  if (phase === 'UPLOADING' || phase === 'EXTRACTING' || phase === 'NORMALIZING') {
     return <ExtractionLoadingScreen phase={phase} />;
   }
 
@@ -392,6 +392,12 @@ export function InputScreen() {
           <FactReviewPanel
             key={caseId}
             facts={facts}
+            recommendations={normalizerArtifact?.payload.recommendations ?? []}
+            normalizer={normalizerArtifact ? {
+              authority: normalizerArtifact.authority,
+              agentId: normalizerArtifact.agent_id,
+              configId: normalizerArtifact.config_id,
+            } : null}
             busy={phase === 'VERIFYING'}
             onSubmit={(reviews) => void completeReview(reviews)}
           />
@@ -401,7 +407,7 @@ export function InputScreen() {
   );
 }
 
-function ExtractionLoadingScreen({ phase }: { phase: 'UPLOADING' | 'EXTRACTING' }) {
+function ExtractionLoadingScreen({ phase }: { phase: 'UPLOADING' | 'EXTRACTING' | 'NORMALIZING' }) {
   const { t } = useI18n();
   return (
     <section
@@ -410,11 +416,25 @@ function ExtractionLoadingScreen({ phase }: { phase: 'UPLOADING' | 'EXTRACTING' 
       className="fixed inset-0 z-50 overflow-y-auto bg-background px-5 py-10"
     >
       <div className="mx-auto flex min-h-full max-w-5xl flex-col justify-center">
-        <div className="brand-mono text-sm tracking-[0.28em]">STANDBY</div>
-        <div className="mt-8 flex items-center gap-3">
-          <LoaderCircle className="h-5 w-5 animate-spin" aria-hidden="true" />
+        <div className="standby-loading-wordmark brand-mono" aria-label="STANDBY">
+          {'STANDBY'.split('').map((letter, index) => (
+            <span
+              key={letter}
+              aria-hidden="true"
+              className="standby-loading-letter"
+              style={{ '--standby-letter-index': index } as CSSProperties}
+            >
+              {letter}
+            </span>
+          ))}
+        </div>
+        <div className="mt-8">
           <h2 className="text-2xl font-medium">
-            {t(phase === 'UPLOADING' ? 'input.loading.upload' : 'input.loading.extract')}
+            {t(phase === 'UPLOADING'
+              ? 'input.loading.upload'
+              : phase === 'NORMALIZING'
+                ? 'input.loading.normalize'
+                : 'input.loading.extract')}
           </h2>
         </div>
         <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">

@@ -68,7 +68,6 @@ function isAction(value: unknown): value is Action {
     && isOptionalString(value.carried_by)
     && isOptionalDirection(value.from)
     && isOptionalDirection(value.to)
-    && isOptionalNumber(value.costume_change_duration_sec)
     && isOptionalString(value.costume_description);
 }
 
@@ -87,7 +86,6 @@ function isCue(value: unknown): value is Cue {
     && typeof value.scene_number === 'string'
     && typeof value.scene_type === 'string'
     && SCENE_TYPES.has(value.scene_type)
-    && isOptionalNumber(value.estimated_duration_sec)
     && isOptionalNumber(value.backstage_crossover_time_override_sec)
     && Array.isArray(value.events)
     && value.events.every(isEvent)

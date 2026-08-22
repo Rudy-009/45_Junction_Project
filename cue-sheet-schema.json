@@ -77,11 +77,6 @@
             "enum": ["scene", "number", "dark"],
             "description": "씬 유형: scene(일반 씬) / number(넘버/곡) / dark(암전 구간)"
           },
-          "estimated_duration_sec": {
-            "type": "number",
-            "description": "해당 씬의 예상 소요 시간(초)",
-            "minimum": 0
-          },
           "backstage_crossover_time_override_sec": {
             "type": "number",
             "description": "이 씬에서의 백스테이지 이동 시간 오버라이드(초). 미지정 시 venue 기본값 사용",
@@ -169,11 +164,6 @@
           "type": "string",
           "enum": ["stage_left", "stage_right"],
           "description": "백스테이지 이동 도착 (backstage_crossover 시)"
-        },
-        "costume_change_duration_sec": {
-          "type": "number",
-          "description": "환복 소요 시간(초) (costume_change 시)",
-          "minimum": 0
         },
         "costume_description": {
           "type": "string",
