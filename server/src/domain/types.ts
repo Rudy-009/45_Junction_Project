@@ -315,6 +315,7 @@ export type ProductionArtifact = {
   config_id: string | null;
   adapter_version: string;
   raw_response_sha256: string;
+  fallback_reason?: "UPSTAGE_RESPONSE_REJECTED";
   payload:
     | FactNormalizerArtifactPayload
     | StoryboardArtifactPayload

@@ -29,6 +29,7 @@ type Artifact = {
   agent_id: string;
   config_id: string | null;
   raw_response_sha256: string;
+  fallback_reason?: "UPSTAGE_RESPONSE_REJECTED";
   payload: JsonObject;
 };
 
@@ -155,7 +156,8 @@ function artifactEvidence(
     provider_job_id: result.artifact.provider_job_id,
     raw_response_sha256: result.artifact.raw_response_sha256,
     authority: result.artifact.authority,
-    strict_decode: true,
+    strict_decode: !result.artifact.fallback_reason,
+    fallback_reason: result.artifact.fallback_reason ?? null,
     payload_count: payloadCount,
   };
 }

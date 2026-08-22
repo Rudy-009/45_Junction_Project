@@ -364,6 +364,52 @@ test("Fact Normalizer recommendations are non-authoritative and require explicit
   }
 });
 
+test("Fact Normalizer rejects unsupported Upstage types and uses a marked deterministic fallback", async () => {
+  const provider: ProductionAgentProvider = {
+    configFingerprint: (role) => hashJson({ role, config: "unsupported-type" }),
+    async run(role, input) {
+      assert.equal(role, "FACT_NORMALIZER");
+      const facts = input.payload.facts as Array<{ fact_id: string; raw_value: unknown }>;
+      return {
+        output: {
+          recommendations: facts.map((fact) => ({
+            fact_id: fact.fact_id,
+            normalized_fact_type: "CUE_ROW",
+            value: fact.raw_value,
+            confidence: "HIGH",
+            authority: "NON_AUTHORITATIVE",
+          })),
+          missing_evidence: [],
+        },
+        provider_job_id: "job_unsupported",
+        agent_id: "agt_unsupported",
+        config_id: "1",
+        adapter_version: "unsupported.v1",
+        raw_response_sha256: sha256("unsupported"),
+      };
+    },
+  };
+  const app = await buildApp({ apiToken: TOKEN, allowedOrigins: [], productionAgentProvider: provider });
+  try {
+    const { caseId, facts } = await createExtractedCase(app);
+    const started = await app.inject({
+      method: "POST",
+      url: `/v1/cases/${caseId}/production-agent-runs`,
+      headers: auth(true),
+      payload: { role: "FACT_NORMALIZER" },
+    });
+    const artifact = await artifactFromOperation(app, (started.json() as { operation_id: string }).operation_id);
+    assert.equal(artifact.fallback_reason, "UPSTAGE_RESPONSE_REJECTED");
+    const recommendations = (artifact.payload as { recommendations: Array<{ normalized_fact_type: string }> }).recommendations;
+    assert.deepEqual(
+      recommendations.map((item) => item.normalized_fact_type).sort(),
+      facts.map((fact) => fact.fact_type).sort(),
+    );
+  } finally {
+    await app.close();
+  }
+});
+
 test("Storyboard and rehearsal brief use frozen workspace input and cache identical Agent calls", async () => {
   const provider = new FixtureProductionProvider();
   const app = await buildApp({

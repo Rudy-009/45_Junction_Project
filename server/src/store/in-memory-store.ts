@@ -1221,7 +1221,32 @@ export class InMemoryStore {
         );
       }
       const result = await this.productionAgentProvider.run(input.role, input.frozenInput);
-      const payload = validateProductionAgentOutput(input.role, result.output, input.allowlist);
+      let fallbackReason: ProductionArtifact["fallback_reason"];
+      let payload: ProductionArtifact["payload"];
+      try {
+        payload = validateProductionAgentOutput(input.role, result.output, input.allowlist);
+      } catch (error) {
+        if (!(error instanceof DomainError)
+          || error.code !== "PRODUCTION_AGENT_RESPONSE_INVALID"
+          || error.message !== "Fact normalization contains an unsupported normalized_fact_type."
+          || input.role !== "FACT_NORMALIZER") throw error;
+        const facts = input.frozenInput.payload.facts;
+        if (!Array.isArray(facts)) throw error;
+        payload = validateProductionAgentOutput("FACT_NORMALIZER", {
+          recommendations: facts.map((value) => {
+            const fact = value as Record<string, unknown>;
+            return {
+              fact_id: fact.fact_id,
+              normalized_fact_type: fact.fact_type,
+              value: fact.raw_value,
+              confidence: "NOT_PROVIDED",
+              authority: "NON_AUTHORITATIVE",
+            };
+          }),
+          missing_evidence: [],
+        }, input.allowlist);
+        fallbackReason = "UPSTAGE_RESPONSE_REJECTED";
+      }
       const artifact: ProductionArtifact = {
         contract_version: "standby.production-artifact.v1",
         artifact_id: input.artifactId,
@@ -1237,6 +1262,7 @@ export class InMemoryStore {
         config_id: result.config_id,
         adapter_version: result.adapter_version,
         raw_response_sha256: result.raw_response_sha256,
+        ...(fallbackReason ? { fallback_reason: fallbackReason } : {}),
         payload,
         created_at: this.now(),
       };
