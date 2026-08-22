@@ -1,0 +1,186 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "StageCueSheet",
+  "description": "무대/뮤지컬 큐 시트 - 동선 모순 감지용 JSON 스키마",
+  "type": "object",
+  "required": ["metadata", "venue", "characters", "props", "cues"],
+  "properties": {
+    "metadata": {
+      "type": "object",
+      "description": "공연 기본 정보",
+      "required": ["title", "version", "created_at"],
+      "properties": {
+        "title": { "type": "string", "description": "공연 제목" },
+        "version": { "type": "string", "description": "큐 시트 버전" },
+        "created_at": { "type": "string", "format": "date-time" },
+        "updated_at": { "type": "string", "format": "date-time" },
+        "notes": { "type": "string", "description": "비고" }
+      }
+    },
+    "venue": {
+      "type": "object",
+      "description": "공연장 설정",
+      "required": ["has_backstage_crossover"],
+      "properties": {
+        "has_backstage_crossover": {
+          "type": "boolean",
+          "description": "백스테이지 상수↔하수 통로 존재 여부"
+        },
+        "backstage_crossover_time_sec": {
+          "type": "number",
+          "description": "백스테이지 상수↔하수 기본 이동 시간(초). 씬별 오버라이드 가능",
+          "minimum": 0
+        }
+      }
+    },
+    "characters": {
+      "type": "array",
+      "description": "등장인물 목록",
+      "items": {
+        "type": "object",
+        "required": ["id", "name"],
+        "properties": {
+          "id": { "type": "string", "description": "인물 고유 ID (예: char_01)" },
+          "name": { "type": "string", "description": "인물 이름 (예: 민수)" },
+          "actor": { "type": "string", "description": "배우 이름 (선택)" }
+        }
+      }
+    },
+    "props": {
+      "type": "array",
+      "description": "소품 목록",
+      "items": {
+        "type": "object",
+        "required": ["id", "name"],
+        "properties": {
+          "id": { "type": "string", "description": "소품 고유 ID (예: prop_01)" },
+          "name": { "type": "string", "description": "소품 이름 (예: 편지, 의자)" },
+          "is_set_piece": {
+            "type": "boolean",
+            "description": "무대 세팅 소품 여부 (가구 등 인물 귀속 아닌 것)",
+            "default": false
+          }
+        }
+      }
+    },
+    "cues": {
+      "type": "array",
+      "description": "큐(씬) 목록 - 시간순 정렬",
+      "items": {
+        "type": "object",
+        "required": ["cue_id", "scene_number", "scene_type"],
+        "properties": {
+          "cue_id": { "type": "string", "description": "큐 고유 ID (예: cue_001)" },
+          "scene_number": { "type": "string", "description": "씬 번호 (예: S#001, N#201)" },
+          "scene_type": {
+            "type": "string",
+            "enum": ["scene", "number"],
+            "description": "씬 유형: scene(일반 씬) / number(넘버/곡)"
+          },
+          "estimated_duration_sec": {
+            "type": "number",
+            "description": "해당 씬의 예상 소요 시간(초)",
+            "minimum": 0
+          },
+          "backstage_crossover_time_override_sec": {
+            "type": "number",
+            "description": "이 씬에서의 백스테이지 이동 시간 오버라이드(초). 미지정 시 venue 기본값 사용",
+            "minimum": 0
+          },
+          "stage_left_movements": {
+            "type": "array",
+            "description": "상수(Stage Left, 관객 기준 오른쪽) 인물 이동",
+            "items": { "$ref": "#/definitions/character_movement" }
+          },
+          "stage_right_movements": {
+            "type": "array",
+            "description": "하수(Stage Right, 관객 기준 왼쪽) 인물 이동",
+            "items": { "$ref": "#/definitions/character_movement" }
+          },
+          "backstage_crossovers": {
+            "type": "array",
+            "description": "백스테이지 상수↔하수 이동",
+            "items": { "$ref": "#/definitions/backstage_crossover" }
+          },
+          "stage_left_props": {
+            "type": "array",
+            "description": "상수 소품 이동",
+            "items": { "$ref": "#/definitions/prop_movement" }
+          },
+          "stage_right_props": {
+            "type": "array",
+            "description": "하수 소품 이동",
+            "items": { "$ref": "#/definitions/prop_movement" }
+          },
+          "costume_changes": {
+            "type": "array",
+            "description": "의상 환복 정보",
+            "items": { "$ref": "#/definitions/costume_change" }
+          },
+          "notes": { "type": "string", "description": "비고" }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "character_movement": {
+      "type": "object",
+      "required": ["character_id", "action"],
+      "properties": {
+        "character_id": { "type": "string", "description": "인물 ID 참조" },
+        "action": {
+          "type": "string",
+          "enum": ["enter", "exit"],
+          "description": "등장(enter) / 퇴장(exit)"
+        }
+      }
+    },
+    "backstage_crossover": {
+      "type": "object",
+      "description": "백스테이지를 통한 상수↔하수 이동",
+      "required": ["character_id", "from", "to"],
+      "properties": {
+        "character_id": { "type": "string", "description": "인물 ID 참조" },
+        "from": {
+          "type": "string",
+          "enum": ["stage_left", "stage_right"],
+          "description": "출발 방향"
+        },
+        "to": {
+          "type": "string",
+          "enum": ["stage_left", "stage_right"],
+          "description": "도착 방향"
+        }
+      }
+    },
+    "prop_movement": {
+      "type": "object",
+      "required": ["prop_id", "action"],
+      "properties": {
+        "prop_id": { "type": "string", "description": "소품 ID 참조" },
+        "action": {
+          "type": "string",
+          "enum": ["in", "out"],
+          "description": "소품 무대 진입(in) / 무대 퇴장(out)"
+        },
+        "carried_by": {
+          "type": "string",
+          "description": "소품을 함께 이동시키는 인물 ID (없으면 스태프 세팅)"
+        }
+      }
+    },
+    "costume_change": {
+      "type": "object",
+      "required": ["character_id", "duration_sec"],
+      "properties": {
+        "character_id": { "type": "string", "description": "인물 ID 참조" },
+        "duration_sec": {
+          "type": "number",
+          "description": "환복 소요 시간(초)",
+          "minimum": 0
+        },
+        "description": { "type": "string", "description": "환복 내용 설명" }
+      }
+    }
+  }
+}

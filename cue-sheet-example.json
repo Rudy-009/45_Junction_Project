@@ -1,0 +1,86 @@
+{
+  "metadata": {
+    "title": "뮤지컬 예시 공연",
+    "version": "1.0.0",
+    "created_at": "2026-08-22T11:00:00+09:00",
+    "updated_at": "2026-08-22T11:00:00+09:00",
+    "notes": "1막 큐 시트"
+  },
+  "venue": {
+    "has_backstage_crossover": true,
+    "backstage_crossover_time_sec": 45
+  },
+  "characters": [
+    { "id": "char_01", "name": "민수", "actor": "김배우" },
+    { "id": "char_02", "name": "은비", "actor": "이배우" },
+    { "id": "char_03", "name": "지훈", "actor": "박배우" }
+  ],
+  "props": [
+    { "id": "prop_01", "name": "편지", "is_set_piece": false },
+    { "id": "prop_02", "name": "의자", "is_set_piece": true },
+    { "id": "prop_03", "name": "가방", "is_set_piece": false }
+  ],
+  "cues": [
+    {
+      "cue_id": "cue_001",
+      "scene_number": "S#001",
+      "scene_type": "scene",
+      "estimated_duration_sec": 180,
+      "stage_left_movements": [
+        { "character_id": "char_01", "action": "enter" }
+      ],
+      "stage_right_movements": [
+        { "character_id": "char_02", "action": "enter" }
+      ],
+      "backstage_crossovers": [],
+      "stage_left_props": [
+        { "prop_id": "prop_03", "action": "in", "carried_by": "char_01" }
+      ],
+      "stage_right_props": [],
+      "costume_changes": [],
+      "notes": "오프닝 - 민수 상수 등장(가방 소지), 은비 하수 등장"
+    },
+    {
+      "cue_id": "cue_002",
+      "scene_number": "S#002",
+      "scene_type": "scene",
+      "estimated_duration_sec": 120,
+      "stage_left_movements": [
+        { "character_id": "char_02", "action": "exit" }
+      ],
+      "stage_right_movements": [],
+      "backstage_crossovers": [
+        { "character_id": "char_02", "from": "stage_left", "to": "stage_right" }
+      ],
+      "stage_left_props": [],
+      "stage_right_props": [],
+      "costume_changes": [
+        { "character_id": "char_02", "duration_sec": 60, "description": "교복 → 사복" }
+      ],
+      "notes": "은비 상수로 퇴장 후 백스테이지로 하수 이동 (환복 60초)"
+    },
+    {
+      "cue_id": "cue_003",
+      "scene_number": "N#101",
+      "scene_type": "number",
+      "estimated_duration_sec": 240,
+      "backstage_crossover_time_override_sec": 30,
+      "stage_left_movements": [
+        { "character_id": "char_01", "action": "exit" }
+      ],
+      "stage_right_movements": [
+        { "character_id": "char_02", "action": "enter" },
+        { "character_id": "char_03", "action": "enter" }
+      ],
+      "backstage_crossovers": [],
+      "stage_left_props": [
+        { "prop_id": "prop_03", "action": "out", "carried_by": "char_01" }
+      ],
+      "stage_right_props": [
+        { "prop_id": "prop_01", "action": "in", "carried_by": "char_02" }
+      ],
+      "costume_changes": [],
+      "notes": "넘버 - 민수 상수 퇴장(가방 반출), 은비 하수 등장(편지 소지), 지훈 하수 등장"
+    }
+  ]
+}
