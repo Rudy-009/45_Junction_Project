@@ -166,3 +166,63 @@ export type Revision = {
   changes: { rowId: string; column: string; from: string; to: string }[];
   rows: Row[];
 };
+
+// ─── 무대 스냅샷 ────────────────────────────────────────────────────
+// 이벤트별 정적 스냅샷이다. 이동 애니메이션은 만들지 않는다.
+// transition은 무대 출입만 표시한다. 백스테이지 내 이동(윙↔환복소, 윙↔윙)은
+// zone 변화로 이미 드러나므로 마커를 붙이지 않는다.
+
+export type Zone = "상수윙" | "무대" | "하수윙" | "하수환복소";
+export type Transition = "ENTER" | "EXIT";
+export type EntityKind = "person" | "prop";
+
+export type EntityDef = { id: string; label: string; kind: EntityKind };
+export type EntityStateAtEvent = { zone: Zone; transition?: Transition };
+
+export const ENTITIES: EntityDef[] = [
+  { id: "hyewon", label: "혜원", kind: "person" },
+  { id: "eunbi", label: "은비", kind: "person" },
+  { id: "bag", label: "마루가방", kind: "prop" },
+];
+
+/** initial_state — 큐시트에서 도출한다. 시뮬레이터에서 손으로 세팅하지 않는다. */
+export const INITIAL_STATE: Record<string, Zone> = {
+  hyewon: "무대",
+  eunbi: "하수윙",
+  bag: "상수윙",
+};
+
+const at = (
+  hyewon: EntityStateAtEvent,
+  eunbi: EntityStateAtEvent,
+  bag: EntityStateAtEvent,
+): Record<string, EntityStateAtEvent> => ({ hyewon, eunbi, bag });
+
+export const STAGE_SNAPSHOTS: Record<string, Record<string, EntityStateAtEvent>> = {
+  // 혜원이 무대에서 하수로 빠진다
+  E1: at({ zone: "하수윙", transition: "EXIT" }, { zone: "하수윙" }, { zone: "상수윙" }),
+  E2: at({ zone: "하수윙" }, { zone: "하수윙" }, { zone: "상수윙" }),
+  // 백스테이지 내 이동 — 무대 출입이 아니므로 마커 없음
+  E3: at({ zone: "하수환복소" }, { zone: "하수윙" }, { zone: "상수윙" }),
+  E4: at({ zone: "하수환복소" }, { zone: "하수윙" }, { zone: "상수윙" }),
+  // 마루가방 좌우 교차 — 이동 담당자 미표기가 VR-03 REVIEW의 근거다
+  E5: at({ zone: "하수환복소" }, { zone: "하수윙" }, { zone: "하수윙" }),
+  E6: at({ zone: "하수환복소" }, { zone: "하수윙" }, { zone: "하수윙" }),
+  // 혜원·은비 동시 재입장
+  E7: at(
+    { zone: "무대", transition: "ENTER" },
+    { zone: "무대", transition: "ENTER" },
+    { zone: "하수윙" },
+  ),
+  // 은비가 가방을 들고 들어온다
+  E8: at({ zone: "무대" }, { zone: "무대" }, { zone: "무대", transition: "ENTER" }),
+};
+
+/** 특정 이벤트 시점의 엔티티 상태 목록. 시뮬레이터의 유일한 입력이다. */
+export function stageAt(eventId: string): (EntityDef & EntityStateAtEvent)[] {
+  const snap = STAGE_SNAPSHOTS[eventId];
+  return ENTITIES.map((e) => ({
+    ...e,
+    ...(snap?.[e.id] ?? { zone: INITIAL_STATE[e.id] ?? "무대" }),
+  }));
+}

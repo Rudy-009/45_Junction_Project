@@ -2,22 +2,17 @@ import { useMemo, useState } from "react";
 import {
   EVENTS,
   ROWS,
+  stageAt,
   type Revision,
   type Row,
   type StandbyEvent,
   type Verdict,
 } from "@/lib/standby-data";
 import { Btn, PanelHeader } from "@/components/standby/Bits";
-import { StageSimulator, type Entity } from "@/components/standby/StageSimulator";
+import { StageSimulator } from "@/components/standby/StageSimulator";
 import { CueSheetPanel, type CellEdit } from "@/components/standby/CueSheetPanel";
 import { TimelinePanel } from "@/components/standby/TimelinePanel";
 import { FindingPopup } from "@/components/standby/FindingPopup";
-
-const BASE_ENTITIES: Entity[] = [
-  { id: "a1", label: "혜원", kind: "person", zone: "하수환복소", connector: { to: "무대", reviewed: true } },
-  { id: "a2", label: "은비", kind: "person", zone: "하수윙", connector: { to: "무대", reviewed: false } },
-  { id: "p1", label: "마루가방", kind: "prop", zone: "상수윙", connector: { to: "무대", reviewed: false } },
-];
 
 function parseSeconds(v: string) {
   const m = /(\d+)/.exec(v ?? "");
@@ -122,7 +117,7 @@ export function WorkspaceScreen() {
         }
       />
       <div className="min-h-0 flex-1">
-        <StageSimulator crossover="true" entities={BASE_ENTITIES} />
+        <StageSimulator crossover="true" entities={stageAt(current.id)} />
       </div>
     </div>
   );
