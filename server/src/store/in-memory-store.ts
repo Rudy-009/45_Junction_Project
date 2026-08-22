@@ -24,7 +24,7 @@ import { canonicalJson, hashJson, sha256 } from "../lib/hash.js";
 import type { ExtractionProvider } from "../providers/extraction-provider.js";
 
 const ROLES: SourceRole[] = ["SCRIPT", "MASTER_CUE", "STAGE_SPEC"];
-const REQUIRED_SOURCE_ROLES: SourceRole[] = ["MASTER_CUE", "STAGE_SPEC"];
+const REQUIRED_SOURCE_ROLES: SourceRole[] = ["MASTER_CUE"];
 
 type IdempotencyRecord = {
   fingerprint: string;
@@ -217,7 +217,7 @@ export class InMemoryStore {
     const record = this.getCase(caseId);
     const missingRoles = REQUIRED_SOURCE_ROLES.filter((role) => !record.sources.has(role));
     if (missingRoles.length > 0) {
-      throw new DomainError(409, "SOURCE_SLOT_MISSING", "MASTER_CUE and STAGE_SPEC are required.", {
+      throw new DomainError(409, "SOURCE_SLOT_MISSING", "MASTER_CUE is required.", {
         missing_roles: missingRoles,
       });
     }
