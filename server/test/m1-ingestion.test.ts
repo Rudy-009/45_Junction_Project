@@ -240,7 +240,12 @@ test("MASTER_CUE JSON file reaches Upstage extraction and human review", async (
 
 function source(
   role: SourceRole,
-  input: { bytes: Uint8Array | null; content: unknown; mediaType: string | null },
+  input: {
+    bytes: Uint8Array | null;
+    content: unknown;
+    mediaType: string | null;
+    originalFilename?: string | null;
+  },
 ): InternalSourceVersion {
   return {
     contract_version: "standby.source.v1",
@@ -251,7 +256,9 @@ function source(
     origin: "USER_PROVIDED",
     authority: "REVIEWED",
     media_type: input.mediaType,
-    original_filename: role === "SCRIPT" ? "script.pdf" : role === "MASTER_CUE" ? "cue.xlsx" : null,
+    original_filename:
+      input.originalFilename ??
+      (role === "SCRIPT" ? "script.pdf" : role === "MASTER_CUE" ? "cue.xlsx" : null),
     created_at: "2026-08-22T00:00:00.000Z",
     content: input.content,
     bytes: input.bytes,
@@ -303,6 +310,71 @@ test("Upstage adapter extracts a master cue without script or stage spec", async
   assert.ok(result.facts.every((fact) => fact.review_status === "UNREVIEWED"));
   assert.deepEqual(result.sourceRuns.map((run) => run.provider), ["UPSTAGE"]);
   assert.ok(result.sourceRuns.every((run) => /^[a-f0-9]{64}$/.test(run.raw_response_sha256)));
+});
+
+test("Upstage adapter converts JSON master cues to a supported XLSX transport", async () => {
+  const originalBytes = new TextEncoder().encode(JSON.stringify({
+    cues: [{ cue_id: "E1", trigger: "LIGHT GO" }],
+  }));
+  const originalHash = sha256(originalBytes);
+  let uploadedFile: File | null = null;
+  const mockFetch: typeof fetch = async (input, init) => {
+    const url = String(input);
+    if (url.endsWith("/v2/files")) {
+      assert.ok(init?.body instanceof FormData);
+      const file = init.body.get("file");
+      assert.ok(file instanceof File);
+      uploadedFile = file;
+      assert.equal(file.name, "cue.upstage.xlsx");
+      assert.equal(
+        file.type,
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      );
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      assert.deepEqual([...bytes.subarray(0, 2)], [0x50, 0x4b]);
+      return Response.json({ id: "file-json-cue" });
+    }
+    if (url.endsWith("/v2/responses") && init?.method === "POST") {
+      return Response.json({ id: "job-json-cue" });
+    }
+    return Response.json({
+      id: "job-json-cue",
+      status: "completed",
+      output: [{
+        content: [{
+          text: JSON.stringify({
+            cue_facts: [{
+              fact_type: "CUE_TRIGGER",
+              locator: "/cues/0/trigger",
+              source_quote_raw: "LIGHT GO",
+            }],
+          }),
+        }],
+      }],
+    });
+  };
+  const jsonSource = source("MASTER_CUE", {
+    bytes: originalBytes,
+    content: null,
+    mediaType: "application/json",
+    originalFilename: "cue.json",
+  });
+  const provider = new UpstageAgentProvider({
+    apiKey: "secret-test-key",
+    agentIds: { MASTER_CUE: "agt_cue" },
+    fetchImpl: mockFetch,
+    pollIntervalMs: 0,
+    timeoutMs: 1_000,
+  });
+
+  const result = await provider.extract(
+    new Map<SourceRole, InternalSourceVersion>([["MASTER_CUE", jsonSource]]),
+  );
+
+  assert.ok(uploadedFile);
+  assert.equal(jsonSource.sha256, originalHash);
+  assert.deepEqual(jsonSource.bytes, originalBytes);
+  assert.equal(result.facts[0]?.locator, "/cues/0/trigger");
 });
 
 test("Upstage adapter fails closed when a generated fact has no evidence quote", async () => {

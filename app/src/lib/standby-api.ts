@@ -103,7 +103,7 @@ export class StandbyApi {
     options: { intervalMs?: number; timeoutMs?: number; signal?: AbortSignal } = {},
   ): Promise<ExtractionOperation> {
     const intervalMs = options.intervalMs ?? 1_000;
-    const deadline = Date.now() + (options.timeoutMs ?? 180_000);
+    const deadline = Date.now() + (options.timeoutMs ?? 660_000);
     while (Date.now() <= deadline) {
       options.signal?.throwIfAborted();
       const operation = await this.getOperation(operationId);

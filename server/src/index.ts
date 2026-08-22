@@ -42,7 +42,7 @@ const extractionProvider = process.env.UPSTAGE_API_KEY
       agentIds,
       configIds,
       pollIntervalMs: Number(process.env.UPSTAGE_POLL_INTERVAL_MS ?? 2_000),
-      timeoutMs: Number(process.env.UPSTAGE_TIMEOUT_MS ?? 120_000),
+      timeoutMs: Number(process.env.UPSTAGE_TIMEOUT_MS ?? 600_000),
     })
   : undefined;
 
