@@ -18,7 +18,7 @@ import {
 import { FactReviewPanel, type FactReviewCommand } from '@/components/domain';
 import { useStandbyWorkspaceStore } from '@/store';
 import type { FactCandidate } from '@/types/standby';
-import { authConfigured, getStandbyAccessToken, supabase } from '@/lib/auth';
+import { authBypassEnabled, authConfigured, getStandbyAccessToken, supabase } from '@/lib/auth';
 import { useI18n, type Locale } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { useNavigate } from '@tanstack/react-router';
@@ -168,12 +168,14 @@ export function InputScreen() {
   const [message, setMessage] = useState<string | null>(null);
   const [caseId, setCaseId] = useState<string | null>(null);
   const [facts, setFacts] = useState<FactCandidate[]>([]);
-  const [authEmail, setAuthEmail] = useState<string | null>(import.meta.env.DEV ? 'local-dev' : null);
+  const [authEmail, setAuthEmail] = useState<string | null>(
+    import.meta.env.DEV || authBypassEnabled ? 'standby-demo' : null,
+  );
   const [loginEmail, setLoginEmail] = useState('');
   const [authMessage, setAuthMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!supabase) return;
+    if (!supabase || authBypassEnabled) return;
     let active = true;
     void supabase.auth.getSession().then(({ data }) => {
       if (active) setAuthEmail(data.session?.user.email ?? null);
@@ -279,11 +281,11 @@ export function InputScreen() {
   };
 
   const ready = Boolean(masterCue);
-  const authenticated = Boolean(authEmail);
+  const authenticated = authBypassEnabled || Boolean(authEmail);
 
   const apiClient = () => {
     const baseUrl = import.meta.env.VITE_STANDBY_API_BASE_URL as string | undefined;
-    return baseUrl && (import.meta.env.DEV || authConfigured)
+    return baseUrl && (import.meta.env.DEV || authBypassEnabled || authConfigured)
       ? new StandbyApi({ baseUrl, getAccessToken: getStandbyAccessToken })
       : null;
   };
@@ -372,7 +374,7 @@ export function InputScreen() {
           <h1 className="text-2xl font-medium">{t('input.title')}</h1>
         </header>
 
-        {!import.meta.env.DEV && (
+        {!import.meta.env.DEV && !authBypassEnabled && (
           <AuthPanel
             configured={authConfigured}
             email={authEmail}

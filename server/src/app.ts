@@ -20,6 +20,7 @@ declare module "fastify" {
 export type ServerConfig = {
   apiToken?: string;
   authenticateToken?: TokenAuthenticator;
+  authBypass?: boolean;
   allowedOrigins: string[];
   logger?: boolean;
   extractionProvider?: ExtractionProvider;
@@ -97,6 +98,10 @@ export async function buildApp(
   app.addHook("onRequest", async (request) => {
     if (request.url === "/healthz") return;
     if (!request.url.startsWith("/v1/")) return;
+    if (config.authBypass) {
+      request.standbyActorId = "demo-user";
+      return;
+    }
     const authorization = request.headers.authorization;
     const token = authorization?.startsWith("Bearer ") ? authorization.slice(7).trim() : "";
     if (!token) {
