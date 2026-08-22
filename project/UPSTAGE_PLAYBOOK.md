@@ -1,6 +1,6 @@
 # STANDBY × Upstage Mastery Playbook
 
-검증 기준일: **2026-08-22**
+검증 기준일: **2026-08-23**
 
 목적: Upstage의 기능을 많이 붙이는 것이 아니라, STANDBY에서 **각 기능이 꼭 해야 하는 일과 하면 안 되는 일**을 고정한다.
 
@@ -12,6 +12,11 @@
 이 문서는 공식 Upstage 문서·제품 페이지·공식 사례를 기준으로 작성했다. 2026-08-22 프로젝트 계정의
 저장 Config #1로 합성 PDF/XLSX smoke는 통과했지만, 실제 공연 원본과 한국어 복합 레이아웃의 추출
 정확도는 아직 검증하지 않았다. `🧪` 표시는 해당 조건의 라이브 검증 전에는 확정 사실처럼 발표하지 않는다.
+
+2026-08-23 멘토링 후 **Stage Spec Extractor · Fact Normalizer · Storyboard Recomposer · Rehearsal Brief**
+네 Agent를 Studio Config `#1`로 저장했고 서버 provider·strict contract·API 배선도 구현했다. 다만 새 네 Agent의
+실제 live job과 raw response는 아직 검증하지 않았다. **Studio 설정 완료·서버 배선 구현·live smoke 대기**로
+구분하며 운영 검증 또는 Upstage 활용 완료라고 발표하지 않는다.
 
 ---
 
@@ -45,6 +50,7 @@ Parse → Classify → Extract → Instruct
 | **Classify** | 섞인 파일을 대본/큐시트/무대 사양/기타로 분류·분할 | 사용자가 이미 역할을 지정한 파일을 장식적으로 재분류 |
 | **Extract** | 문서별 서식을 `ScriptFact`·`CueFact`·`StageFact`로 정규화 | 없는 이름·cue ID·시간·경로 추측, 원문 고쳐 쓰기 |
 | **Instruct / Solar** | 애매한 사건 연결 후보 설명, 중립적 확인 질문 생성 | blocking·환복·소품 위험의 최종 판정 |
+| **후처리 Agent** | reviewed event를 재배열한 storyboard 후보와 기존 finding의 리허설 brief 생성 | 새 event·좌표·경로·finding·verdict 생성, source 수정 |
 | **우리 코드** | 사건 compile, 시간·경로·상태 검증, 2D 상태 재생, provenance 보존 | 누락된 사실을 모델 추론으로 메우기 |
 | **사람** | 최신본·정답·실제 안전 여부 확정 | 모든 필드를 처음부터 수작업으로 재입력 |
 
@@ -158,6 +164,10 @@ MVP에서도 하지 않는 것:
   ScriptFact         CueFact           StageFact
        └─────────────────┬─────────────────┘
                          ▼
+               Fact Normalizer
+       NON_AUTHORITATIVE normalized 추천
+                         │
+                         ▼
        Instruct(조건부) — LINK_CANDIDATE·검토 설명
                          │
                          ▼
@@ -168,7 +178,85 @@ MVP에서도 하지 않는 것:
                          │
                          ▼
           finding + source trace + 2D simulator
+                         │
+             ┌───────────┴───────────┐
+             ▼                       ▼
+ Storyboard Recomposer        Rehearsal Brief
+ semantic transition 후보     기존 근거의 확인 brief
 ```
+
+### 3-1. 추가 네 Agent — Studio 설정·서버 배선 구현, live smoke 대기
+
+기존 Script/Master Cue Extractor를 없애거나 하나의 만능 Agent로 합치지 않는다. 추가 범위는 아래 네 개로
+고정한다. Agent 수를 늘리는 것이 목적이 아니라 **입력 전 stage constraint → 검증 뒤 event 이해 → 리허설
+전달**까지 Upstage의 책임 구간을 넓히는 것이 목적이다.
+
+| Agent | Agent ID | Config | 검증 상태 |
+|---|---|---:|---|
+| Stage Spec Extractor | `agt_PxbxmhXXT8iqdzs5WmHfUz` | `1` | Studio 저장 · 서버 배선 구현 · live smoke 대기 |
+| Fact Normalizer | `agt_6tn639gGApNdV9SdRfAjnE` | `1` | Studio 저장 · 서버 배선 구현 · live smoke 대기 |
+| Storyboard Recomposer | `agt_go8aoJTVDvEwK8mwXh5gEi` | `1` | Studio 저장 · 서버 배선 구현 · live smoke 대기 |
+| Rehearsal Brief | `agt_9iLkb7fqwdEtaBv48t9tQA` | `1` | Studio 저장 · 서버 배선 구현 · live smoke 대기 |
+
+#### A. Stage Spec Extractor
+
+| 항목 | 계약 |
+|---|---|
+| 입력 | 사용자가 확인한 stage-spec 문서, 또는 현재 폼 JSON을 원본 hash와 분리된 임시 전송 문서로 변환한 것 |
+| 출력 | `stage_facts`: crossover, route time/capacity, minimum change, initial state와 각 locator·source quote |
+| trigger | case의 source extraction 시작. Agent/Config가 없거나 strict decode가 실패하면 현재 deterministic form extractor로 fallback |
+| cache | `stage source SHA-256 + Agent ID + Config ID + 실제 request-body hash` |
+| trust | 모든 결과는 `UNREVIEWED`. 좌표·CAD geometry·실제 이동 경로·안전 verdict를 만들지 않으며 사람 승인 전 compiler가 읽지 않음 |
+
+#### B. Fact Normalizer
+
+| 항목 | 계약 |
+|---|---|
+| 입력 | Script/Master Cue/Stage Spec Extractor가 만든 raw fact, source ref, 허용된 normalized fact schema/version |
+| 출력 | source fact별 `NON_AUTHORITATIVE` `normalized_fact_type`·field value 추천과 recommendation reason |
+| trigger | 역할별 extraction이 모두 성공한 뒤 review queue를 열기 전 |
+| cache | `raw fact-set digest + normalized schema version + Agent ID + Config ID + input hash` |
+| trust | strict semantic validation을 통과해도 자동 승인하지 않음. review state·source·verdict 변경 금지. type이 틀리면 사람이 임의 type으로 바꾸지 않고 추천을 거절 |
+
+review UI는 gate 전체에서 한 번 선택하는 `추천값`과 `사용자화` mode를 명시적으로 구분한다. fact card마다
+mode를 반복하지 않는다. 추천값 mode에서는 Normalizer의 type과 field를 읽기 전용으로 보여 준다. 사용자화
+mode에서는 Agent가 고른 allowlist type을 고정하고 field 값만 편집한다. `일괄 승인`은 사람이 명시적으로
+실행하며, 유효한 사용자화 draft 각각에 별도 review record를 남긴다. 자동 approve, 자동 snapshot freeze,
+normalization type selector는 두지 않는다.
+
+#### C. Storyboard Recomposer
+
+| 항목 | 계약 |
+|---|---|
+| 입력 | frozen review snapshot에서 compile한 event graph, 시간순으로 인접한 두 stage snapshot, allowlist된 action·source fact ref |
+| 출력 | 읽기 전용 `NON_AUTHORITATIVE` `beats`(`ENTER/EXIT/MOVE/HOLD/CROSSFADE`)·event 요약·`missing_evidence` |
+| trigger | reviewed workspace에서 timeline event가 바뀔 때 비동기 실행. 동일 frozen input은 서버 cache 사용 |
+| cache | `review_snapshot_id + cue_revision_id + from/to event ID + Agent ID + Config ID + input hash` |
+| trust | event/entity/zone/fact ID를 서버 allowlist로 strict 검증. 좌표·곡선·새 event·duration을 추정하지 않음. `beats`·`missing_evidence`는 정적 snapshot이나 deterministic verdict를 만들거나 수정하지 않으며 실패·timeout은 정적 snapshot fallback |
+
+JSON Editor 직행은 review snapshot이 없으므로 현재 Storyboard Agent를 호출하지 않는다. 로컬 대본 발췌·
+정적 snapshot·인접 semantic motion만 제공한다. reviewed workspace에서는 timeline 클릭마다 긴 job을 동기
+대기하지 않으며, 늦게 도착한 이전 event 응답이 현재 선택을 덮지 못하게 selection/version을 검사한다.
+
+#### D. Rehearsal Brief
+
+| 항목 | 계약 |
+|---|---|
+| 입력 | reviewed event graph와 코드가 확정한 finding, calculation, missing fact, evidence fact ref |
+| 출력 | 무대감독용 짧은 요약, event·department별 확인 질문, `unknowns` 목록 |
+| trigger | 새 verifier result hash가 생긴 뒤 1회. 같은 결과에서 언어를 바꾸면 locale별 cache만 선택 |
+| cache | `verifier result hash + locale + Agent ID + Config ID + input hash` |
+| trust | 새 finding·severity·verdict·안전 결론을 만들지 않음. 기존 근거를 압축하는 읽기 전용 산출물이며 기본 접힘·핵심 3개 제한 |
+
+네 Agent 모두 Agent ID·Config ID·provider job ID·input/output hash를 provenance에 남긴다. API key와 원문은
+브라우저에 보내지 않으며, 모델 텍스트를 HTML로 실행하지 않는다.
+
+### 3-2. Script Sidebar 경계
+
+현재 공개 MVP에는 별도 SCRIPT 업로드 슬롯을 다시 만들지 않는다. 워크스페이스의 접이식 Script Sidebar는
+MASTER_CUE에 이미 포함된 dialogue·stage direction·trigger·note만 event별로 읽어 보여 주는 보조 인덱스다.
+timeline 선택은 같은 event 발췌를 스크롤·강조하고, 발췌 선택은 같은 event로 이동한다. 이 패널은 읽기
+전용이며 Agent가 원문을 보충하거나 fact·snapshot·verdict authority를 만드는 경로가 아니다.
 
 ### 중요한 미확정 경계
 
@@ -269,7 +357,7 @@ MVP label은 네 개만 둔다.
 | schema | 최소 raw field |
 |---|---|
 | `ScriptFact` | locator copy, fact kind, document/section raw, speaker/dialogue, stage direction, subject, movement, location, prop, costume, declared/cumulative timing, comment/unresolved, source quote |
-| `CueFact` | cell locator copy, record kind, cue ID, trigger, target, operation, state, location, prop, costume, responsible party, duration/qualifier, unresolved, note, source quote |
+| `CueFact` | cell locator copy, record kind, cue ID, trigger, target, operation, state, location, prop, costume, responsible party, explicit time text/qualifier, unresolved, note, source quote |
 | `StageFact` | fact_type, subject, zone, from_zone, to_zone, direction, value, unit, semantics, route_status, topology_complete, source_quote_raw |
 
 [upstage/cue-facts.schema.json](upstage/cue-facts.schema.json)과 [upstage/script-facts.schema.json](upstage/script-facts.schema.json)은 standalone Information Extract의 `response_format`용 역할별 schema다. 앱 내부 교환 계약은 [upstage/exchange-envelope.schema.json](upstage/exchange-envelope.schema.json)으로 분리한다. StageFact schema와 Studio가 export한 Extract-fields JSON, 실제 Upstage 응답 capture는 아직 없으므로 구현 완료로 표시하지 않는다. 자세한 source packet·locator·fixture 경계는 [JSON_CONTRACT.md](JSON_CONTRACT.md)를 따른다.
@@ -408,13 +496,13 @@ Instruct는 `available < required`, route capacity, prop state transition을 계
 }
 ```
 
-`CueFact`는 cue ID·department·trigger·target·operation·location·duration·prop·costume raw 값을, `StageFact`는 zone·route·restriction·time·capacity·topology raw 값을 가진다. `raw` 필드를 먼저 보존하고 normalized 값은 파생 데이터로 별도 생성한다. 원문을 덮어쓰지 않는다.
+`CueFact`는 cue ID·department·trigger·target·operation·location·prop·costume와 문서에 명시된 time text raw 값을, `StageFact`는 zone·route·restriction·time·capacity·topology raw 값을 가진다. 공개 CueSheet JSON에는 장면 길이·환복 소요 시간을 추정하는 `estimated_duration_sec`·`costume_change_duration_sec`를 두지 않는다. `raw` 필드를 먼저 보존하고 normalized 값은 파생 데이터로 별도 생성한다. 원문을 덮어쓰지 않는다.
 
 다음은 Extract가 아니라 앱과 사람의 책임이다.
 
 - Parse reading order 기반 `sequence_index`
 - actor↔character와 raw label↔stage zone mapping
-- normalized time range와 duration semantics
+- 명시된 시간 text의 reviewed min/max semantics. 문서에 없는 duration은 계산하지 않음
 - 2D `layout_geometry`
 - `origin`과 `review_status`
 - event link와 verdict
@@ -518,6 +606,19 @@ Case 상태:
 6. 결과를 원본 file ID와 `script / cuesheet / stage_spec` 역할에 다시 연결
 7. 유형별 fact decoder를 거쳐 사람 review 후 verifier 실행
 
+추가 네 Agent의 구현된 서버 흐름 (**실제 live smoke 대기**):
+
+1. `Stage Spec Extractor`는 source extraction operation 안에서 별도 역할 job으로 실행하고 `stage_facts`를
+   기존 review queue에 `UNREVIEWED`로 넣는다.
+2. 역할별 raw fact가 모이면 `Fact Normalizer`가 allowlist schema의 normalized type/value를 추천한다.
+   추천은 읽기 전용이며 사람의 review 전에는 authority가 없다.
+3. snapshot freeze 뒤 reviewed graph와 finding을 원문과 분리된 최소 입력 문서로 만든다.
+4. 같은 입력 file ID를 `Storyboard Recomposer`와 `Rehearsal Brief` job이 읽되 결과 artifact와 cache key는
+   Agent별로 분리한다.
+5. Storyboard는 timeline 선택 시 lazy 실행한다. target snapshot은 job 완료를 기다리지 않고 즉시 보여 주며,
+   같은 frozen input은 서버 cache를 사용한다.
+6. Normalizer와 두 후처리 결과는 strict decoder와 allowlist를 통과해도 `NON_AUTHORITATIVE`이며 verifier 입력으로 역류하지 않는다.
+
 - [Agents API](https://console.upstage.ai/docs/agents)
 - [Jobs API](https://console.upstage.ai/docs/agents/jobs)
 
@@ -530,7 +631,43 @@ Case 상태:
 - 실패 job은 과금되지 않지만 무한 retry하지 않는다.
 - document-processing cache key는 세 파일 SHA-256 + Agent ID + 실제 request body hash 조합으로 둔다.
 - verifier cache에는 reviewed fact set, event-link version, stage topology/constraint version도 포함한다.
+- Fact Normalizer cache에는 raw fact-set digest·normalized schema version·Agent/Config·input hash를 넣는다.
+- Storyboard cache에는 review snapshot·revision·from/to event·Agent/Config·input hash를, Rehearsal Brief
+  cache에는 verifier result hash·locale·Agent/Config·input hash를 넣는다.
+- Agent job timeout이나 cache miss가 timeline 선택, stage snapshot, deterministic verifier를 막으면 안 된다.
 - Split 뒤 file identity나 role이 보존되지 않으면 결과를 섞지 않는다. 역할별 Agent/config와 별도 job으로 fallback한다.
+
+### Timeout budget과 latency 계측
+
+현재 extraction 경로의 기본값은 브라우저 operation poll **1초 / 660초**, 서버 Upstage job poll
+**2초 / 600초**다. 서버의 각 Upstage HTTP 요청도 같은 600초 `AbortSignal`을 쓰므로, file upload·job submit·
+개별 poll 요청이 지연되면 job 전체 deadline과 별개로 벽시계 시간이 늘어날 수 있다. review queue 조회는 job이
+끝난 뒤 시작한다. 따라서 `전체가 오래 걸렸다` 한 값만 남기지 말고 아래 span을 분리한다.
+
+대기 UI는 JetBrains Mono의 `S T A N D B Y`를 `S`부터 `Y`까지 순서대로 밝히되, 이를 실제 진행률로
+표현하지 않는다. 상태·실패·timeout 문구는 계속 별도로 표시하며 `prefers-reduced-motion`에서는 순차 효과를
+멈추고 고정 wordmark를 보여 준다. 본문과 조작 UI는 시스템 서체를 사용한다.
+
+| span | 시작 → 종료 | 필수 tag |
+|---|---|---|
+| `client.hash_validate` | 파일 선택 → signature·size·SHA-256 완료 | role, bytes, extension, outcome |
+| `client.case_upload` | case 생성 시작 → 모든 source upload 완료 | case ID, source count, duration, outcome |
+| `server.upstage_file_upload` | `/v2/files` 요청 → file ID 수신 | role, source hash prefix, Agent ID, duration, outcome |
+| `server.upstage_job_submit` | `/v2/responses` 요청 → job ID 수신 | role, Agent/Config ID, input hash prefix, duration, outcome |
+| `server.upstage_job_poll` | 첫 GET → terminal/timeout | role, job ID, poll count, queued/in-progress durations, outcome |
+| `server.strict_decode` | terminal payload 수신 → decoder 종료 | role, schema version, output hash prefix, duration, outcome |
+| `client.review_ready` | extraction operation 시작 → review queue 표시 | operation ID, fact count, total duration, outcome |
+| `agent.production` | Normalizer/Storyboard/Brief 시작 → artifact/cache/fallback | role, input/config fingerprint, cache hit, duration, stale-drop, outcome |
+
+`outcome`은 최소 `SUCCEEDED | FAILED | TIMEOUT | DECODE_REJECTED | CACHE_HIT | FALLBACK`으로 고정한다.
+Storyboard는 `timeline_select_to_snapshot_ms`와 `timeline_select_to_storyboard_ms`를 별도로 측정한다. 첫 값은
+Agent timeout과 무관하게 즉시 끝나야 한다. selection/version이 바뀐 뒤 도착한 응답은 `stale_drop=true`로
+기록하고 화면에 적용하지 않는다.
+
+로그에는 원문 bytes, source quote, API key, 전체 hash, Agent 응답 본문을 넣지 않는다. request/operation/job/
+artifact ID와 hash prefix만 구조화해 남기고, 에러 메시지는 allowlist된 code로 정규화한다. p50/p95와
+timeout 비율은 role·span별로 보고, `UPSTAGE_JOB_TIMEOUT`을 file upload 지연·submit 지연·poll deadline·decode
+실패와 구분할 수 있어야 한다.
 
 ### Config 변경 추적
 
@@ -540,10 +677,14 @@ Case 상태:
 이를 전송하고 provenance에 기록하며, 값이 없으면 필드를 생략하고 `null`로 남긴다. Draft를 저장하지
 않은 상태나 임의 추정값은 절대 전송하지 않는다.
 
-현재 저장 스키마:
+현재 저장 스키마와 실제 확인 범위:
 
 - Script Config #1: Parse → Extract(Standard), `script_facts` 14개 raw 필드
 - Master Cue Config #1: Parse → Extract(Standard), `cue_facts` 16개 raw 필드
+- Stage Spec Extractor: `agt_PxbxmhXXT8iqdzs5WmHfUz`, Config `#1` **저장 · 서버 배선 구현 · live smoke 대기**
+- Fact Normalizer: `agt_6tn639gGApNdV9SdRfAjnE`, Config `#1` **저장 · 서버 배선 구현 · live smoke 대기**
+- Storyboard Recomposer: `agt_go8aoJTVDvEwK8mwXh5gEi`, Config `#1` **저장 · 서버 배선 구현 · live smoke 대기**
+- Rehearsal Brief: `agt_9iLkb7fqwdEtaBv48t9tQA`, Config `#1` **저장 · 서버 배선 구현 · live smoke 대기**
 
 실제 Agent/Config ID와 smoke fixture의 raw response hash를 함께 보관해 Config 변경을 감시한다.
 
@@ -563,6 +704,8 @@ Files API → 역할별 Agent Config #1 → job polling → strict decoder → U
 - PDF run: Script `job_YPFgaia4HoyvzmjW7W5Rtk`, Master Cue `job_bH8PBxZYd8mW9fzCYgbCco`
 - XLSX run: Script `job_5h692JBNzFCceiFzgbwDtj`, Master Cue `job_Sa8VH787dXnmCPvbpDh3xD`
 - decoder가 관측한 key는 Script 14개, Master Cue 16개로 저장 Config schema와 일치했다.
+- 위 표의 Stage Spec 3개는 현재 `STANDBY_FORM` deterministic extractor 결과다. **Stage Spec Extractor
+  Agent의 live smoke가 아니며**, Fact Normalizer·Storyboard Recomposer·Rehearsal Brief도 이 smoke 범위에 없다.
 - 이 결과는 **API 연결·파일 형식·schema·review gate**를 검증한다. 실제 대본/큐시트에 대한 recall,
   locator 품질, 표 병합·줄바꿈 보존율이나 제품 정확도를 증명하지는 않는다.
 - 공개 가능한 sanitized evidence는 `qa/upstage-live-smoke-2026-08-22.json`에 보관한다.
@@ -701,13 +844,16 @@ STANDBY에서 직접 호출할 정당한 경우:
 - 세 파일을 한 case로 실행해 script anchor, cue 17열, stage label 확인
 - 🧪 Studio Jobs location은 별도 hard gate; 실패해도 page+quote로 계속 진행
 
-### 3–8시간: Studio Agent 완성
+### 3–8시간: Studio Agent live smoke 고정
 
 - Grace로 Agent 초안 생성
 - Classify 4종 + Split by file
 - Script: 재입장·costume state·prop requirement, Cue: 퇴장·window·환복·route occupancy·prop move/handoff, Stage: zone·route time·minimum-change·route capacity를 포함한 유형별 flat Extract config 고정
 - 세 Studio Extract-fields export와 config version 보관
 - Instruct decision 3종
+- Stage Spec Extractor·Fact Normalizer·Storyboard Recomposer·Rehearsal Brief의 저장된 Config `#1`을 export하고
+  최소 fixture의 raw response hash·strict decode·fallback 결과를 보관한다. 하나라도 live smoke 전이면 발표에서
+  `Studio 설정·서버 배선 구현`까지만 말한다.
 
 ### 8–14시간: 정답과 review gate
 
@@ -728,12 +874,15 @@ STANDBY에서 직접 호출할 정당한 경우:
 
 1. 세 파일 업로드 + fact/link/topology review
 2. finding 목록 + 2D event simulator + 세 source drawer
+3. 별도 화면 없이 cached storyboard 전환과 기본 접힘 rehearsal brief를 같은 workspace에 배치
 
 ### 38–44시간: 측정
 
 - reviewed fixture에서 3/3, clean FP 0, insufficient abstention 확인
 - 실패 case를 먼저 고침
 - config name과 returned model 기록
+- 인접 storyboard cache hit, 비인접 jump 정적 교체, reduced-motion, Agent timeout fallback을 측정
+- Brief가 원래 없던 finding·verdict·안전 결론을 만들지 않는지 strict fixture로 확인
 
 ### 44–48시간: 동결
 
@@ -765,20 +914,28 @@ STANDBY에서 직접 호출할 정당한 경우:
 
 ## 11. 심사위원에게 설명하는 Upstage 깊이
 
-“노드 네 개를 썼다”가 깊이가 아니다. 아래 여섯 층이 모두 실제로 연결되어야 한다.
+“Agent 수가 많다”가 깊이가 아니다. 아래 여덟 층이 실제 계약과 live evidence로 연결되어야 한다.
 
 1. **다형식 구조 복원** — 대본·17열 큐시트·무대 사양의 서로 다른 구조 보존
 2. **분류·분할** — 한 case의 script/cuesheet/stage_spec/other가 올바른 lane으로 감
-3. **유형별 추출** — 각 문서가 ScriptFact/CueFact/StageFact contract가 됨
-4. **reviewed event compile** — 사람이 승인한 anchor·link·topology만 실행 순서로 연결
-5. **검증·시뮬레이션** — blocking·quick-change·prop 상태를 결정론적으로 검사하고 2D에서 재생
-6. **원문·운영 루프** — 각 finding을 source evidence, ground truth, config version, API polling·fallback에 연결
+3. **유형별 추출** — 각 문서가 ScriptFact/CueFact/StageFact contract가 됨. Stage Spec Agent 결과도 UNREVIEWED gate를 통과
+4. **정규화 추천** — Fact Normalizer가 raw fact를 allowlist schema에 추천하되 사람 승인 전 authority가 없음
+5. **reviewed event compile** — 사람이 승인한 anchor·link·topology만 실행 순서로 연결
+6. **검증·시뮬레이션** — blocking·quick-change·prop 상태를 결정론적으로 검사하고 2D에서 재생
+7. **Storyboard 재구성** — reviewed 인접 snapshot만 Agent가 의미 순서로 재구성하고 strict decoder·cache·정적 fallback으로 제한
+8. **Rehearsal 전달·운영 루프** — 기존 finding과 missing evidence만 brief로 압축하고 source evidence·config·polling·fallback에 연결
 
 30점 답변용 한 문장:
 
 > **우리는 Upstage로 대본·큐시트·무대 사양을 각각 검증 가능한 공연 fact로 구조화하고 원문 근거를 보존했습니다. 사람이 승인한 fact만 결정론적 verifier와 2D stage simulator에 넣어 blocking·quick-change·prop 상태를 검사합니다.**
 
 단, 이 문장은 smoke test와 실제 API 연결이 모두 끝난 뒤에만 과거형으로 말한다.
+
+네 Agent의 live smoke까지 통과한 뒤에만 덧붙일 문장:
+
+> **검증 뒤에는 Upstage가 인접 event의 storyboard와 기존 finding의 rehearsal brief를 재구성하지만, 두 산출물은 판정을 바꾸지 않는 읽기 전용 보조 결과입니다.**
+
+현재 네 Agent의 Agent ID·Config는 저장됐지만 live response가 없으므로 이 문장은 아직 미래형으로 말한다.
 
 ---
 
@@ -795,6 +952,10 @@ STANDBY에서 직접 호출할 정당한 경우:
 - [ ] 공개 기능, Beta, coming soon, 행사 전용 가능성을 구분해 심사위원에게 답할 수 있다.
 - [ ] 한 run의 페이지 수와 node별 mode로 예상 비용을 계산할 수 있다.
 - [ ] API 장애·좌표 누락·표 구조 실패 때 꾸며내지 않고 fallback으로 전환할 수 있다.
+- [ ] 네 추가 Agent 각각의 input/output/trigger/cache key를 설명하고 Agent ID·Config·raw response hash를 재현할 수 있다.
+- [ ] Fact Normalizer 추천이 자동 승인되지 않고, gate 전체의 추천값/사용자화 선택과 fact별 review record를 거쳐야 함을 재현할 수 있다.
+- [ ] Storyboard 출력의 가짜 event/entity/zone을 strict decoder가 거절하고 timeline은 정적 snapshot으로 계속 동작함을 재현할 수 있다.
+- [ ] Rehearsal Brief 전후 verifier result hash가 같고, 새 finding이나 안전 결론이 생기지 않았음을 확인할 수 있다.
 
 가장 좋은 연습은 같은 3문서 hero case로 config 세 개를 만드는 것이다.
 
