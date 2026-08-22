@@ -1,284 +1,258 @@
 import { useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
-import { Plus, Trash2, UploadCloud } from 'lucide-react';
-import { Btn } from '@/components/ui';
-import { OriginBadge, ReviewBadge } from '@/components/ui';
+import { UploadCloud, AlertTriangle, CheckCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useCueSheetStore } from '@/store';
 import type { CueSheet } from '@/types';
 
-type Origin = 'REAL_REFERENCE' | 'CONTROLLED_FIXTURE' | 'MUTATED_FIXTURE';
-type SourceState = { filename: string; hash: string; origin: Origin; reviewed: boolean };
-
 export function InputScreen() {
   const navigate = useNavigate();
   const loadCueSheet = useCueSheetStore((s) => s.loadCueSheet);
+  const cueSheet = useCueSheetStore((s) => s.cueSheet);
 
-  const [script, setScript] = useState<SourceState>({
-    filename: '',
-    hash: '',
-    origin: 'REAL_REFERENCE',
-    reviewed: false,
-  });
-  const [cuesheet, setCuesheet] = useState<SourceState>({
-    filename: '',
-    hash: '',
-    origin: 'CONTROLLED_FIXTURE',
-    reviewed: false,
-  });
-  const [spec, setSpec] = useState<SourceState>({
-    filename: '',
-    hash: '',
-    origin: 'CONTROLLED_FIXTURE',
-    reviewed: false,
-  });
+  const [filename, setFilename] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [summary, setSummary] = useState<{
+    title: string;
+    characters: number;
+    props: number;
+    cues: number;
+    crossover: boolean;
+  } | null>(null);
 
-  const [wings, setWings] = useState({ 상수: true, 하수: true });
-  const [crossover, setCrossover] = useState<'true' | 'false' | 'UNKNOWN'>('true');
-  const [crossoverTime, setCrossoverTime] = useState('45');
-  const [routes, setRoutes] = useState([
-    { from: '하수윙', to: '하수환복소', min: '3', max: '4' },
-    { from: '하수환복소', to: '무대', min: '3', max: '4' },
-  ]);
+  const handleFile = async (file: File) => {
+    setError(null);
+    setSummary(null);
+    setFilename(file.name);
 
-  const handleFileUpload = async (file: File, type: 'script' | 'cuesheet' | 'spec') => {
     const text = await file.text();
+
+    // JSON 파싱
+    let data: unknown;
     try {
-      const data = JSON.parse(text) as CueSheet;
-      loadCueSheet(data);
-      const setter = type === 'script' ? setScript : type === 'cuesheet' ? setCuesheet : setSpec;
-      setter((prev) => ({ ...prev, filename: file.name, hash: `size:${file.size}` }));
-    } catch {
-      // Non-JSON file - just record filename
-      const setter = type === 'script' ? setScript : type === 'cuesheet' ? setCuesheet : setSpec;
-      setter((prev) => ({ ...prev, filename: file.name, hash: `size:${file.size}` }));
+      data = JSON.parse(text);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : '알 수 없는 파싱 에러';
+      setError(`JSON 파싱 실패: ${msg}`);
+      return;
     }
+
+    // 스키마 최소 검증
+    const obj = data as Record<string, unknown>;
+    const missing: string[] = [];
+    if (!obj.metadata) missing.push('metadata');
+    if (!obj.venue) missing.push('venue');
+    if (!obj.characters) missing.push('characters');
+    if (!obj.props) missing.push('props');
+    if (!obj.cues) missing.push('cues');
+
+    if (missing.length > 0) {
+      setError(`필수 필드 누락: ${missing.join(', ')}\n\ncue-sheet-schema.json 형식에 맞는 파일을 올려주세요.`);
+      return;
+    }
+
+    const cueData = data as CueSheet;
+
+    // cues 배열 안에 events가 있는지 확인
+    if (Array.isArray(cueData.cues) && cueData.cues.length > 0) {
+      const firstCue = cueData.cues[0];
+      if (!firstCue.events) {
+        setError('cues[].events 필드가 없습니다. Event 기반 스키마 형식이 필요합니다.');
+        return;
+      }
+    }
+
+    // 로드 성공
+    loadCueSheet(cueData);
+    setSummary({
+      title: cueData.metadata?.title ?? '(제목 없음)',
+      characters: cueData.characters?.length ?? 0,
+      props: cueData.props?.length ?? 0,
+      cues: cueData.cues?.length ?? 0,
+      crossover: cueData.venue?.has_backstage_crossover ?? false,
+    });
   };
 
   return (
-    <div className="mx-auto max-w-[1400px] p-6">
-      <div className="mb-4 flex items-baseline gap-3">
-        <h1 className="text-lg font-medium">입력 · INPUT SOURCES</h1>
-        <span className="mono text-[11px] text-muted-foreground">
-          큐시트 파일을 업로드하세요
-        </span>
+    <div className="mx-auto max-w-[800px] p-6">
+      <div className="mb-6">
+        <h1 className="text-lg font-medium">STANDBY · 큐시트 검증</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          cue-sheet-schema.json 형식의 큐시트 파일을 업로드하면 동선 모순을 자동 검증합니다.
+        </p>
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
-        <SourceCard title="SCRIPT" state={script} onChange={setScript}>
-          <Dropzone hint="대본 파일을 끌어다 놓으세요 (.fdx, .pdf)" onFile={(f) => handleFileUpload(f, 'script')} />
-        </SourceCard>
+      {/* Upload area */}
+      <Dropzone
+        filename={filename}
+        onFile={handleFile}
+        hasError={!!error}
+        hasData={!!summary}
+      />
 
-        <SourceCard title="CUESHEET" state={cuesheet} onChange={setCuesheet}>
-          <Dropzone hint="큐시트 JSON 파일을 끌어다 놓으세요 (.json)" onFile={(f) => handleFileUpload(f, 'cuesheet')} />
-        </SourceCard>
-
-        <SourceCard title="STAGE_SPEC" state={spec} onChange={setSpec}>
-          <div className="flex flex-col gap-4 p-3">
-            <Field label="wings">
-              <div className="flex gap-4">
-                {(['상수', '하수'] as const).map((w) => (
-                  <label key={w} className="flex items-center gap-2 text-xs">
-                    <input
-                      type="checkbox"
-                      checked={wings[w]}
-                      onChange={() => setWings((p) => ({ ...p, [w]: !p[w] }))}
-                    />
-                    {w}
-                  </label>
-                ))}
-              </div>
-            </Field>
-
-            <Field label="crossover (백스테이지 통로)">
-              <div className="flex gap-4">
-                {(['true', 'false', 'UNKNOWN'] as const).map((v) => (
-                  <label key={v} className="mono flex items-center gap-2 text-xs">
-                    <input
-                      type="radio"
-                      name="crossover"
-                      checked={crossover === v}
-                      onChange={() => setCrossover(v)}
-                    />
-                    {v}
-                  </label>
-                ))}
-              </div>
-            </Field>
-
-            <Field label="백스테이지 이동 시간 (초)">
-              <input
-                value={crossoverTime}
-                onChange={(e) => setCrossoverTime(e.target.value)}
-                className="mono w-20 border border-border bg-background px-2 py-1 text-xs outline-none focus:border-foreground"
-                placeholder="45"
-              />
-            </Field>
-
-            <Field label="route times">
-              <div className="flex flex-col gap-1">
-                {routes.map((r, i) => (
-                  <div key={i} className="flex items-center gap-1">
-                    <Cell
-                      value={r.from}
-                      onChange={(v) =>
-                        setRoutes((p) => p.map((x, j) => (i === j ? { ...x, from: v } : x)))
-                      }
-                    />
-                    <span className="mono text-xs">→</span>
-                    <Cell
-                      value={r.to}
-                      onChange={(v) =>
-                        setRoutes((p) => p.map((x, j) => (i === j ? { ...x, to: v } : x)))
-                      }
-                    />
-                    <span className="mono text-xs">:</span>
-                    <Cell
-                      w={44}
-                      value={r.min}
-                      onChange={(v) =>
-                        setRoutes((p) => p.map((x, j) => (i === j ? { ...x, min: v } : x)))
-                      }
-                    />
-                    <span className="mono text-xs">–</span>
-                    <Cell
-                      w={44}
-                      value={r.max}
-                      onChange={(v) =>
-                        setRoutes((p) => p.map((x, j) => (i === j ? { ...x, max: v } : x)))
-                      }
-                    />
-                    <span className="mono text-[10px] text-muted-foreground">sec</span>
-                    <button
-                      onClick={() => setRoutes((p) => p.filter((_, j) => j !== i))}
-                      className="ml-auto border border-border p-1 hover:bg-muted"
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </button>
-                  </div>
-                ))}
-                <Btn
-                  className="mt-1 self-start"
-                  onClick={() => setRoutes((p) => [...p, { from: '', to: '', min: '', max: '' }])}
-                >
-                  <Plus className="mr-1 h-3 w-3" /> 경로 추가
-                </Btn>
-              </div>
-            </Field>
+      {/* Error */}
+      {error && (
+        <div className="mt-4 flex gap-3 border border-violation bg-violation-bg p-4">
+          <AlertTriangle className="h-5 w-5 shrink-0 text-violation" />
+          <div>
+            <p className="text-sm font-medium text-violation">파일을 읽을 수 없습니다</p>
+            <pre className="mt-1 text-xs text-violation whitespace-pre-wrap">{error}</pre>
           </div>
-        </SourceCard>
-      </div>
+        </div>
+      )}
 
+      {/* Summary */}
+      {summary && (
+        <div className="mt-4 border border-consistent bg-consistent-bg p-4">
+          <div className="flex items-center gap-2">
+            <CheckCircle className="h-5 w-5 text-consistent" />
+            <span className="text-sm font-medium text-consistent">로드 완료</span>
+          </div>
+          <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+            <div>
+              <span className="text-muted-foreground">공연: </span>
+              <span className="font-medium">{summary.title}</span>
+            </div>
+            <div>
+              <span className="text-muted-foreground">백스테이지 통로: </span>
+              <span className="font-medium">{summary.crossover ? '있음' : '없음'}</span>
+            </div>
+            <div>
+              <span className="text-muted-foreground">인물: </span>
+              <span className="mono">{summary.characters}명</span>
+            </div>
+            <div>
+              <span className="text-muted-foreground">소품: </span>
+              <span className="mono">{summary.props}개</span>
+            </div>
+            <div>
+              <span className="text-muted-foreground">큐(씬): </span>
+              <span className="mono">{summary.cues}개</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Validation preview */}
+      {cueSheet && (
+        <ValidationPreview />
+      )}
+
+      {/* Action */}
       <div className="mt-6 flex justify-end">
         <button
           onClick={() => navigate({ to: '/workspace' })}
-          className="border border-foreground bg-foreground px-5 py-2.5 text-sm text-background hover:bg-muted-foreground"
+          disabled={!cueSheet}
+          className={cn(
+            'border px-5 py-2.5 text-sm',
+            cueSheet
+              ? 'border-foreground bg-foreground text-background hover:bg-muted-foreground'
+              : 'border-border bg-muted text-muted-foreground cursor-not-allowed',
+          )}
         >
-          검증 시작
+          워크스페이스 열기
         </button>
       </div>
     </div>
   );
 }
 
-function SourceCard({
-  title,
-  state,
-  onChange,
-  children,
-}: {
-  title: string;
-  state: SourceState;
-  onChange: (s: SourceState) => void;
-  children: React.ReactNode;
-}) {
+function ValidationPreview() {
+  const validationResult = useCueSheetStore((s) => s.validationResult);
+  if (!validationResult) return null;
+
   return (
-    <section className="flex flex-col border border-border bg-surface">
-      <header className="border-b border-border px-3 py-2">
-        <div className="mono text-[11px] tracking-[0.14em] text-muted-foreground">{title}</div>
-        {state.filename && (
-          <>
-            <div className="mt-1 text-sm">{state.filename}</div>
-            <div className="mono mt-1 text-[10px] text-muted-foreground">{state.hash}</div>
-          </>
+    <div className="mt-4 border border-border bg-surface p-4">
+      <div className="flex items-center gap-4 text-sm">
+        <span className="font-medium">검증 결과</span>
+        {validationResult.errors > 0 && (
+          <span className="mono flex items-center gap-1 text-violation">
+            <span className="h-2 w-2 rounded-full bg-violation" />
+            ERROR {validationResult.errors}건
+          </span>
         )}
-        <div className="mt-2 flex flex-wrap items-center gap-1">
-          <OriginBadge origin={state.origin} />
-          <ReviewBadge
-            reviewed={state.reviewed}
-            onToggle={() => onChange({ ...state, reviewed: !state.reviewed })}
-          />
+        {validationResult.warnings > 0 && (
+          <span className="mono flex items-center gap-1 text-review">
+            <span className="h-2 w-2 rounded-full bg-review" />
+            WARNING {validationResult.warnings}건
+          </span>
+        )}
+        {validationResult.total_contradictions === 0 && (
+          <span className="mono text-consistent">모순 없음 ✓</span>
+        )}
+      </div>
+      {validationResult.contradictions.length > 0 && (
+        <div className="mt-3 max-h-40 overflow-auto">
+          {validationResult.contradictions.slice(0, 5).map((c, i) => (
+            <div key={i} className="mono border-b border-border py-1 text-[11px]">
+              <span className={c.severity === 'ERROR' ? 'text-violation' : 'text-review'}>
+                {c.severity}
+              </span>
+              {' '}{c.scene_number} · {c.description}
+            </div>
+          ))}
+          {validationResult.contradictions.length > 5 && (
+            <p className="mono mt-1 text-[11px] text-muted-foreground">
+              ... 외 {validationResult.contradictions.length - 5}건 (워크스페이스에서 확인)
+            </p>
+          )}
         </div>
-      </header>
-      <div className="flex-1">{children}</div>
-    </section>
-  );
-}
-
-function Dropzone({ hint, onFile }: { hint: string; onFile: (file: File) => void }) {
-  const [over, setOver] = useState(false);
-  return (
-    <div className="p-3">
-      <div
-        onDragOver={(e) => {
-          e.preventDefault();
-          setOver(true);
-        }}
-        onDragLeave={() => setOver(false)}
-        onDrop={(e) => {
-          e.preventDefault();
-          setOver(false);
-          const file = e.dataTransfer.files[0];
-          if (file) onFile(file);
-        }}
-        onClick={() => {
-          const input = document.createElement('input');
-          input.type = 'file';
-          input.onchange = () => {
-            const file = input.files?.[0];
-            if (file) onFile(file);
-          };
-          input.click();
-        }}
-        className={cn(
-          'flex h-40 cursor-pointer flex-col items-center justify-center gap-2 border border-dashed border-border text-center',
-          over ? 'bg-muted' : 'bg-background',
-        )}
-      >
-        <UploadCloud className="h-5 w-5 text-muted-foreground" />
-        <span className="text-xs text-muted-foreground">{hint}</span>
-        <span className="mono text-[10px] text-muted-foreground">DROP / CLICK</span>
-      </div>
+      )}
     </div>
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="flex flex-col gap-2">
-      <div className="mono text-[10px] tracking-[0.14em] text-muted-foreground uppercase">
-        {label}
-      </div>
-      {children}
-    </div>
-  );
-}
-
-function Cell({
-  value,
-  onChange,
-  w = 96,
+function Dropzone({
+  filename,
+  onFile,
+  hasError,
+  hasData,
 }: {
-  value: string;
-  onChange: (v: string) => void;
-  w?: number;
+  filename: string;
+  onFile: (file: File) => void;
+  hasError: boolean;
+  hasData: boolean;
 }) {
+  const [over, setOver] = useState(false);
+
   return (
-    <input
-      value={value}
-      style={{ width: w }}
-      onChange={(e) => onChange(e.target.value)}
-      className="mono border border-border bg-background px-1 py-[2px] text-xs outline-none focus:border-foreground"
-    />
+    <div
+      onDragOver={(e) => {
+        e.preventDefault();
+        setOver(true);
+      }}
+      onDragLeave={() => setOver(false)}
+      onDrop={(e) => {
+        e.preventDefault();
+        setOver(false);
+        const file = e.dataTransfer.files[0];
+        if (file) onFile(file);
+      }}
+      onClick={() => {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.json';
+        input.onchange = () => {
+          const file = input.files?.[0];
+          if (file) onFile(file);
+        };
+        input.click();
+      }}
+      className={cn(
+        'flex h-48 cursor-pointer flex-col items-center justify-center gap-3 border-2 border-dashed text-center transition-colors',
+        over && 'border-foreground bg-muted',
+        !over && !hasError && !hasData && 'border-border bg-background hover:border-muted-foreground',
+        hasError && 'border-violation/50 bg-violation-bg/30',
+        hasData && !hasError && 'border-consistent/50 bg-consistent-bg/30',
+      )}
+    >
+      <UploadCloud className="h-8 w-8 text-muted-foreground" />
+      {filename ? (
+        <span className="text-sm">{filename}</span>
+      ) : (
+        <span className="text-sm text-muted-foreground">큐시트 JSON 파일을 드래그하거나 클릭해서 선택</span>
+      )}
+      <span className="mono text-[10px] text-muted-foreground">.json · cue-sheet-schema 형식</span>
+    </div>
   );
 }

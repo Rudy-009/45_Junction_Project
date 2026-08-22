@@ -1,0 +1,446 @@
+{
+  "metadata": {
+    "title": "별마루",
+    "version": "26S 전체큐시트",
+    "created_at": "",
+    "updated_at": "",
+    "notes": "S#/N#는 장면 구간이고, 최소 단위는 입장/퇴장/이동/소품/환복 이벤트로 재구성"
+  },
+  "venue": {
+    "has_backstage_crossover": true,
+    "backstage_crossover_time_sec": 0
+  },
+  "characters": [
+    { "id": "char_hyewon", "name": "혜원", "actor": "" },
+    { "id": "char_jungwon", "name": "정원", "actor": "" },
+    { "id": "char_eunbi", "name": "은비", "actor": "" },
+    { "id": "char_yurim", "name": "유림", "actor": "" },
+    { "id": "char_yunseo", "name": "윤서", "actor": "" },
+    { "id": "char_minseo", "name": "민서", "actor": "" },
+    { "id": "char_hyunseo", "name": "현서", "actor": "" },
+    { "id": "char_jungmin", "name": "정민", "actor": "" }
+  ],
+  "props": [
+    { "id": "prop_bed", "name": "침대", "is_set_piece": true },
+    { "id": "prop_blanket", "name": "이불", "is_set_piece": false },
+    { "id": "prop_pillow", "name": "베개", "is_set_piece": false },
+    { "id": "prop_storybook", "name": "동화책", "is_set_piece": false },
+    { "id": "prop_table", "name": "식탁", "is_set_piece": true },
+    { "id": "prop_chair", "name": "의자", "is_set_piece": true },
+    { "id": "prop_towel", "name": "수건", "is_set_piece": false },
+    { "id": "prop_phone_jungwon", "name": "정원휴대폰", "is_set_piece": false },
+    { "id": "prop_phone_minseo_dummy", "name": "민서휴대폰 공기계", "is_set_piece": false },
+    { "id": "prop_basket", "name": "장바구니", "is_set_piece": false },
+    { "id": "prop_small_light", "name": "작은조명", "is_set_piece": false },
+    { "id": "prop_cheer_solo", "name": "치어리딩 솔", "is_set_piece": false },
+    { "id": "prop_party_hat", "name": "생일꼬깔모자", "is_set_piece": false },
+    { "id": "prop_maru_bag", "name": "마루가방", "is_set_piece": false },
+    { "id": "prop_vocab_book", "name": "영단어장", "is_set_piece": false }
+  ],
+  "cues": [
+    {
+      "cue_id": "cue_s5",
+      "scene_number": "S#5",
+      "scene_type": "scene",
+      "estimated_duration_sec": 0,
+      "backstage_crossover_time_override_sec": 0,
+      "events": [
+        {
+          "event_id": "evt_s5_001",
+          "trigger": {
+            "type": "scene_change",
+            "character_id": "",
+            "description": "S#5 시작, 생일파티 장면 세팅"
+          },
+          "actions": [
+            {
+              "type": "prop_out",
+              "character_id": "",
+              "direction": "stage_right",
+              "prop_id": "prop_party_hat",
+              "carried_by": "char_hyewon",
+              "from": "stage_right",
+              "to": "stage_right",
+              "costume_change_duration_sec": 0,
+              "costume_description": ""
+            },
+            {
+              "type": "prop_in",
+              "character_id": "",
+              "direction": "stage_right",
+              "prop_id": "prop_maru_bag",
+              "carried_by": "char_jungwon",
+              "from": "stage_right",
+              "to": "stage_right",
+              "costume_change_duration_sec": 0,
+              "costume_description": ""
+            }
+          ],
+          "notes": "꼬깔모자 out, 마루가방 in [1](#docchat-1-1-46)"
+        },
+        {
+          "event_id": "evt_s5_002",
+          "trigger": {
+            "type": "dialogue",
+            "character_id": "char_hyewon",
+            "description": "혜원: 선물 같은 거 다 필요 없다고!"
+          },
+          "actions": [
+            {
+              "type": "character_exit",
+              "character_id": "char_eunbi",
+              "direction": "stage_left",
+              "prop_id": "",
+              "carried_by": "",
+              "from": "stage_left",
+              "to": "stage_left",
+              "costume_change_duration_sec": 0,
+              "costume_description": ""
+            }
+          ],
+          "notes": "은비 퇴장 [1](#docchat-1-2-194)"
+        },
+        {
+          "event_id": "evt_s5_003",
+          "trigger": {
+            "type": "dialogue",
+            "character_id": "char_jungwon",
+            "description": "정원: 오지 말 걸 그랬나..."
+          },
+          "actions": [
+            {
+              "type": "character_exit",
+              "character_id": "char_jungwon",
+              "direction": "stage_left",
+              "prop_id": "",
+              "carried_by": "",
+              "from": "stage_left",
+              "to": "stage_left",
+              "costume_change_duration_sec": 0,
+              "costume_description": ""
+            }
+          ],
+          "notes": "정원 퇴장 [1](#docchat-1-2-194)"
+        },
+        {
+          "event_id": "evt_s5_004",
+          "trigger": {
+            "type": "dialogue",
+            "character_id": "char_yunseo",
+            "description": "윤서: 야..! 좀 조용해졌다. 나가보자."
+          },
+          "actions": [
+            {
+              "type": "character_enter",
+              "character_id": "char_yurim",
+              "direction": "stage_left",
+              "prop_id": "",
+              "carried_by": "",
+              "from": "stage_left",
+              "to": "stage_left",
+              "costume_change_duration_sec": 0,
+              "costume_description": ""
+            },
+            {
+              "type": "character_enter",
+              "character_id": "char_yunseo",
+              "direction": "stage_left",
+              "prop_id": "",
+              "carried_by": "",
+              "from": "stage_left",
+              "to": "stage_left",
+              "costume_change_duration_sec": 0,
+              "costume_description": ""
+            }
+          ],
+          "notes": "정원 퇴장 후 유림, 윤서 입장 [1](#docchat-1-2-194)"
+        }
+      ],
+      "notes": "마루의 생일파티 / 별들의 대화 [1](#docchat-1-2-194)"
+    },
+    {
+      "cue_id": "cue_s8",
+      "scene_number": "S#8",
+      "scene_type": "scene",
+      "estimated_duration_sec": 0,
+      "backstage_crossover_time_override_sec": 0,
+      "events": [
+        {
+          "event_id": "evt_s8_001",
+          "trigger": {
+            "type": "scene_change",
+            "character_id": "",
+            "description": "S#8 시작"
+          },
+          "actions": [],
+          "notes": "은비, 혜원 하수 무대대기 완료 [1](#docchat-1-2-306)"
+        },
+        {
+          "event_id": "evt_s8_002",
+          "trigger": {
+            "type": "dialogue",
+            "character_id": "char_hyewon",
+            "description": "혜원: 엄마, 가자. 나 여기 있기 싫어. 집에 갈래."
+          },
+          "actions": [],
+          "notes": "감정 전환 지점 [1](#docchat-1-2-306)"
+        },
+        {
+          "event_id": "evt_s8_003",
+          "trigger": {
+            "type": "dialogue",
+            "character_id": "char_eunbi",
+            "description": "은비: 일단 집으로 가요."
+          },
+          "actions": [
+            {
+              "type": "character_exit",
+              "character_id": "char_hyewon",
+              "direction": "stage_right",
+              "prop_id": "",
+              "carried_by": "",
+              "from": "stage_right",
+              "to": "stage_right",
+              "costume_change_duration_sec": 0,
+              "costume_description": ""
+            },
+            {
+              "type": "character_exit",
+              "character_id": "char_eunbi",
+              "direction": "stage_right",
+              "prop_id": "",
+              "carried_by": "",
+              "from": "stage_right",
+              "to": "stage_right",
+              "costume_change_duration_sec": 0,
+              "costume_description": ""
+            }
+          ],
+          "notes": "혜원, 은비 퇴장 [1](#docchat-1-2-306)"
+        },
+        {
+          "event_id": "evt_s8_004",
+          "trigger": {
+            "type": "dialogue",
+            "character_id": "char_jungwon",
+            "description": "정원: 마루야..."
+          },
+          "actions": [
+            {
+              "type": "character_exit",
+              "character_id": "char_jungwon",
+              "direction": "stage_right",
+              "prop_id": "",
+              "carried_by": "",
+              "from": "stage_right",
+              "to": "stage_right",
+              "costume_change_duration_sec": 0,
+              "costume_description": ""
+            }
+          ],
+          "notes": "정원이 한숨 쉬며 쫓아 나감 [1](#docchat-1-2-306)"
+        }
+      ],
+      "notes": "학예회에 늦은 우현 [1](#docchat-1-2-306)"
+    },
+    {
+      "cue_id": "cue_s11_n8",
+      "scene_number": "S#11",
+      "scene_type": "scene",
+      "estimated_duration_sec": 0,
+      "backstage_crossover_time_override_sec": 0,
+      "events": [
+        {
+          "event_id": "evt_s11_001",
+          "trigger": {
+            "type": "sound_cue",
+            "character_id": "",
+            "description": "학교 종소리 S.E."
+          },
+          "actions": [
+            {
+              "type": "character_enter",
+              "character_id": "char_hyunseo",
+              "direction": "stage_left",
+              "prop_id": "",
+              "carried_by": "",
+              "from": "stage_left",
+              "to": "stage_left",
+              "costume_change_duration_sec": 0,
+              "costume_description": ""
+            },
+            {
+              "type": "character_enter",
+              "character_id": "char_jungmin",
+              "direction": "stage_left",
+              "prop_id": "",
+              "carried_by": "",
+              "from": "stage_left",
+              "to": "stage_left",
+              "costume_change_duration_sec": 0,
+              "costume_description": ""
+            }
+          ],
+          "notes": "현서, 정민 무대대기 완료 후 학교 종소리와 함께 시작 [2](#docchat-group-doc1p2h403--doc1p1h96)"
+        },
+        {
+          "event_id": "evt_s11_002",
+          "trigger": {
+            "type": "dialogue",
+            "character_id": "char_hyewon",
+            "description": "혜원: 우리 아빠 거짓말쟁이 아니야! 진짜 바빠서 못 온 거란 말이야!"
+          },
+          "actions": [],
+          "notes": "N#8 세션큐 직전 대사 [1](#docchat-1-2-403)"
+        },
+        {
+          "event_id": "evt_s11_003",
+          "trigger": {
+            "type": "dialogue",
+            "character_id": "char_hyewon",
+            "description": "혜원 대사① 아 우리 아빠가 선물해준 거야~"
+          },
+          "actions": [
+            {
+              "type": "prop_in",
+              "character_id": "",
+              "direction": "stage_left",
+              "prop_id": "prop_maru_bag",
+              "carried_by": "char_hyewon",
+              "from": "stage_left",
+              "to": "stage_left",
+              "costume_change_duration_sec": 0,
+              "costume_description": ""
+            }
+          ],
+          "notes": "마루가방 in [1](#docchat-1-2-403)"
+        },
+        {
+          "event_id": "evt_s11_004",
+          "trigger": {
+            "type": "dialogue",
+            "character_id": "char_hyewon",
+            "description": "혜원 대사③ 안돼 나한테 정말 소중한 거야"
+          },
+          "actions": [],
+          "notes": "가방을 둘러싼 갈등 이벤트 [1](#docchat-1-2-403)"
+        }
+      ],
+      "notes": "마루를 놀리는 친구들 / Larger than life 연결 구간 [1](#docchat-1-2-403)"
+    },
+    {
+      "cue_id": "cue_s12",
+      "scene_number": "S#12",
+      "scene_type": "scene",
+      "estimated_duration_sec": 0,
+      "backstage_crossover_time_override_sec": 0,
+      "events": [
+        {
+          "event_id": "evt_s12_001",
+          "trigger": {
+            "type": "scene_change",
+            "character_id": "",
+            "description": "S#12 시작"
+          },
+          "actions": [],
+          "notes": "정원, 은비 하수 무대대기 완료 [1](#docchat-1-2-411)"
+        },
+        {
+          "event_id": "evt_s12_002",
+          "trigger": {
+            "type": "dialogue",
+            "character_id": "char_jungwon",
+            "description": "정원: 어, 우리 마루 왔어?"
+          },
+          "actions": [],
+          "notes": "장면 시작 대사 [1](#docchat-1-2-411)"
+        },
+        {
+          "event_id": "evt_s12_003",
+          "trigger": {
+            "type": "dialogue",
+            "character_id": "char_hyewon",
+            "description": "혜원 빠르게 지나쳐가고"
+          },
+          "actions": [
+            {
+              "type": "character_exit",
+              "character_id": "char_hyewon",
+              "direction": "stage_right",
+              "prop_id": "",
+              "carried_by": "",
+              "from": "stage_right",
+              "to": "stage_right",
+              "costume_change_duration_sec": 0,
+              "costume_description": ""
+            }
+          ],
+          "notes": "혜원이 빠르게 지나감 [1](#docchat-1-2-411)"
+        },
+        {
+          "event_id": "evt_s12_004",
+          "trigger": {
+            "type": "dialogue",
+            "character_id": "char_eunbi",
+            "description": "은비: 마루야··· 오늘 학교에서 무슨 일 있었어?"
+          },
+          "actions": [
+            {
+              "type": "backstage_crossover",
+              "character_id": "char_eunbi",
+              "direction": "stage_left",
+              "prop_id": "",
+              "carried_by": "",
+              "from": "stage_right",
+              "to": "stage_left",
+              "costume_change_duration_sec": 0,
+              "costume_description": ""
+            }
+          ],
+          "notes": "빠르게 하수 조명 out, 상수 조명 in 전환과 함께 공간 축 이동 [1](#docchat-1-2-411)"
+        },
+        {
+          "event_id": "evt_s12_005",
+          "trigger": {
+            "type": "dialogue",
+            "character_id": "char_jungwon",
+            "description": "정원: 마루야 아빠인데, 들어가도 될까?"
+          },
+          "actions": [],
+          "notes": "침실 쪽 접근 대사 [1](#docchat-1-2-411)"
+        },
+        {
+          "event_id": "evt_s12_006",
+          "trigger": {
+            "type": "dialogue",
+            "character_id": "char_hyewon",
+            "description": "혜원: 응 이번 딱 한 번만 봐주는 거야."
+          },
+          "actions": [],
+          "notes": "화해 이벤트 [1](#docchat-1-2-411)"
+        },
+        {
+          "event_id": "evt_s12_007",
+          "trigger": {
+            "type": "dialogue",
+            "character_id": "char_jungwon",
+            "description": "정원: 우리 토요일에 놀이동산 갈까?"
+          },
+          "actions": [],
+          "notes": "다음 장면 전환의 핵심 약속 [1](#docchat-1-2-411)"
+        },
+        {
+          "event_id": "evt_s12_008",
+          "trigger": {
+            "type": "dialogue",
+            "character_id": "char_hyewon",
+            "description": "혜원: 약속!"
+          },
+          "actions": [],
+          "notes": "장면 종료 직전 [1](#docchat-1-2-411)"
+        }
+      ],
+      "notes": "우현이 마루에게 사과 [1](#docchat-1-2-411)"
+    }
+  ]
+}
