@@ -16,8 +16,8 @@
 ## 1. 한 문장 현황
 
 현재 STANDBY는 **하드코딩된 공연 fixture를 탐색·편집·재현하는 프런트 데모**와
-**통제 fixture의 퀵체인지 한 규칙을 검증하는 독립 Fastify 백엔드**가 각각 동작한다.
-두 시스템은 아직 연결되지 않았고, 실제 파일 업로드와 Upstage 호출도 구현되지 않았다.
+**실제 PDF/XLSX 입력·Upstage Agent 추출·사람 검토 게이트를 제공하는 Fastify 백엔드**가 각각 동작한다.
+프런트 API client는 추가됐지만 기존 화면에는 아직 배선되지 않았다.
 
 따라서 현재 웹 화면에서 보이는 finding과 근거는 실제 업로드 문서를 분석한 결과가 아니다.
 
@@ -29,8 +29,8 @@
 |---|---|---|
 | 두 화면 라우팅 | **구현** | `/` 입력, `/workspace` 워크스페이스만 존재 |
 | 세 입력 UI | **부분 구현** | SCRIPT·CUESHEET 카드와 STAGE_SPEC 폼을 표시하고 로컬 상태를 수정할 수 있음 |
-| 파일 업로드 | **미구현** | dropzone은 drag hover만 처리하며 파일을 읽거나 저장하지 않음 |
-| Upstage 추출 | **미구현** | `Upstage 추출 시작`은 API 호출 없이 `/workspace`로 이동 |
+| 파일 업로드 | **백엔드 구현 / UI 미배선** | SCRIPT PDF/DOCX, MASTER_CUE XLSX/PDF를 multipart로 받고 byte SHA-256을 고정. 기존 dropzone은 아직 호출하지 않음 |
+| Upstage 추출 | **adapter 구현 / UI 미배선** | Files API → 역할별 Agent job → polling → strict decoder를 구현. 실 Agent ID로 live smoke는 미실행 |
 | Fact/authority 검토 | **UI fixture** | REVIEWED 배지는 토글되지만 추출 fact나 판정 입력과 연결되지 않음 |
 | 이벤트 타임라인 | **부분 구현** | E1~E8 선택·이전·다음 가능. 재생 버튼은 다음 이벤트로 한 번 이동할 뿐 연속 재생하지 않음 |
 | 이벤트별 2D 무대 | **구현** | E1~E8별 정적 스냅샷, 인물/소품 위치, ENTER/EXIT 방향·라벨 표시 |
@@ -43,11 +43,11 @@
 | 원본 hash/revision 영속성 | **미구현** | 새로고침하면 편집·이력·결정이 모두 사라짐. 프런트는 백엔드 hash 계약을 사용하지 않음 |
 | XLSX import/export | **미구현** | 실제 엑셀 읽기·서식 보존·새 파일 내보내기 없음 |
 | refresh/변경 감지 | **미구현** | source hash 비교, 변경 문서 재추출, UNREVIEWED 게이트 없음 |
-| 프런트–백엔드 연결 | **미구현** | `app/`에는 `/v1` 호출 코드가 없음 |
-| 백엔드 API 수직 슬라이스 | **구현** | case→source→fixture extraction→review→snapshot→workspace→cue revision 흐름을 메모리에서 제공 |
-| 실제 Upstage 연동 | **미구현** | API key를 읽거나 Upstage API를 호출하는 adapter가 없음 |
+| 프런트–백엔드 연결 | **client 구현 / 화면 미배선** | `app/src/lib/standby-api.ts`에 case→upload→operation→review→snapshot client가 있으나 화면은 fixture 상태 |
+| 백엔드 API 수직 슬라이스 | **구현** | case→source→비동기 extraction→review→snapshot→workspace→cue revision 흐름을 메모리에서 제공 |
+| 실제 Upstage 연동 | **코드 구현 / live 미검증** | API key·역할별 Agent ID를 env로 받고 `/v2/files`, `/v2/responses`, polling을 실행 |
 | 결정론적 verifier | **부분 구현** | 백엔드는 `VR-01 QUICK_CHANGE_IMPOSSIBLE` 통제 fixture만 계산 |
-| strict JSON 계약 | **계약·테스트 구현** | `contracts/`의 스키마를 테스트하지만, 브라우저 업로드에서 생성·교환하는 흐름은 아직 없음 |
+| strict JSON 계약 | **계약·decoder·테스트 구현** | 역할별 `script_facts`/`cue_facts`, locator·quote를 fail-closed로 검사하고 새 fact를 `UNREVIEWED`로 격리 |
 | 데이터베이스 | **미구현** | 백엔드 재시작 시 case·review·revision이 모두 사라지는 in-memory store |
 
 ---
@@ -109,9 +109,10 @@
 | 순서 | Method / Path | 동작 |
 |---:|---|---|
 | 1 | `POST /v1/cases` | case 생성 |
-| 2 | `POST /v1/cases/:caseId/sources/:role` | 세 역할의 JSON `content`와 metadata 등록 |
-| 3 | `POST /v1/cases/:caseId/extraction-runs` | 실제 Upstage 대신 통제 fixture fact 생성 |
-| 4 | `GET /v1/operations/:operationId` | 완료된 extraction operation 조회 |
+| 2 | `POST /v1/cases/:caseId/sources/:role` | SCRIPT·MASTER_CUE multipart 파일 또는 STAGE_SPEC JSON 등록 |
+| 3 | `POST /v1/cases/:caseId/extraction-runs` | `CONTROLLED_FIXTURE` 또는 `UPSTAGE_AGENT` 비동기 작업 시작 |
+| 4 | `GET /v1/operations/:operationId` | `QUEUED/RUNNING/SUCCEEDED/FAILED` extraction 상태 조회 |
+| 4-1 | `GET /v1/extraction-runs/:runId` | 역할별 provider job·agent·응답 hash provenance 조회 |
 | 5 | `GET /v1/cases/:caseId/review-queue` | 검토 대기 fact 조회 |
 | 6 | `POST /v1/cases/:caseId/fact-reviews:batch` | fact를 REVIEWED 또는 REJECTED로 기록 |
 | 7 | `POST /v1/cases/:caseId/review-snapshots` | 현재 검토 상태를 고정하고 compile·verify |
@@ -137,7 +138,8 @@ cue revision으로 환복시간 70s
 - 허용 origin 기반 CORS
 - Helmet 보안 헤더
 - 분당 120회 rate limit
-- 요청 body 1 MiB 제한
+- JSON 요청 body 1 MiB, 파일 1개당 50 MiB 제한
+- 역할별 확장자·MIME·파일 signature 검사와 파일명 경로 제거
 - `/v1` 정적 bearer token 검사
 - 쓰기 요청의 `Idempotency-Key` 강제와 재사용 충돌 검사
 - source SHA-256과 cue revision의 base hash/revision 검사
@@ -154,10 +156,11 @@ cue revision으로 환복시간 70s
 flowchart LR
   U[사용자] --> A[Vite React app]
   A --> F[하드코딩 fixture와 React state]
-  A -. 아직 연결 안 됨 .-> S[Fastify server]
+  A --> CL[standby-api client]
+  CL -. 화면 미배선 .-> S[Fastify server]
   S --> M[in-memory store]
   S --> C[strict JSON contracts]
-  S -. 아직 호출 안 함 .-> UP[Upstage API]
+  S --> UP[Upstage Files + Agent Jobs API]
 ```
 
 현재 시연 가능한 경로는 `사용자 → app fixture`이고, 테스트 가능한 백엔드 경로는
@@ -192,8 +195,8 @@ E3 카드 클릭
 
 | 우선 | 간극 | 완료 조건 |
 |---|---|---|
-| P0 | 실제 입력 수집 | 업로드한 SCRIPT·MASTER_CUE와 작성한 STAGE_SPEC이 immutable source+hash로 서버에 등록됨 |
-| P0 | Upstage adapter | Parse/Classify/Extract 결과를 strict fact 계약으로 수신하며 실패·재시도·provenance를 기록함 |
+| P0 | 실제 입력 수집 UI 배선 | 기존 dropzone·STAGE_SPEC 폼이 구현된 API client를 호출해 immutable source+hash를 서버에 등록함 |
+| P0 | Upstage live smoke | 실제 역할별 Agent ID로 PDF/XLSX 1건씩 실행해 Studio 출력이 decoder 계약과 일치하는지 고정함 |
 | P0 | 프런트–백엔드 연결 | 입력→review queue→snapshot→workspace가 fixture import 없이 한 case ID로 이어짐 |
 | P0 | 검증 규칙 완성 | `VR-01`, `VR-02`, `VR-03`이 reviewed fact와 세 source evidence로 결정론적으로 실행됨 |
 | P1 | 영속성과 권한 | 사용자별 case 접근 제어, DB/object storage, audit log를 갖춤 |

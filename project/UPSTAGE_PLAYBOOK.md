@@ -381,7 +381,7 @@ Instruct는 `available < required`, route capacity, prop state transition을 계
   "origin": "REAL_REFERENCE",
   "returned_model": "document-parse-260630",
   "agent_id": "agt_...",
-  "config_id": "확인된 값 또는 null",
+  "config_id": null,
   "extraction_review_status": "UNREVIEWED"
 }
 ```
@@ -509,7 +509,7 @@ Case 상태:
 공식 흐름:
 
 1. `/v2/files`에 파일을 올려 `file_id` 획득
-2. 역할별 `/v2/responses` 요청에 `model=agent_id`, pinned `config_id`, 해당 역할의 `input_file` 하나를 전달
+2. 역할별 `/v2/responses` 요청에 `model=agent_id`, 해당 역할의 `input_file` 하나를 전달
 3. job ID를 저장하고 polling
 4. `/v2/responses/{job_id}`를 `include=all`로 조회
 5. 각 step의 `content[].text`와 `content[].additional_values` 해석
@@ -526,13 +526,13 @@ Case 상태:
 - Jobs는 비동기이므로 UI 상태와 timeout을 둔다.
 - Webhook이 공개 지원되기 전에는 polling을 쓴다.
 - 실패 job은 과금되지 않지만 무한 retry하지 않는다.
-- document-processing cache key는 세 파일 SHA-256 + Agent/config 조합으로 둔다.
+- document-processing cache key는 세 파일 SHA-256 + Agent ID + 실제 request body hash 조합으로 둔다.
 - verifier cache에는 reviewed fact set, event-link version, stage topology/constraint version도 포함한다.
 - Split 뒤 file identity나 role이 보존되지 않으면 결과를 섞지 않는다. 역할별 Agent/config와 별도 job으로 fallback한다.
 
-### Config ID 고정
+### Config 변경 추적
 
-공식 Create Job body는 `model`, `input`, `include`, `config_id`를 제공한다. production은 `config_id`를 명시해 Studio draft 변경이 기존 실행을 암묵적으로 바꾸지 않게 하고, 실제 request body hash와 config ID를 함께 저장한다. Studio Extract node의 location/confidence 설정은 job body field가 아니므로 pinned node-config snapshot으로 별도 증명하거나 `NOT_OBSERVED`로 둔다.
+2026-08-22 기준 공식 Create Job body에서 확인되는 필드는 `model`, `input`, `include`이며 `config_id`는 확인되지 않았다. 따라서 M1 adapter는 `config_id`를 전송하지 않고 provenance에 `null`로 기록한다. Studio draft 변경이 기존 실행을 암묵적으로 바꿀 위험은 Agent export와 실제 request body hash, smoke fixture 결과 hash를 함께 보관해 감시한다. 공식 API에서 별도 버전 식별자가 확인되기 전에는 임의 필드를 만들어 보내지 않는다.
 
 - [Create Job](https://console.upstage.ai/api/agents/jobs/create-job)
 - [Studio 버전·배포](https://console.upstage.ai/docs/studio/deployment)
