@@ -153,6 +153,8 @@ export function WorkspaceScreen() {
   const selectCue = useCueSheetStore((s) => s.selectCue);
   const selectEvent = useCueSheetStore((s) => s.selectEvent);
   const commitCueSheet = useCueSheetStore((s) => s.commitCueSheet);
+  const revisions = useCueSheetStore((s) => s.revisions);
+  const loadRevision = useCueSheetStore((s) => s.loadRevision);
   const [stageMotion, setStageMotion] = useState<StageMotion>();
   const [storyboardState, setStoryboardState] = useState<StoryboardAgentState>({ status: 'IDLE' });
   const [script, setScript] = useState<ScriptProjection | null>(null);
@@ -445,10 +447,12 @@ export function WorkspaceScreen() {
                 focusTarget={focusTarget}
                 editedKeys={new Set(Object.keys(cueChanges))}
                 changes={Object.values(cueChanges)}
+                revisions={revisions}
                 onSelectEvent={handleSelectEvent}
                 onEdit={editCueCell}
                 onDiscardAll={discardCueChanges}
                 onSave={saveCueChanges}
+                onLoadRevision={loadRevision}
               />
               {popupTarget && popupCue && (
                 <>

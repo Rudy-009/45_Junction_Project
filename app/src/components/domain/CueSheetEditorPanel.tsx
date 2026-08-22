@@ -9,6 +9,7 @@ import type {
   TriggerType,
 } from '@/types/cue-sheet';
 import type { Contradiction } from '@/types/validation';
+import type { Revision } from '@/types/ui';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
 
@@ -173,10 +174,12 @@ export function CueSheetEditorPanel({
   focusTarget,
   editedKeys,
   changes,
+  revisions,
   onSelectEvent,
   onEdit,
   onDiscardAll,
   onSave,
+  onLoadRevision,
 }: {
   cueSheet: CueSheet;
   contradictions: Contradiction[];
@@ -184,21 +187,28 @@ export function CueSheetEditorPanel({
   focusTarget: FocusTarget;
   editedKeys: Set<string>;
   changes: CueEditorChange[];
+  revisions: Revision[];
   onSelectEvent: (cueId: string, eventId: string) => void;
   onEdit: (edit: CueCellEdit) => void;
   onDiscardAll: () => void;
   onSave: () => void;
+  onLoadRevision: (revisionId: string) => void;
 }) {
   const { locale } = useI18n();
   const rows = useMemo(() => eventRows(cueSheet), [cueSheet]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [editing, setEditing] = useState<EditingCell | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [previewRevisionId, setPreviewRevisionId] = useState<string | null>(null);
 
   const copy = locale === 'ko' ? {
     title: 'CUE SHEET',
     pending: `미반영 변경 ${changes.length}건`,
     discard: '모든 변경 취소',
     save: '저장',
+    history: '히스토리',
+    historyEmpty: '저장된 revision이 없습니다.',
+    changes: '변경',
     status: '상태',
     event: 'EVENT',
     scene: '씬',
@@ -216,6 +226,9 @@ export function CueSheetEditorPanel({
     pending: `${changes.length} UNSAVED`,
     discard: 'Discard all',
     save: 'Save',
+    history: 'History',
+    historyEmpty: 'No saved revisions.',
+    changes: 'changes',
     status: 'Status',
     event: 'EVENT',
     scene: 'Scene',
@@ -339,7 +352,7 @@ export function CueSheetEditorPanel({
   };
 
   return (
-    <section className="flex h-full flex-col bg-surface" aria-label={copy.title}>
+    <section className="relative flex h-full flex-col bg-surface" aria-label={copy.title}>
       <header className="flex min-h-9 shrink-0 items-center justify-between gap-3 border-b border-border px-3 py-1">
         <span className="mono text-[10px] tracking-[0.12em] text-muted-foreground">{copy.title}</span>
         <div className="flex flex-wrap items-center justify-end gap-2">
@@ -357,8 +370,54 @@ export function CueSheetEditorPanel({
           <button type="button" disabled={changes.length === 0} onClick={onSave} className="border border-foreground bg-foreground px-3 py-1 text-[10px] text-background hover:bg-muted-foreground disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground">
             {copy.save}
           </button>
+          <button
+            type="button"
+            aria-expanded={historyOpen}
+            onClick={() => {
+              setHistoryOpen((open) => !open);
+              setPreviewRevisionId(null);
+            }}
+            className="border border-border px-2 py-1 text-[10px] hover:bg-muted"
+          >
+            {copy.history} {revisions.length}
+          </button>
         </div>
       </header>
+
+      {historyOpen && (
+        <div className="absolute top-9 right-3 z-40 grid w-[560px] max-w-[calc(100%-24px)] grid-cols-2 border border-border-strong bg-elevated">
+          <div className="max-h-56 overflow-y-auto border-r border-border p-2">
+            {revisions.map((revision) => (
+              <button
+                key={revision.id}
+                type="button"
+                onMouseEnter={() => setPreviewRevisionId(revision.id)}
+                onFocus={() => setPreviewRevisionId(revision.id)}
+                onClick={() => {
+                  onLoadRevision(revision.id);
+                  setHistoryOpen(false);
+                }}
+                className="mb-1 block w-full border border-border bg-background p-2 text-left text-[10px] hover:border-foreground"
+              >
+                <span className="font-semibold">{revision.savedAt}</span>
+                <span className="ml-2 text-muted-foreground">{revision.changes.length} {copy.changes}</span>
+                <span className="mt-1 block truncate text-muted-foreground">{revision.author}</span>
+              </button>
+            ))}
+            {revisions.length === 0 && (
+              <p className="p-2 text-[10px] text-muted-foreground">{copy.historyEmpty}</p>
+            )}
+          </div>
+          <div className="max-h-56 overflow-y-auto p-2">
+            {(revisions.find((revision) => revision.id === previewRevisionId)?.changes ?? []).map((change) => (
+              <div key={`${change.rowId}:${change.column}`} className="mb-1 border border-border bg-background p-2 text-[10px]">
+                <p className="font-semibold">{change.rowId} · {change.column}</p>
+                <p className="mt-1 break-words text-muted-foreground">{change.from || '—'} → {change.to || '—'}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-auto">
         <table className="w-max min-w-full border-collapse text-left">
