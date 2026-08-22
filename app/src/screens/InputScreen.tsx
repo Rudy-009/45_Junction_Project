@@ -1,70 +1,83 @@
-import { useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
-import { Plus, Trash2, UploadCloud } from "lucide-react";
-import { Btn, OriginBadge, ReviewBadge } from "@/components/standby/Bits";
-import type { Origin } from "@/lib/standby-data";
-import { cn } from "@/lib/utils";
+import { useNavigate } from '@tanstack/react-router';
+import { useState } from 'react';
+import { Plus, Trash2, UploadCloud } from 'lucide-react';
+import { Btn } from '@/components/ui';
+import { OriginBadge, ReviewBadge } from '@/components/ui';
+import { cn } from '@/lib/utils';
+import { useCueSheetStore } from '@/store';
+import type { CueSheet } from '@/types';
 
+type Origin = 'REAL_REFERENCE' | 'CONTROLLED_FIXTURE' | 'MUTATED_FIXTURE';
 type SourceState = { filename: string; hash: string; origin: Origin; reviewed: boolean };
 
 export function InputScreen() {
   const navigate = useNavigate();
+  const loadCueSheet = useCueSheetStore((s) => s.loadCueSheet);
+
   const [script, setScript] = useState<SourceState>({
-    filename: "maru_S16-S17_rev7.fdx",
-    hash: "sha256:9f21c0ab4e7d…c18a",
-    origin: "REAL_REFERENCE",
-    reviewed: true,
+    filename: '',
+    hash: '',
+    origin: 'REAL_REFERENCE',
+    reviewed: false,
   });
   const [cuesheet, setCuesheet] = useState<SourceState>({
-    filename: "cuesheet_master_v11.xlsx",
-    hash: "sha256:41b7de0092fa…7d33",
-    origin: "CONTROLLED_FIXTURE",
+    filename: '',
+    hash: '',
+    origin: 'CONTROLLED_FIXTURE',
     reviewed: false,
   });
   const [spec, setSpec] = useState<SourceState>({
-    filename: "stage_spec.form",
-    hash: "sha256:cc04a71fe8b2…0e59",
-    origin: "MUTATED_FIXTURE",
+    filename: '',
+    hash: '',
+    origin: 'CONTROLLED_FIXTURE',
     reviewed: false,
   });
 
   const [wings, setWings] = useState({ 상수: true, 하수: true });
-  const [crossover, setCrossover] = useState<"true" | "false" | "UNKNOWN">("true");
+  const [crossover, setCrossover] = useState<'true' | 'false' | 'UNKNOWN'>('true');
+  const [crossoverTime, setCrossoverTime] = useState('45');
   const [routes, setRoutes] = useState([
-    { from: "하수윙", to: "하수환복소", min: "3", max: "4" },
-    { from: "하수환복소", to: "무대", min: "3", max: "4" },
+    { from: '하수윙', to: '하수환복소', min: '3', max: '4' },
+    { from: '하수환복소', to: '무대', min: '3', max: '4' },
   ]);
 
-  const [actors, setActors] = useState([
-    { id: "혜원", zone: "무대" },
-    { id: "은비", zone: "하수윙" },
-  ]);
-  const [props, setProps] = useState([{ id: "마루가방", zone: "상수윙" }]);
-  const [costumes, setCostumes] = useState([{ actor: "혜원", item: "우주복 B", zone: "하수환복소" }]);
+  const handleFileUpload = async (file: File, type: 'script' | 'cuesheet' | 'spec') => {
+    const text = await file.text();
+    try {
+      const data = JSON.parse(text) as CueSheet;
+      loadCueSheet(data);
+      const setter = type === 'script' ? setScript : type === 'cuesheet' ? setCuesheet : setSpec;
+      setter((prev) => ({ ...prev, filename: file.name, hash: `size:${file.size}` }));
+    } catch {
+      // Non-JSON file - just record filename
+      const setter = type === 'script' ? setScript : type === 'cuesheet' ? setCuesheet : setSpec;
+      setter((prev) => ({ ...prev, filename: file.name, hash: `size:${file.size}` }));
+    }
+  };
 
   return (
     <div className="mx-auto max-w-[1400px] p-6">
       <div className="mb-4 flex items-baseline gap-3">
         <h1 className="text-lg font-medium">입력 · INPUT SOURCES</h1>
         <span className="mono text-[11px] text-muted-foreground">
-          우주비행사가 된 마루 / 긴 암전 S#16 → S#17
+          큐시트 파일을 업로드하세요
         </span>
       </div>
 
       <div className="grid grid-cols-3 gap-4">
         <SourceCard title="SCRIPT" state={script} onChange={setScript}>
-          <Dropzone hint="대본 파일을 끌어다 놓으세요 (.fdx, .pdf)" />
+          <Dropzone hint="대본 파일을 끌어다 놓으세요 (.fdx, .pdf)" onFile={(f) => handleFileUpload(f, 'script')} />
         </SourceCard>
 
         <SourceCard title="CUESHEET" state={cuesheet} onChange={setCuesheet}>
-          <Dropzone hint="큐시트 파일을 끌어다 놓으세요 (.xlsx, .csv)" />
+          <Dropzone hint="큐시트 JSON 파일을 끌어다 놓으세요 (.json)" onFile={(f) => handleFileUpload(f, 'cuesheet')} />
         </SourceCard>
 
         <SourceCard title="STAGE_SPEC" state={spec} onChange={setSpec}>
           <div className="flex flex-col gap-4 p-3">
             <Field label="wings">
               <div className="flex gap-4">
-                {(["상수", "하수"] as const).map((w) => (
+                {(['상수', '하수'] as const).map((w) => (
                   <label key={w} className="flex items-center gap-2 text-xs">
                     <input
                       type="checkbox"
@@ -79,7 +92,7 @@ export function InputScreen() {
 
             <Field label="crossover (백스테이지 통로)">
               <div className="flex gap-4">
-                {(["true", "false", "UNKNOWN"] as const).map((v) => (
+                {(['true', 'false', 'UNKNOWN'] as const).map((v) => (
                   <label key={v} className="mono flex items-center gap-2 text-xs">
                     <input
                       type="radio"
@@ -91,6 +104,15 @@ export function InputScreen() {
                   </label>
                 ))}
               </div>
+            </Field>
+
+            <Field label="백스테이지 이동 시간 (초)">
+              <input
+                value={crossoverTime}
+                onChange={(e) => setCrossoverTime(e.target.value)}
+                className="mono w-20 border border-border bg-background px-2 py-1 text-xs outline-none focus:border-foreground"
+                placeholder="45"
+              />
             </Field>
 
             <Field label="route times">
@@ -137,52 +159,11 @@ export function InputScreen() {
                 ))}
                 <Btn
                   className="mt-1 self-start"
-                  onClick={() => setRoutes((p) => [...p, { from: "", to: "", min: "", max: "" }])}
+                  onClick={() => setRoutes((p) => [...p, { from: '', to: '', min: '', max: '' }])}
                 >
                   <Plus className="mr-1 h-3 w-3" /> 경로 추가
                 </Btn>
               </div>
-            </Field>
-
-            <Field label="initial_state">
-              <MiniTable
-                caption="actors"
-                headers={["id", "start zone"]}
-                rows={actors.map((a) => [a.id, a.zone])}
-                onChange={(r, c, v) =>
-                  setActors((p) =>
-                    p.map((x, i) => (i === r ? (c === 0 ? { ...x, id: v } : { ...x, zone: v }) : x)),
-                  )
-                }
-              />
-              <MiniTable
-                caption="props"
-                headers={["id", "start zone"]}
-                rows={props.map((a) => [a.id, a.zone])}
-                onChange={(r, c, v) =>
-                  setProps((p) =>
-                    p.map((x, i) => (i === r ? (c === 0 ? { ...x, id: v } : { ...x, zone: v }) : x)),
-                  )
-                }
-              />
-              <MiniTable
-                caption="costumes"
-                headers={["actor", "item", "stored zone"]}
-                rows={costumes.map((a) => [a.actor, a.item, a.zone])}
-                onChange={(r, c, v) =>
-                  setCostumes((p) =>
-                    p.map((x, i) =>
-                      i === r
-                        ? c === 0
-                          ? { ...x, actor: v }
-                          : c === 1
-                            ? { ...x, item: v }
-                            : { ...x, zone: v }
-                        : x,
-                    ),
-                  )
-                }
-              />
             </Field>
           </div>
         </SourceCard>
@@ -190,10 +171,10 @@ export function InputScreen() {
 
       <div className="mt-6 flex justify-end">
         <button
-          onClick={() => navigate({ to: "/workspace" })}
+          onClick={() => navigate({ to: '/workspace' })}
           className="border border-foreground bg-foreground px-5 py-2.5 text-sm text-background hover:bg-muted-foreground"
         >
-          Upstage 추출 시작
+          검증 시작
         </button>
       </div>
     </div>
@@ -215,8 +196,12 @@ function SourceCard({
     <section className="flex flex-col border border-border bg-surface">
       <header className="border-b border-border px-3 py-2">
         <div className="mono text-[11px] tracking-[0.14em] text-muted-foreground">{title}</div>
-        <div className="mt-1 text-sm">{state.filename}</div>
-        <div className="mono mt-1 text-[10px] text-muted-foreground">{state.hash}</div>
+        {state.filename && (
+          <>
+            <div className="mt-1 text-sm">{state.filename}</div>
+            <div className="mono mt-1 text-[10px] text-muted-foreground">{state.hash}</div>
+          </>
+        )}
         <div className="mt-2 flex flex-wrap items-center gap-1">
           <OriginBadge origin={state.origin} />
           <ReviewBadge
@@ -230,7 +215,7 @@ function SourceCard({
   );
 }
 
-function Dropzone({ hint }: { hint: string }) {
+function Dropzone({ hint, onFile }: { hint: string; onFile: (file: File) => void }) {
   const [over, setOver] = useState(false);
   return (
     <div className="p-3">
@@ -243,10 +228,21 @@ function Dropzone({ hint }: { hint: string }) {
         onDrop={(e) => {
           e.preventDefault();
           setOver(false);
+          const file = e.dataTransfer.files[0];
+          if (file) onFile(file);
+        }}
+        onClick={() => {
+          const input = document.createElement('input');
+          input.type = 'file';
+          input.onchange = () => {
+            const file = input.files?.[0];
+            if (file) onFile(file);
+          };
+          input.click();
         }}
         className={cn(
-          "flex h-40 flex-col items-center justify-center gap-2 border border-dashed border-border text-center",
-          over ? "bg-muted" : "bg-background",
+          'flex h-40 cursor-pointer flex-col items-center justify-center gap-2 border border-dashed border-border text-center',
+          over ? 'bg-muted' : 'bg-background',
         )}
       >
         <UploadCloud className="h-5 w-5 text-muted-foreground" />
@@ -284,52 +280,5 @@ function Cell({
       onChange={(e) => onChange(e.target.value)}
       className="mono border border-border bg-background px-1 py-[2px] text-xs outline-none focus:border-foreground"
     />
-  );
-}
-
-function MiniTable({
-  caption,
-  headers,
-  rows,
-  onChange,
-}: {
-  caption: string;
-  headers: string[];
-  rows: string[][];
-  onChange: (row: number, col: number, value: string) => void;
-}) {
-  return (
-    <div className="mb-2">
-      <div className="mono mb-1 text-[10px] text-muted-foreground">{caption}</div>
-      <table className="w-full border-collapse text-xs">
-        <thead>
-          <tr>
-            {headers.map((h) => (
-              <th
-                key={h}
-                className="mono border border-border bg-muted px-1 py-[2px] text-left text-[10px] font-normal text-muted-foreground"
-              >
-                {h}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r, ri) => (
-            <tr key={ri}>
-              {r.map((c, ci) => (
-                <td key={ci} className="border border-border p-0">
-                  <input
-                    value={c}
-                    onChange={(e) => onChange(ri, ci, e.target.value)}
-                    className="w-full bg-surface px-1 py-[2px] text-xs outline-none focus:bg-muted"
-                  />
-                </td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
   );
 }
