@@ -24,6 +24,7 @@ import { canonicalJson, hashJson, sha256 } from "../lib/hash.js";
 import type { ExtractionProvider } from "../providers/extraction-provider.js";
 
 const ROLES: SourceRole[] = ["SCRIPT", "MASTER_CUE", "STAGE_SPEC"];
+const REQUIRED_SOURCE_ROLES: SourceRole[] = ["MASTER_CUE", "STAGE_SPEC"];
 
 type IdempotencyRecord = {
   fingerprint: string;
@@ -214,9 +215,9 @@ export class InMemoryStore {
 
   startExtraction(caseId: string, adapter: ExtractionAdapter): Operation {
     const record = this.getCase(caseId);
-    const missingRoles = ROLES.filter((role) => !record.sources.has(role));
+    const missingRoles = REQUIRED_SOURCE_ROLES.filter((role) => !record.sources.has(role));
     if (missingRoles.length > 0) {
-      throw new DomainError(409, "SOURCE_SLOT_MISSING", "All three source roles are required.", {
+      throw new DomainError(409, "SOURCE_SLOT_MISSING", "MASTER_CUE and STAGE_SPEC are required.", {
         missing_roles: missingRoles,
       });
     }
@@ -312,7 +313,7 @@ export class InMemoryStore {
 
   createReviewSnapshot(caseId: string, actorId: string): ReviewSnapshot {
     const record = this.getCase(caseId);
-    if (record.sources.size !== ROLES.length || record.facts.size === 0) {
+    if (REQUIRED_SOURCE_ROLES.some((role) => !record.sources.has(role)) || record.facts.size === 0) {
       throw new DomainError(409, "GATE_MISSING_INPUT", "Extraction must finish before snapshot freeze.");
     }
     const frozenCandidates = structuredClone([...record.facts.values()]).sort((a, b) =>

@@ -149,15 +149,18 @@ export class UpstageAgentProvider implements ExtractionProvider {
   async extract(
     sources: Map<SourceRole, InternalSourceVersion>,
   ): Promise<ExtractionProviderResult> {
-    const script = this.requiredFileSource(sources, "SCRIPT");
     const masterCue = this.requiredFileSource(sources, "MASTER_CUE");
+    const script = sources.get("SCRIPT");
+    if (script && script.bytes === null) {
+      throw new DomainError(409, "SOURCE_FORMAT_INVALID", "SCRIPT must be uploaded as a file.");
+    }
     const stageSpec = sources.get("STAGE_SPEC");
     if (!stageSpec || stageSpec.bytes !== null) {
       throw new DomainError(409, "SOURCE_FORMAT_INVALID", "STAGE_SPEC must be structured JSON.");
     }
 
     const [scriptResult, cueResult] = await Promise.all([
-      this.extractFile("SCRIPT", script),
+      script ? this.extractFile("SCRIPT", script) : Promise.resolve(null),
       this.extractFile("MASTER_CUE", masterCue),
     ]);
     const stageFacts = extractStageSpec(stageSpec);
@@ -175,8 +178,8 @@ export class UpstageAgentProvider implements ExtractionProvider {
     };
 
     return {
-      facts: [...scriptResult.facts, ...cueResult.facts, ...stageFacts],
-      sourceRuns: [scriptResult.run, cueResult.run, stageRun],
+      facts: [...(scriptResult?.facts ?? []), ...cueResult.facts, ...stageFacts],
+      sourceRuns: [...(scriptResult ? [scriptResult.run] : []), cueResult.run, stageRun],
     };
   }
 
