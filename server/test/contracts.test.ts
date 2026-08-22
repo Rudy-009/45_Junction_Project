@@ -7,6 +7,7 @@ import type { ValidateFunction } from "ajv";
 import { DomainError } from "../src/domain/errors.js";
 import {
   assertEventGraphSemantics,
+  assertNormalizedFactSemantics,
   assertStageSpecSemantics,
   assertVerificationSemantics,
 } from "../src/contracts/semantic.js";
@@ -83,6 +84,11 @@ test("semantic validators reject reversed ranges, duplicate events, and duplicat
         ],
       }),
     (error: unknown) => error instanceof DomainError && error.code === "EVIDENCE_ROLES_INVALID",
+  );
+
+  assert.throws(
+    () => assertNormalizedFactSemantics({ normalized_fact_type: "INVENTED", value: {} }),
+    (error: unknown) => error instanceof DomainError && error.code === "NORMALIZED_FACT_TYPE_INVALID",
   );
 });
 

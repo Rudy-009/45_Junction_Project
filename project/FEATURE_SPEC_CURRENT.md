@@ -49,7 +49,8 @@ Upstage가 추출한 결과가 아니다. 입력과 workspace 두 데이터 흐�
 | 프런트–백엔드 연결 | **입력 경로 부분 배선** | 입력 화면이 case→upload→operation→review queue client를 호출. review→snapshot→workspace는 아직 fixture와 분리 |
 | 백엔드 API 수직 슬라이스 | **구현** | case→source→비동기 extraction→review→snapshot→workspace→cue revision 흐름을 메모리에서 제공 |
 | 실제 Upstage 연동 | **합성 live smoke 통과** | 역할별 저장 Config #1로 PDF/PDF와 PDF/XLSX를 실행해 12 Script + 5 Cue + 3 Stage facts와 전건 `UNREVIEWED`를 확인. 실제 원본 fidelity는 미검증 |
-| 결정론적 verifier | **부분 구현** | 백엔드는 `VR-01 QUICK_CHANGE_IMPOSSIBLE` 통제 fixture만 계산 |
+| reviewed fact compiler | **백엔드 구현** | 승인된 `EVENT_STATE`만 8-event graph와 stage snapshot으로 compile. Upstage raw→normalized review UI는 아직 없음 |
+| 결정론적 verifier | **통제 fixture 구현** | rules v2가 VR-01 quick-change, VR-02 route capacity, VR-03 prop continuity와 규칙별 기권을 계산 |
 | strict JSON 계약 | **계약·decoder·테스트 구현** | 역할별 `script_facts`/`cue_facts`, locator·quote를 fail-closed로 검사하고 새 fact를 `UNREVIEWED`로 격리 |
 | 데이터베이스 | **미구현** | 백엔드 재시작 시 case·review·revision이 모두 사라지는 in-memory store |
 
@@ -107,18 +108,25 @@ Upstage가 추출한 결과가 아니다. 입력과 workspace 두 데이터 흐�
 | 9 | `POST /v1/cases/:caseId/cue-revisions` | base revision/hash를 확인한 cell patch 생성 |
 | - | `GET /healthz` | 인증 없이 health 확인 |
 
-현재 검증 수직 슬라이스는 다음 세 상태를 재현한다.
+현재 rules v2 수직 슬라이스는 다음 상태를 재현한다.
 
 ```text
 fact 미검토
-  → INSUFFICIENT_EVIDENCE
+  → VR-01·VR-02·VR-03 모두 INSUFFICIENT_EVIDENCE
 
-fact 검토 완료 + 환복시간 58s
-  → VR-01 VIOLATION
+20개 통제 fact 검토 완료
+  → 8-event graph
+  → VR-01 VIOLATION / VR-02 VIOLATION / VR-03 REVIEW
 
 cue revision으로 환복시간 70s
-  → finding 0건 / CONSISTENT
+  → VR-01만 CONSISTENT, 나머지 finding은 유지
+
+tight fixture / clean control
+  → VR-01 REVIEW / 세 core finding 0건
 ```
+
+Upstage의 `ScriptFact`·`CueFact` raw field를 compiler가 추측해서 정규화하지 않는다. 사람이 검토할 때
+`corrected_value.normalized_fact_type`과 `value`를 명시하면 compiler가 그 승인된 값만 읽는다.
 
 ### 4-1. 구현된 보호 장치
 
@@ -148,6 +156,8 @@ flowchart LR
   CL -->|개발 환경 배선| S[Fastify server]
   S --> M[in-memory store]
   S --> C[strict JSON contracts]
+  C --> G[reviewed fact compiler + event graph]
+  G --> V[VR-01 / VR-02 / VR-03]
   S --> UP[Upstage Files + Script/Master Cue Agent Config #1]
 ```
 
@@ -184,10 +194,11 @@ PRD 기준 핵심 데모인 세 원문 업로드 → UNREVIEWED fact review → 
 | 우선 | 간극 | 완료 조건 |
 |---|---|---|
 | P0 | 실제 reference fidelity | 실제 한국어 대본·17열 Master Cue의 locator, 병합 셀, 줄바꿈, critical token을 사람이 원문과 대조해 gold fact 기준으로 고정함 |
-| P0 | 프런트–백엔드 완전 연결 | 현재 입력→review queue 이후의 fact 검토→snapshot→workspace가 fixture import 없이 한 case ID로 이어짐 |
-| P0 | 검증 규칙 완성 | `VR-01`, `VR-02`, `VR-03`이 reviewed fact와 세 source evidence로 결정론적으로 실행됨 |
+| P0 | 운영 실행·인증 경계 | Railway API/worker와 Supabase Auth·Postgres·private Storage를 연결하고, Vercel SPA에는 공개 API URL과 사용자 세션만 둠 |
+| P0 | 프런트–백엔드 완전 연결 | 현재 입력→review queue 이후 normalized fact 검토→snapshot→workspace가 한 case ID로 이어짐 |
+| P0 | 실제 fact normalization | 실제 Upstage raw 17개를 EVENT/quick/blocking/prop normalized fact로 사람이 승인하고 rules v2에 투입함 |
 | P0 | UI 계약 복구 | 현재 JSON workspace를 PRD의 두 화면·Evidence Trace·`INSUFFICIENT_EVIDENCE` 계약과 정렬함 |
-| P1 | 영속성과 권한 | 사용자별 case 접근 제어, DB/object storage, audit log를 갖춤 |
+| P1 | 운영 보강 | 사용자별 case 권한·quota, audit log, 악성 파일 검사, 관측성을 갖춤 |
 | P1 | 연속 재생 동기화 | 재생 중 타임라인·큐시트·무대가 같은 이벤트로 계속 진행됨 |
 | P1 | XLSX 왕복 | 원본 구조·sheet·서식을 유지한 새 파일을 내보내고 재수입 시 같은 fact를 얻음 |
 | P2 | refresh gate | hash가 같은 문서는 재호출하지 않고 새 fact는 승인 전 UNREVIEWED로 격리함 |

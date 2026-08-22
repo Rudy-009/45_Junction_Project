@@ -92,7 +92,7 @@ test("unreviewed facts abstain, reviewed facts violate, and a 70s revision clear
   });
   assert.equal(queueResponse.statusCode, 200, queueResponse.body);
   const queue = queueResponse.json() as { items: FactCandidate[] };
-  assert.equal(queue.items.length, 5);
+  assert.equal(queue.items.length, 20);
   assert.ok(queue.items.every((fact) => fact.review_status === "UNREVIEWED"));
 
   const unreviewedSnapshotResponse = await app.inject({
@@ -110,8 +110,15 @@ test("unreviewed facts abstain, reviewed facts violate, and a 70s revision clear
   });
   assert.equal(abstainedResponse.statusCode, 200, abstainedResponse.body);
   const abstained = abstainedResponse.json() as WorkspaceSnapshot;
-  assert.equal(abstained.findings[0]?.verdict, "INSUFFICIENT_EVIDENCE");
-  assert.equal(abstained.findings[0]?.evidence.length, 3);
+  assert.deepEqual(
+    abstained.findings.map((finding) => [finding.rule_id, finding.verdict]),
+    [
+      ["VR-01", "INSUFFICIENT_EVIDENCE"],
+      ["VR-02", "INSUFFICIENT_EVIDENCE"],
+      ["VR-03", "INSUFFICIENT_EVIDENCE"],
+    ],
+  );
+  assert.ok(abstained.findings.every((finding) => finding.evidence.length === 3));
 
   const reviewsResponse = await app.inject({
     method: "POST",
@@ -134,7 +141,7 @@ test("unreviewed facts abstain, reviewed facts violate, and a 70s revision clear
   });
   assert.equal(reviewedSnapshotResponse.statusCode, 201, reviewedSnapshotResponse.body);
   const reviewedSnapshot = reviewedSnapshotResponse.json() as ReviewSnapshot;
-  assert.equal(reviewedSnapshot.reviewed_fact_ids.length, 5);
+  assert.equal(reviewedSnapshot.reviewed_fact_ids.length, 20);
   assert.match(reviewedSnapshot.fact_snapshot_digest, /^[a-f0-9]{64}$/);
 
   const violationResponse = await app.inject({
@@ -144,18 +151,23 @@ test("unreviewed facts abstain, reviewed facts violate, and a 70s revision clear
   });
   assert.equal(violationResponse.statusCode, 200, violationResponse.body);
   const violation = violationResponse.json() as WorkspaceSnapshot;
-  assert.equal(violation.findings[0]?.verdict, "VIOLATION");
-  assert.deepEqual(violation.findings[0]?.calculation, {
+  const quickViolation = violation.findings.find((finding) => finding.rule_id === "VR-01");
+  assert.equal(quickViolation?.verdict, "VIOLATION");
+  assert.deepEqual(quickViolation?.calculation, {
     available_min_ms: 58000,
     available_max_ms: 62000,
     required_min_ms: 66000,
     required_max_ms: 68000,
   });
   assert.deepEqual(
-    violation.findings[0]?.evidence.map((evidence) => evidence.role),
+    quickViolation?.evidence.map((evidence) => evidence.role),
     ["SCRIPT", "MASTER_CUE", "STAGE_SPEC"],
   );
-  assert.ok(violation.findings[0]?.evidence.every((evidence) => evidence.review_status === "REVIEWED"));
+  assert.ok(quickViolation?.evidence.every((evidence) => evidence.review_status === "REVIEWED"));
+  assert.equal(violation.findings.find((finding) => finding.rule_id === "VR-02")?.verdict, "VIOLATION");
+  assert.equal(violation.findings.find((finding) => finding.rule_id === "VR-03")?.verdict, "REVIEW");
+  assert.equal(violation.event_graph.events.length, 8);
+  assert.equal(violation.events.length, 8);
 
   const minimumChangeFact = queue.items.find(
     (fact) => fact.fact_type === "MINIMUM_CHANGE_TIME",
@@ -179,7 +191,7 @@ test("unreviewed facts abstain, reviewed facts violate, and a 70s revision clear
   assert.equal(frozenSnapshotResponse.statusCode, 200, frozenSnapshotResponse.body);
   const frozenSnapshot = frozenSnapshotResponse.json() as WorkspaceSnapshot;
   assert.equal(frozenSnapshot.verification.result_hash, violation.verification.result_hash);
-  assert.equal(frozenSnapshot.findings[0]?.verdict, "VIOLATION");
+  assert.equal(frozenSnapshot.findings.find((finding) => finding.rule_id === "VR-01")?.verdict, "VIOLATION");
 
   const rejectedSnapshotResponse = await app.inject({
     method: "POST",
@@ -198,7 +210,9 @@ test("unreviewed facts abstain, reviewed facts violate, and a 70s revision clear
   });
   assert.equal(insufficientResponse.statusCode, 200, insufficientResponse.body);
   assert.equal(
-    (insufficientResponse.json() as WorkspaceSnapshot).findings[0]?.verdict,
+    (insufficientResponse.json() as WorkspaceSnapshot).findings.find(
+      (finding) => finding.rule_id === "VR-01",
+    )?.verdict,
     "INSUFFICIENT_EVIDENCE",
   );
 
@@ -257,7 +271,9 @@ test("unreviewed facts abstain, reviewed facts violate, and a 70s revision clear
   });
   assert.equal(consistentResponse.statusCode, 200, consistentResponse.body);
   const consistent = consistentResponse.json() as WorkspaceSnapshot;
-  assert.equal(consistent.findings.length, 0);
+  assert.equal(consistent.findings.some((finding) => finding.rule_id === "VR-01"), false);
+  assert.equal(consistent.findings.find((finding) => finding.rule_id === "VR-02")?.verdict, "VIOLATION");
+  assert.equal(consistent.findings.find((finding) => finding.rule_id === "VR-03")?.verdict, "REVIEW");
   assert.equal(consistent.events.find((event) => event.event_id === "E3")?.aggregate, "CONSISTENT");
   assert.equal(consistent.original_master_cue_sha256, originalHash);
   assert.notEqual(consistent.cue_revision_id, violation.cue_revision_id);
