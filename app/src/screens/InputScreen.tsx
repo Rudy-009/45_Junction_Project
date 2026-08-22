@@ -4,6 +4,7 @@ import {
   Check,
   FileSpreadsheet,
   FileText,
+  Info,
   LoaderCircle,
   Plus,
   UploadCloud,
@@ -14,7 +15,13 @@ import {
   StandbyApiError,
   type SourceOrigin,
 } from '@/lib/standby-api';
+import { FactReviewPanel, type FactReviewCommand } from '@/components/domain';
+import { useStandbyWorkspaceStore } from '@/store';
+import type { FactCandidate } from '@/types/standby';
+import { authConfigured, getStandbyAccessToken, supabase } from '@/lib/auth';
+import { useI18n, type Locale } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
+import { useNavigate } from '@tanstack/react-router';
 
 const MAX_SOURCE_BYTES = 50 * 1024 * 1024;
 const SOURCE_ORIGIN: SourceOrigin = 'USER_PROVIDED';
@@ -29,7 +36,7 @@ const ZONES = [
 
 type SourceKind = 'SCRIPT' | 'MASTER_CUE';
 type Crossover = 'UNKNOWN' | 'AVAILABLE' | 'UNAVAILABLE';
-type SubmitPhase = 'IDLE' | 'UPLOADING' | 'EXTRACTING' | 'SUCCEEDED' | 'FAILED';
+type SubmitPhase = 'IDLE' | 'UPLOADING' | 'EXTRACTING' | 'REVIEW' | 'VERIFYING' | 'SUCCEEDED' | 'FAILED';
 
 type SelectedSource = {
   file: File;
@@ -39,6 +46,8 @@ type SelectedSource = {
 
 type RouteDraft = {
   id: string;
+  routeId: string;
+  capacity: string;
   from: string;
   to: string;
   minSeconds: string;
@@ -54,29 +63,32 @@ type EntityDraft = {
 
 const SOURCE_CONFIG: Record<SourceKind, {
   label: string;
-  helper: string;
   accept: string;
   extensions: string[];
 }> = {
   SCRIPT: {
     label: 'SCRIPT',
-    helper: '대사·지문·등퇴장 위치가 담긴 원 대본',
     accept: '.pdf,.docx',
     extensions: ['pdf', 'docx'],
   },
   MASTER_CUE: {
     label: 'MASTER CUE',
-    helper: '사람이 통합하고 승인한 마스터 큐시트',
     accept: '.xlsx,.pdf',
     extensions: ['xlsx', 'pdf'],
   },
 };
 
-function newRoute(): RouteDraft {
+function newRoute(
+  from = 'STAGE_LEFT_WING',
+  to = 'STAGE_LEFT_CHANGE',
+  routeId = '',
+): RouteDraft {
   return {
     id: crypto.randomUUID(),
-    from: 'STAGE_LEFT_WING',
-    to: 'STAGE_LEFT_CHANGE',
+    routeId,
+    capacity: '1',
+    from,
+    to,
     minSeconds: '',
     maxSeconds: '',
   };
@@ -103,40 +115,69 @@ async function sha256(bytes: BufferSource) {
   return bytesToHex(await crypto.subtle.digest('SHA-256', bytes));
 }
 
-async function inspectSourceFile(kind: SourceKind, file: File): Promise<SelectedSource> {
+async function inspectSourceFile(kind: SourceKind, file: File, locale: Locale): Promise<SelectedSource> {
   const config = SOURCE_CONFIG[kind];
   const extension = extensionOf(file.name);
 
   if (!config.extensions.includes(extension)) {
-    throw new Error(`${config.accept.replaceAll(',', ', ')} 형식만 사용할 수 있습니다.`);
+    throw new Error(locale === 'ko'
+      ? `${config.accept.replaceAll(',', ', ')} 형식만 사용할 수 있습니다.`
+      : `Only ${config.accept.replaceAll(',', ', ')} files are supported.`);
   }
-  if (file.size === 0) throw new Error('빈 파일은 사용할 수 없습니다.');
-  if (file.size > MAX_SOURCE_BYTES) throw new Error('파일은 50MB 이하여야 합니다.');
+  if (file.size === 0) throw new Error(locale === 'ko' ? '빈 파일은 사용할 수 없습니다.' : 'Empty files are not supported.');
+  if (file.size > MAX_SOURCE_BYTES) throw new Error(locale === 'ko' ? '파일은 50MB 이하여야 합니다.' : 'Files must be 50MB or smaller.');
 
   const bytes = await file.arrayBuffer();
   const signature = new Uint8Array(bytes.slice(0, 5));
   const isPdf = String.fromCharCode(...signature) === '%PDF-';
   const isZip = signature[0] === 0x50 && signature[1] === 0x4b;
 
-  if (extension === 'pdf' && !isPdf) throw new Error('확장자와 PDF 파일 서명이 일치하지 않습니다.');
+  if (extension === 'pdf' && !isPdf) throw new Error(locale === 'ko' ? '확장자와 PDF 파일 서명이 일치하지 않습니다.' : 'The extension does not match the PDF file signature.');
   if ((extension === 'docx' || extension === 'xlsx') && !isZip) {
-    throw new Error('확장자와 Office 파일 서명이 일치하지 않습니다.');
+    throw new Error(locale === 'ko' ? '확장자와 Office 파일 서명이 일치하지 않습니다.' : 'The extension does not match the Office file signature.');
   }
 
   return { file, sha256: await sha256(bytes), origin: SOURCE_ORIGIN };
 }
 
 export function InputScreen() {
+  const { locale, t } = useI18n();
+  const navigate = useNavigate();
+  const setWorkspace = useStandbyWorkspaceStore((state) => state.setWorkspace);
+  const clearWorkspace = useStandbyWorkspaceStore((state) => state.clear);
   const [script, setScript] = useState<SelectedSource | null>(null);
   const [masterCue, setMasterCue] = useState<SelectedSource | null>(null);
   const [sourceErrors, setSourceErrors] = useState<Partial<Record<SourceKind, string>>>({});
   const [crossover, setCrossover] = useState<Crossover>('UNKNOWN');
   const [minimumChangeSeconds, setMinimumChangeSeconds] = useState('60');
-  const [routes, setRoutes] = useState<RouteDraft[]>([newRoute()]);
+  const [routes, setRoutes] = useState<RouteDraft[]>([
+    newRoute('STAGE_LEFT_WING', 'STAGE_LEFT_CHANGE', 'ROUTE_TO_CHANGE'),
+    newRoute('STAGE_LEFT_CHANGE', 'STAGE', 'ROUTE_TO_ENTRY'),
+  ]);
   const [entities, setEntities] = useState<EntityDraft[]>([newEntity()]);
   const [stageHash, setStageHash] = useState('계산 중');
   const [phase, setPhase] = useState<SubmitPhase>('IDLE');
   const [message, setMessage] = useState<string | null>(null);
+  const [caseId, setCaseId] = useState<string | null>(null);
+  const [facts, setFacts] = useState<FactCandidate[]>([]);
+  const [authEmail, setAuthEmail] = useState<string | null>(import.meta.env.DEV ? 'local-dev' : null);
+  const [loginEmail, setLoginEmail] = useState('');
+  const [authMessage, setAuthMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!supabase) return;
+    let active = true;
+    void supabase.auth.getSession().then(({ data }) => {
+      if (active) setAuthEmail(data.session?.user.email ?? null);
+    });
+    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+      setAuthEmail(session?.user.email ?? null);
+    });
+    return () => {
+      active = false;
+      data.subscription.unsubscribe();
+    };
+  }, []);
 
   const stageSpec = useMemo(() => ({
     contract_version: 'standby.stage-spec.v1',
@@ -147,6 +188,10 @@ export function InputScreen() {
       to: route.to,
       min_ms: Math.round(Number(route.minSeconds) * 1000),
       max_ms: Math.round(Number(route.maxSeconds) * 1000),
+    })),
+    route_capacities: routes.map((route) => ({
+      route_id: route.routeId.trim(),
+      capacity: Number(route.capacity),
     })),
     minimum_change_ms: Math.round(Number(minimumChangeSeconds) * 1000),
     initial_state: entities.map((entity) => ({
@@ -164,23 +209,30 @@ export function InputScreen() {
     const errors: string[] = [];
     const changeSeconds = Number(minimumChangeSeconds);
     if (!Number.isFinite(changeSeconds) || changeSeconds < 0) {
-      errors.push('최소 환복 시간은 0 이상의 숫자여야 합니다.');
+      errors.push(t('input.error.changeTime'));
     }
-    if (routes.length === 0) errors.push('이동 경로가 최소 1개 필요합니다.');
+    if (routes.length < 2) errors.push(t('input.error.routes'));
+    const routeIds = routes.map((route) => route.routeId.trim());
+    if (routeIds.some((routeId) => !routeId)) errors.push(t('input.error.routeId'));
+    if (new Set(routeIds).size !== routeIds.length) errors.push(t('input.error.routeIdDuplicate'));
     for (const route of routes) {
       const min = Number(route.minSeconds);
       const max = Number(route.maxSeconds);
-      if (route.from === route.to) errors.push('이동 경로의 출발과 도착은 달라야 합니다.');
+      const capacity = Number(route.capacity);
+      if (route.from === route.to) errors.push(t('input.error.routeSame'));
       if (!Number.isFinite(min) || !Number.isFinite(max) || min < 0 || max < min) {
-        errors.push('이동 시간은 0 이상이며 최소 시간이 최대 시간보다 작아야 합니다.');
+        errors.push(t('input.error.routeTime'));
+      }
+      if (!Number.isInteger(capacity) || capacity < 1) {
+        errors.push(t('input.error.capacity'));
       }
     }
-    if (entities.length === 0) errors.push('초기 배치가 최소 1개 필요합니다.');
+    if (entities.length === 0) errors.push(t('input.error.entity'));
     const entityIds = entities.map((entity) => entity.entityId.trim());
-    if (entityIds.some((id) => !id)) errors.push('모든 초기 배치에 엔티티 ID가 필요합니다.');
-    if (new Set(entityIds).size !== entityIds.length) errors.push('엔티티 ID는 중복될 수 없습니다.');
+    if (entityIds.some((id) => !id)) errors.push(t('input.error.entityId'));
+    if (new Set(entityIds).size !== entityIds.length) errors.push(t('input.error.entityDuplicate'));
     return [...new Set(errors)];
-  }, [entities, minimumChangeSeconds, routes]);
+  }, [entities, locale, minimumChangeSeconds, routes]);
 
   useEffect(() => {
     let active = true;
@@ -193,9 +245,12 @@ export function InputScreen() {
   const selectSource = async (kind: SourceKind, file: File) => {
     setPhase('IDLE');
     setMessage(null);
+    setCaseId(null);
+    setFacts([]);
+    clearWorkspace();
     setSourceErrors((current) => ({ ...current, [kind]: undefined }));
     try {
-      const selected = await inspectSourceFile(kind, file);
+      const selected = await inspectSourceFile(kind, file, locale);
       if (kind === 'SCRIPT') setScript(selected);
       else setMasterCue(selected);
     } catch (error) {
@@ -203,33 +258,42 @@ export function InputScreen() {
       else setMasterCue(null);
       setSourceErrors((current) => ({
         ...current,
-        [kind]: error instanceof Error ? error.message : '파일을 확인할 수 없습니다.',
+        [kind]: error instanceof Error ? error.message : locale === 'ko' ? '파일을 확인할 수 없습니다.' : 'Could not inspect the file.',
       }));
     }
   };
 
   const ready = Boolean(script && masterCue && stageErrors.length === 0);
+  const authenticated = Boolean(authEmail);
+
+  const apiClient = () => {
+    const baseUrl = import.meta.env.VITE_STANDBY_API_BASE_URL as string | undefined;
+    return baseUrl && (import.meta.env.DEV || authConfigured)
+      ? new StandbyApi({ baseUrl, getAccessToken: getStandbyAccessToken })
+      : null;
+  };
 
   const startExtraction = async () => {
     if (!script || !masterCue || stageErrors.length > 0) return;
 
-    const baseUrl = import.meta.env.VITE_STANDBY_API_BASE_URL as string | undefined;
-    const localToken = import.meta.env.DEV
-      ? (import.meta.env.VITE_STANDBY_API_TOKEN as string | undefined) ?? 'local-dev-token'
-      : undefined;
+    if (!authenticated) {
+      setPhase('FAILED');
+      setMessage(t('input.error.login'));
+      return;
+    }
 
-    if (!baseUrl || !localToken) {
+    const api = apiClient();
+    if (!api) {
       setPhase('FAILED');
       setMessage(
-        '세 입력은 준비됐지만 Production 인증 백엔드가 아직 연결되지 않았습니다. API key를 브라우저에 넣지 않고 서버 연결 후 추출해야 합니다.',
+        t('input.error.api'),
       );
       return;
     }
 
-    const api = new StandbyApi({ baseUrl, getAccessToken: () => localToken });
     try {
       setPhase('UPLOADING');
-      setMessage('Case를 만들고 세 입력을 업로드하고 있습니다.');
+      setMessage(t('input.status.upload'));
       const createdCase = await api.createCase(`STANDBY ${new Date().toLocaleString('ko-KR')}`);
       await Promise.all([
         api.uploadSourceFile(createdCase.case_id, 'SCRIPT', script.file, script.origin),
@@ -238,19 +302,48 @@ export function InputScreen() {
       ]);
 
       setPhase('EXTRACTING');
-      setMessage('Upstage가 입력에서 fact 후보를 추출하고 있습니다. 판정에는 아직 반영되지 않습니다.');
+      setMessage(t('input.status.extract'));
       const operation = await api.startExtraction(createdCase.case_id, 'UPSTAGE_AGENT');
       await api.waitForOperation(operation.operation_id);
       const queue = await api.getReviewQueue(createdCase.case_id);
 
-      setPhase('SUCCEEDED');
-      setMessage(`${queue.items.length}개의 fact 후보를 추출했습니다. 모두 UNREVIEWED 상태이며 사람의 승인이 필요합니다.`);
+      setCaseId(createdCase.case_id);
+      setFacts(queue.items);
+      setPhase('REVIEW');
+      setMessage(t('input.status.review', { count: queue.items.length }));
     } catch (error) {
       setPhase('FAILED');
       setMessage(
         error instanceof StandbyApiError
           ? `${error.code}: ${error.message}`
-          : error instanceof Error ? error.message : '추출을 시작할 수 없습니다.',
+          : error instanceof Error ? error.message : t('input.error.extract'),
+      );
+    }
+  };
+
+  const completeReview = async (reviews: FactReviewCommand[]) => {
+    const api = apiClient();
+    if (!api || !caseId) {
+      setPhase('FAILED');
+      setMessage(t('input.error.noCase'));
+      return;
+    }
+    try {
+      setPhase('VERIFYING');
+      setMessage(t('input.status.verify'));
+      if (reviews.length > 0) await api.reviewFacts(caseId, reviews);
+      await api.freezeReviewSnapshot(caseId);
+      const workspace = await api.getWorkspace(caseId);
+      setWorkspace(caseId, workspace);
+      setPhase('SUCCEEDED');
+      setMessage(t('input.status.done'));
+      await navigate({ to: '/workspace' });
+    } catch (error) {
+      setPhase('FAILED');
+      setMessage(
+        error instanceof StandbyApiError
+          ? `${error.code}: ${error.message}`
+          : error instanceof Error ? error.message : t('input.error.review'),
       );
     }
   };
@@ -259,20 +352,30 @@ export function InputScreen() {
     <main className="min-h-screen bg-background px-4 py-8 text-foreground lg:px-8">
       <div className="mx-auto max-w-[1500px]">
         <header className="border-b border-border pb-5">
-          <p className="mono text-[11px] tracking-[0.18em] text-muted-foreground">STANDBY / SOURCE INTAKE</p>
-          <div className="mt-2 flex flex-col justify-between gap-3 lg:flex-row lg:items-end">
-            <div>
-              <h1 className="text-2xl font-medium">공연 검증 입력</h1>
-              <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-                대본·사람이 통합한 마스터 큐시트·무대 사양을 한 공연 순서로 대조합니다.
-                AI는 fact 후보만 만들고, 검증 판정은 승인된 사실과 결정론적 규칙으로 수행합니다.
-              </p>
-            </div>
-            <div className="mono text-[11px] text-muted-foreground">
-              3 SOURCES · HUMAN AUTHORITY · EVIDENCE ALWAYS
-            </div>
-          </div>
+          <h1 className="text-2xl font-medium">{t('input.title')}</h1>
         </header>
+
+        {!import.meta.env.DEV && (
+          <AuthPanel
+            configured={authConfigured}
+            email={authEmail}
+            loginEmail={loginEmail}
+            message={authMessage}
+            onEmail={setLoginEmail}
+            onSend={async () => {
+              if (!supabase || !loginEmail.trim()) return;
+              const { error } = await supabase.auth.signInWithOtp({
+                email: loginEmail.trim(),
+                options: { emailRedirectTo: window.location.origin },
+              });
+              setAuthMessage(error ? error.message : t('input.linkSent'));
+            }}
+            onSignOut={async () => {
+              await supabase?.auth.signOut();
+              setAuthMessage(t('input.signedOut'));
+            }}
+          />
+        )}
 
         <section className="mt-6 grid items-start gap-4 lg:grid-cols-3">
           <SourceCard
@@ -301,32 +404,83 @@ export function InputScreen() {
           />
         </section>
 
-        <footer className="mt-5 flex flex-col gap-3 border border-border bg-surface p-4 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <p className="text-sm font-medium">리뷰 게이트</p>
-            <p className="mt-1 text-xs leading-5 text-muted-foreground">
-              여기서 REVIEWED는 입력 역할과 파일을 사람이 확인했다는 뜻입니다. 추출된 fact는 별도로 승인될 때까지 UNREVIEWED입니다.
-            </p>
-          </div>
+        <footer className="mt-5 flex justify-end border border-border bg-surface p-4">
           <button
             type="button"
-            disabled={!ready || phase === 'UPLOADING' || phase === 'EXTRACTING'}
+            disabled={!ready || !authenticated || phase === 'UPLOADING' || phase === 'EXTRACTING' || phase === 'REVIEW' || phase === 'VERIFYING'}
             onClick={() => void startExtraction()}
             className={cn(
               'flex min-w-52 items-center justify-center gap-2 border px-5 py-3 text-sm font-medium',
-              ready && phase !== 'UPLOADING' && phase !== 'EXTRACTING'
+              ready && authenticated && phase !== 'UPLOADING' && phase !== 'EXTRACTING' && phase !== 'REVIEW' && phase !== 'VERIFYING'
                 ? 'border-foreground bg-foreground text-background hover:bg-muted-foreground'
                 : 'cursor-not-allowed border-border bg-muted text-muted-foreground',
             )}
           >
             {(phase === 'UPLOADING' || phase === 'EXTRACTING') && <LoaderCircle className="h-4 w-4 animate-spin" />}
-            Upstage Fact 추출 시작
+            {t('input.start')}
           </button>
         </footer>
 
         {message && <ExtractionStatus phase={phase} message={message} />}
+
+        {facts.length > 0 && (phase === 'REVIEW' || phase === 'VERIFYING' || phase === 'FAILED') && (
+          <FactReviewPanel
+            key={caseId}
+            facts={facts}
+            busy={phase === 'VERIFYING'}
+            onSubmit={(reviews) => void completeReview(reviews)}
+          />
+        )}
       </div>
     </main>
+  );
+}
+
+function AuthPanel({
+  configured,
+  email,
+  loginEmail,
+  message,
+  onEmail,
+  onSend,
+  onSignOut,
+}: {
+  configured: boolean;
+  email: string | null;
+  loginEmail: string;
+  message: string | null;
+  onEmail: (value: string) => void;
+  onSend: () => Promise<void>;
+  onSignOut: () => Promise<void>;
+}) {
+  const { t } = useI18n();
+  if (!configured) {
+    return (
+      <section className="mt-5 border border-insufficient bg-insufficient/10 p-4">
+        <p className="text-sm font-medium">{t('input.authMissing')}</p>
+        <p className="mt-1 text-xs leading-5 text-muted-foreground">
+          {t('input.authMissingHelp')}
+        </p>
+      </section>
+    );
+  }
+  if (email) {
+    return (
+      <section className="mt-5 flex items-center justify-between border border-consistent bg-consistent-bg p-4">
+        <div><p className="text-sm font-medium">{t('input.authenticated')}</p><p className="mono mt-1 text-[10px] text-muted-foreground">{email}</p></div>
+        <button type="button" onClick={() => void onSignOut()} className="border border-border px-3 py-2 text-xs">{t('input.signOut')}</button>
+      </section>
+    );
+  }
+  return (
+    <section className="mt-5 border border-border bg-surface p-4">
+      <p className="text-sm font-medium">{t('input.signIn')}</p>
+      <div className="mt-3 flex gap-2">
+        <input type="email" value={loginEmail} onChange={(event) => onEmail(event.target.value)} placeholder="team@example.com" className="min-w-0 flex-1 border border-border bg-background px-3 py-2 text-sm" />
+        <button type="button" disabled={!loginEmail.trim()} onClick={() => void onSend()} className="border border-foreground bg-foreground px-4 py-2 text-sm text-background disabled:border-border disabled:bg-muted disabled:text-muted-foreground">{t('input.sendLink')}</button>
+      </div>
+      {message && <p className="mt-2 text-xs text-muted-foreground">{message}</p>}
+    </section>
   );
 }
 
@@ -341,10 +495,13 @@ function SourceCard({
   error?: string;
   onFile: (file: File) => void;
 }) {
+  const { t } = useI18n();
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const config = SOURCE_CONFIG[kind];
   const Icon = kind === 'SCRIPT' ? FileText : FileSpreadsheet;
+  const helper = kind === 'SCRIPT' ? t('input.script.helper') : t('input.cue.helper');
 
   return (
     <article className="border border-border bg-surface">
@@ -353,7 +510,7 @@ function SourceCard({
           <div className="border border-border p-2"><Icon className="h-4 w-4" /></div>
           <div>
             <p className="mono text-xs font-semibold tracking-[0.1em]">{config.label}</p>
-            <p className="mt-1 text-xs leading-5 text-muted-foreground">{config.helper}</p>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">{helper}</p>
           </div>
         </div>
         <AuthorityToken reviewed={Boolean(source)} />
@@ -376,7 +533,7 @@ function SourceCard({
         }}
       >
         <UploadCloud className="h-6 w-6 text-muted-foreground" />
-        <span className="mt-3 text-sm font-medium">{source ? '다른 파일 선택' : '파일 선택 또는 드롭'}</span>
+        <span className="mt-3 text-sm font-medium">{source ? t('input.replace') : t('input.choose')}</span>
         <span className="mono mt-1 text-[11px] text-muted-foreground">{config.accept.replaceAll(',', ' · ')} / MAX 50MB</span>
       </button>
       <input
@@ -397,15 +554,20 @@ function SourceCard({
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />{error}
           </div>
         ) : source ? (
-          <dl className="space-y-2 text-xs">
-            <SourceRow label="FILE" value={source.file.name} />
-            <SourceRow label="SIZE" value={`${(source.file.size / 1024 / 1024).toFixed(2)} MB`} />
-            <SourceRow label="ORIGIN" value={source.origin} />
-            <SourceRow label="SHA-256" value={`${source.sha256.slice(0, 12)}…`} mono />
-          </dl>
-        ) : (
-          <p className="text-xs leading-5 text-muted-foreground">선택 전에는 파일명이나 검증 결과를 가정하지 않습니다.</p>
-        )}
+          <div className="space-y-2 text-xs">
+            <dl className="space-y-2">
+              <SourceRow label={t('input.file')} value={source.file.name} />
+              <SourceRow label={t('input.size')} value={`${(source.file.size / 1024 / 1024).toFixed(2)} MB`} />
+            </dl>
+            <button type="button" aria-expanded={detailsOpen} onClick={() => setDetailsOpen((open) => !open)} className="ml-auto flex items-center gap-1 text-[10px] text-muted-foreground"><Info size={12} />{t('input.details')}</button>
+            {detailsOpen && (
+              <dl className="space-y-2 border-t border-border pt-2">
+                <SourceRow label={t('input.origin')} value={source.origin} />
+                <SourceRow label="SHA-256" value={`${source.sha256.slice(0, 12)}…`} mono />
+              </dl>
+            )}
+          </div>
+        ) : null}
       </div>
     </article>
   );
@@ -434,7 +596,9 @@ function StageSpecCard({
   onRoutes: (value: RouteDraft[]) => void;
   onEntities: (value: EntityDraft[]) => void;
 }) {
+  const { t } = useI18n();
   const valid = errors.length === 0;
+  const [detailsOpen, setDetailsOpen] = useState(false);
 
   return (
     <article className="border border-border bg-surface">
@@ -443,7 +607,7 @@ function StageSpecCard({
           <div className="border border-border p-2"><FileSpreadsheet className="h-4 w-4" /></div>
           <div>
             <p className="mono text-xs font-semibold tracking-[0.1em]">STAGE SPEC</p>
-            <p className="mt-1 text-xs leading-5 text-muted-foreground">윙·통로·이동시간·초기 배치를 직접 확인</p>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">{t('input.stage.helper')}</p>
           </div>
         </div>
         <AuthorityToken reviewed={valid} />
@@ -451,34 +615,56 @@ function StageSpecCard({
 
       <div className="space-y-5 p-4">
         <div className="grid grid-cols-2 gap-3">
-          <Field label="백스테이지 통로">
+          <Field label={t('input.crossover')}>
             <select className="w-full border border-border bg-background px-2 py-2 text-xs" value={crossover} onChange={(event) => onCrossover(event.target.value as Crossover)}>
-              <option value="UNKNOWN">확인 필요</option>
-              <option value="AVAILABLE">있음</option>
-              <option value="UNAVAILABLE">없음</option>
+              <option value="UNKNOWN">{t('input.crossover.unknown')}</option>
+              <option value="AVAILABLE">{t('input.crossover.available')}</option>
+              <option value="UNAVAILABLE">{t('input.crossover.unavailable')}</option>
             </select>
           </Field>
-          <Field label="최소 환복 시간 (초)">
+          <Field label={t('input.minimumChange')}>
             <input className="w-full border border-border bg-background px-2 py-2 text-xs" type="number" min="0" value={minimumChangeSeconds} onChange={(event) => onMinimumChange(event.target.value)} />
           </Field>
         </div>
 
         <div>
           <div className="mb-2 flex items-center justify-between">
-            <p className="mono text-[11px] text-muted-foreground">ROUTE TIMES</p>
-            <button type="button" className="flex items-center gap-1 text-[11px]" onClick={() => onRoutes([...routes, newRoute()])}><Plus className="h-3 w-3" />경로</button>
+            <p className="text-[11px] text-muted-foreground">{t('input.routeTimes')}</p>
+            <button type="button" className="flex items-center gap-1 text-[11px]" onClick={() => onRoutes([...routes, newRoute()])}><Plus className="h-3 w-3" />{t('input.addRoute')}</button>
           </div>
           <div className="space-y-2">
             {routes.map((route) => (
               <div key={route.id} className="border border-border bg-background p-2">
+                <div className="mb-2 grid grid-cols-[1fr_100px] gap-2">
+                  <Field label="ROUTE ID">
+                    <input
+                      aria-label="경로 ID"
+                      placeholder="HASU_CROSSOVER"
+                      className="w-full border border-border bg-surface px-2 py-1.5 text-xs"
+                      value={route.routeId}
+                      onChange={(event) => onRoutes(routes.map((item) => item.id === route.id ? { ...item, routeId: event.target.value } : item))}
+                    />
+                  </Field>
+                  <Field label="CAPACITY">
+                    <input
+                      aria-label="경로 수용 인원"
+                      className="w-full border border-border bg-surface px-2 py-1.5 text-xs"
+                      type="number"
+                      min="1"
+                      step="1"
+                      value={route.capacity}
+                      onChange={(event) => onRoutes(routes.map((item) => item.id === route.id ? { ...item, capacity: event.target.value } : item))}
+                    />
+                  </Field>
+                </div>
                 <div className="grid grid-cols-[1fr_1fr_auto] gap-2">
                   <ZoneSelect value={route.from} onChange={(from) => onRoutes(routes.map((item) => item.id === route.id ? { ...item, from } : item))} />
                   <ZoneSelect value={route.to} onChange={(to) => onRoutes(routes.map((item) => item.id === route.id ? { ...item, to } : item))} />
                   <button type="button" aria-label="경로 삭제" onClick={() => onRoutes(routes.filter((item) => item.id !== route.id))}><X className="h-4 w-4 text-muted-foreground" /></button>
                 </div>
                 <div className="mt-2 grid grid-cols-2 gap-2">
-                  <TimeInput label="MIN SEC" value={route.minSeconds} onChange={(minSeconds) => onRoutes(routes.map((item) => item.id === route.id ? { ...item, minSeconds } : item))} />
-                  <TimeInput label="MAX SEC" value={route.maxSeconds} onChange={(maxSeconds) => onRoutes(routes.map((item) => item.id === route.id ? { ...item, maxSeconds } : item))} />
+                  <TimeInput label={t('input.min')} value={route.minSeconds} onChange={(minSeconds) => onRoutes(routes.map((item) => item.id === route.id ? { ...item, minSeconds } : item))} />
+                  <TimeInput label={t('input.max')} value={route.maxSeconds} onChange={(maxSeconds) => onRoutes(routes.map((item) => item.id === route.id ? { ...item, maxSeconds } : item))} />
                 </div>
               </div>
             ))}
@@ -487,15 +673,15 @@ function StageSpecCard({
 
         <div>
           <div className="mb-2 flex items-center justify-between">
-            <p className="mono text-[11px] text-muted-foreground">INITIAL STATE</p>
-            <button type="button" className="flex items-center gap-1 text-[11px]" onClick={() => onEntities([...entities, newEntity()])}><Plus className="h-3 w-3" />배치</button>
+            <p className="text-[11px] text-muted-foreground">{t('input.initialState')}</p>
+            <button type="button" className="flex items-center gap-1 text-[11px]" onClick={() => onEntities([...entities, newEntity()])}><Plus className="h-3 w-3" />{t('input.addEntity')}</button>
           </div>
           <div className="space-y-2">
             {entities.map((entity) => (
               <div key={entity.id} className="grid grid-cols-[1fr_90px_1fr_auto] gap-2 border border-border bg-background p-2">
-                <input aria-label="엔티티 ID" placeholder="인물/소품 ID" className="min-w-0 border border-border bg-surface px-2 py-2 text-xs" value={entity.entityId} onChange={(event) => onEntities(entities.map((item) => item.id === entity.id ? { ...item, entityId: event.target.value } : item))} />
+                <input aria-label="Entity ID" placeholder={t('input.entityPlaceholder')} className="min-w-0 border border-border bg-surface px-2 py-2 text-xs" value={entity.entityId} onChange={(event) => onEntities(entities.map((item) => item.id === entity.id ? { ...item, entityId: event.target.value } : item))} />
                 <select aria-label="엔티티 종류" className="border border-border bg-surface px-2 text-xs" value={entity.kind} onChange={(event) => onEntities(entities.map((item) => item.id === entity.id ? { ...item, kind: event.target.value as EntityDraft['kind'] } : item))}>
-                  <option value="PERSON">사람</option><option value="PROP">소품</option>
+                  <option value="PERSON">{t('input.person')}</option><option value="PROP">{t('input.prop')}</option>
                 </select>
                 <ZoneSelect value={entity.zone} onChange={(zone) => onEntities(entities.map((item) => item.id === entity.id ? { ...item, zone } : item))} />
                 <button type="button" aria-label="초기 배치 삭제" onClick={() => onEntities(entities.filter((item) => item.id !== entity.id))}><X className="h-4 w-4 text-muted-foreground" /></button>
@@ -510,10 +696,15 @@ function StageSpecCard({
           </div>
         )}
 
-        <dl className="border-t border-border pt-3 text-xs">
-          <SourceRow label="ORIGIN" value="USER_PROVIDED" />
-          <SourceRow label="SHA-256" value={hash === '계산 중' ? hash : `${hash.slice(0, 12)}…`} mono />
-        </dl>
+        <div className="border-t border-border pt-3 text-xs">
+          <button type="button" aria-expanded={detailsOpen} onClick={() => setDetailsOpen((open) => !open)} className="ml-auto flex items-center gap-1 text-[10px] text-muted-foreground"><Info size={12} />{t('input.details')}</button>
+          {detailsOpen && (
+            <dl className="mt-2 space-y-2">
+              <SourceRow label={t('input.origin')} value="USER_PROVIDED" />
+              <SourceRow label="SHA-256" value={hash === '계산 중' ? hash : `${hash.slice(0, 12)}…`} mono />
+            </dl>
+          )}
+        </div>
       </div>
     </article>
   );
@@ -541,9 +732,16 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 }
 
 function ZoneSelect({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const { locale } = useI18n();
   return (
     <select aria-label="무대 구역" className="min-w-0 border border-border bg-surface px-2 py-2 text-xs" value={value} onChange={(event) => onChange(event.target.value)}>
-      {ZONES.map(([zone, label]) => <option key={zone} value={zone}>{label}</option>)}
+      {ZONES.map(([zone, label]) => <option key={zone} value={zone}>{locale === 'ko' ? label : {
+        STAGE: 'Stage',
+        STAGE_RIGHT_WING: 'Stage Right Wing',
+        STAGE_LEFT_WING: 'Stage Left Wing',
+        STAGE_RIGHT_CHANGE: 'Stage Right Change Area',
+        STAGE_LEFT_CHANGE: 'Stage Left Change Area',
+      }[zone]}</option>)}
     </select>
   );
 }

@@ -1,3 +1,5 @@
+import type { FactCandidate, WorkspaceSnapshot } from '@/types/standby';
+
 export type SourceRole = "SCRIPT" | "MASTER_CUE" | "STAGE_SPEC";
 export type SourceOrigin = "REAL_REFERENCE" | "USER_PROVIDED" | "CONTROLLED_FIXTURE";
 export type ExtractionAdapter = "CONTROLLED_FIXTURE" | "UPSTAGE_AGENT";
@@ -20,19 +22,6 @@ export type ExtractionOperation = {
   result_source: "CONTROLLED_FIXTURE" | "UPSTAGE" | "MIXED" | null;
   resource_ref: { type: "extraction_run"; id: string };
   error: { code: string; message: string } | null;
-};
-
-export type FactCandidate = {
-  fact_id: string;
-  fact_type: string;
-  raw_value: unknown;
-  reviewed_value: unknown | null;
-  source_role: SourceRole;
-  source_id: string;
-  locator: string;
-  quote: string;
-  confidence: "HIGH" | "LOW" | "NOT_PROVIDED";
-  review_status: "UNREVIEWED" | "REVIEWED" | "REJECTED";
 };
 
 type ApiErrorBody = {
@@ -62,7 +51,7 @@ export class StandbyApi {
 
   constructor(private readonly options: StandbyApiOptions) {
     this.baseUrl = options.baseUrl.replace(/\/$/, "");
-    this.fetchImpl = options.fetchImpl ?? fetch;
+    this.fetchImpl = options.fetchImpl ?? globalThis.fetch.bind(globalThis);
   }
 
   createCase(title: string) {
@@ -170,8 +159,8 @@ export class StandbyApi {
     );
   }
 
-  getWorkspace<T = unknown>(caseId: string) {
-    return this.request<T>(`/v1/cases/${caseId}/workspace`);
+  getWorkspace(caseId: string) {
+    return this.request<WorkspaceSnapshot>(`/v1/cases/${caseId}/workspace`);
   }
 
   private async request<T>(
