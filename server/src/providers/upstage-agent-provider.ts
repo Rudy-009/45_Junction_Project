@@ -253,7 +253,6 @@ export class UpstageAgentProvider implements ExtractionProvider {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         model: agentId,
-        include: ["all"],
         input: [{ role: "user", content: [{ type: "input_file", file_id: fileId }] }],
         ...(configId ? { config_id: configId } : {}),
       }),
@@ -263,7 +262,7 @@ export class UpstageAgentProvider implements ExtractionProvider {
   private async pollJob(jobId: string): Promise<JsonObject> {
     const deadline = Date.now() + this.timeoutMs;
     while (Date.now() <= deadline) {
-      const job = await this.upstageFetch(`/v2/responses/${encodeURIComponent(jobId)}?include[]=all`, {
+      const job = await this.upstageFetch(`/v2/responses/${encodeURIComponent(jobId)}`, {
         method: "GET",
       });
       const status = nonEmptyString(job.status, "Upstage job status");
