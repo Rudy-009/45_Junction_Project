@@ -7,10 +7,12 @@ const ALLOWED = {
   SCRIPT: new Map([
     [".pdf", "application/pdf"],
     [".docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"],
+    [".json", "application/json"],
   ]),
   MASTER_CUE: new Map([
     [".xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"],
     [".pdf", "application/pdf"],
+    [".json", "application/json"],
   ]),
 } as const;
 
@@ -33,15 +35,23 @@ export function assertSourceFile(
   }
   const extension = path.extname(filename).toLowerCase();
   const expectedMediaType = ALLOWED[role].get(extension as never);
-  if (!expectedMediaType || expectedMediaType !== mediaType) {
+  if (!expectedMediaType) {
     throw new DomainError(415, "SOURCE_MEDIA_TYPE_INVALID", `${role} file type is not supported.`);
   }
+  if (extension === ".json") {
+    if (mediaType && mediaType !== expectedMediaType && mediaType !== "text/plain") {
+      throw new DomainError(415, "SOURCE_MEDIA_TYPE_INVALID", `${role} file type is not supported.`);
+    }
+  } else if (mediaType !== expectedMediaType) {
+    throw new DomainError(415, "SOURCE_MEDIA_TYPE_INVALID", `${role} file type is not supported.`);
+  }
+
   const isPdf = extension === ".pdf" && Buffer.from(bytes.subarray(0, 5)).toString("ascii") === "%PDF-";
   const isZip =
     (extension === ".docx" || extension === ".xlsx") &&
     bytes[0] === 0x50 &&
     bytes[1] === 0x4b;
-  if (!isPdf && !isZip) {
+  if (!isPdf && !isZip && extension !== ".json") {
     throw new DomainError(422, "SOURCE_SIGNATURE_INVALID", "Source file signature does not match its type.");
   }
 }

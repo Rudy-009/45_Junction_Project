@@ -68,13 +68,13 @@ const SOURCE_CONFIG: Record<SourceKind, {
 }> = {
   SCRIPT: {
     label: 'SCRIPT',
-    accept: '.pdf,.docx',
-    extensions: ['pdf', 'docx'],
+    accept: '.pdf,.docx,.json',
+    extensions: ['pdf', 'docx', 'json'],
   },
   MASTER_CUE: {
     label: 'MASTER CUE',
-    accept: '.xlsx,.pdf',
-    extensions: ['xlsx', 'pdf'],
+    accept: '.xlsx,.pdf,.json',
+    extensions: ['xlsx', 'pdf', 'json'],
   },
 };
 
@@ -131,10 +131,18 @@ async function inspectSourceFile(kind: SourceKind, file: File, locale: Locale): 
   const signature = new Uint8Array(bytes.slice(0, 5));
   const isPdf = String.fromCharCode(...signature) === '%PDF-';
   const isZip = signature[0] === 0x50 && signature[1] === 0x4b;
+  const text = new TextDecoder().decode(bytes);
 
   if (extension === 'pdf' && !isPdf) throw new Error(locale === 'ko' ? '확장자와 PDF 파일 서명이 일치하지 않습니다.' : 'The extension does not match the PDF file signature.');
   if ((extension === 'docx' || extension === 'xlsx') && !isZip) {
     throw new Error(locale === 'ko' ? '확장자와 Office 파일 서명이 일치하지 않습니다.' : 'The extension does not match the Office file signature.');
+  }
+  if (extension === 'json') {
+    try {
+      JSON.parse(text);
+    } catch {
+      throw new Error(locale === 'ko' ? 'JSON 파일 형식이 올바르지 않습니다.' : 'The JSON file format is invalid.');
+    }
   }
 
   return { file, sha256: await sha256(bytes), origin: SOURCE_ORIGIN };
