@@ -11,6 +11,10 @@ import type {
 import { canonicalJson, hashJson, sha256 } from "../lib/hash.js";
 import type { ExtractionProvider, ExtractionProviderResult } from "./extraction-provider.js";
 import type {
+  ScriptProjectionProvider,
+  ScriptProjectionProviderResult,
+} from "./script-projection-provider.js";
+import type {
   ProductionAgentProvider,
   ProductionAgentProviderResult,
 } from "./production-agent-provider.js";
@@ -205,7 +209,11 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-export class UpstageAgentProvider implements ExtractionProvider, ProductionAgentProvider {
+export class UpstageAgentProvider implements
+  ExtractionProvider,
+  ProductionAgentProvider,
+  ScriptProjectionProvider
+{
   private readonly fetchImpl: FetchLike;
   private readonly baseUrl: string;
   private readonly pollIntervalMs: number;
@@ -262,6 +270,15 @@ export class UpstageAgentProvider implements ExtractionProvider, ProductionAgent
         ...(stageRun ? [stageRun] : []),
       ],
     };
+  }
+
+  async projectScript(
+    source: InternalSourceVersion,
+  ): Promise<ScriptProjectionProviderResult> {
+    if (source.role !== "SCRIPT" || source.bytes === null) {
+      throw new DomainError(409, "SOURCE_FORMAT_INVALID", "SCRIPT must be uploaded as a file.");
+    }
+    return this.extractFile("SCRIPT", source);
   }
 
   configFingerprint(role: ProductionAgentRole): string {

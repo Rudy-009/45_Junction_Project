@@ -1,0 +1,97 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://standby.local/contracts/script-projection.v1.schema.json",
+  "title": "STANDBY Upstage script projection",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "projection_id",
+    "authority",
+    "source",
+    "provenance",
+    "segments",
+    "created_at"
+  ],
+  "properties": {
+    "contract_version": { "const": "standby.script-projection.v1" },
+    "projection_id": { "type": "string", "minLength": 1 },
+    "authority": { "const": "NON_AUTHORITATIVE" },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["filename", "media_type", "sha256"],
+      "properties": {
+        "filename": { "type": "string", "minLength": 1, "maxLength": 180 },
+        "media_type": { "type": "string", "minLength": 1 },
+        "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider",
+        "source_role",
+        "origin",
+        "provider_job_id",
+        "agent_id",
+        "config_id",
+        "adapter_version",
+        "raw_response_sha256"
+      ],
+      "properties": {
+        "provider": { "const": "UPSTAGE_AGENT" },
+        "source_role": { "const": "SCRIPT" },
+        "origin": { "const": "USER_PROVIDED" },
+        "provider_job_id": { "type": "string", "minLength": 1 },
+        "agent_id": { "type": "string", "minLength": 1 },
+        "config_id": { "type": ["string", "null"] },
+        "adapter_version": { "type": "string", "minLength": 1 },
+        "raw_response_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      }
+    },
+    "segments": {
+      "type": "array",
+      "maxItems": 10000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "segment_id",
+          "sequence_index",
+          "kind",
+          "text",
+          "speaker",
+          "event_id",
+          "locator",
+          "source_quote",
+          "provenance"
+        ],
+        "properties": {
+          "segment_id": { "type": "string", "minLength": 1 },
+          "sequence_index": { "type": "integer", "minimum": 0 },
+          "kind": { "enum": ["DIALOGUE", "STAGE_DIRECTION"] },
+          "text": { "type": "string", "minLength": 1 },
+          "speaker": { "type": ["string", "null"] },
+          "event_id": { "type": ["string", "null"] },
+          "locator": { "type": "string", "minLength": 1 },
+          "source_quote": { "type": "string", "minLength": 1 },
+          "provenance": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "raw_fact_id",
+              "raw_fact_sha256"
+            ],
+            "properties": {
+              "raw_fact_id": { "type": "string", "minLength": 1 },
+              "raw_fact_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+            }
+          }
+        }
+      }
+    },
+    "created_at": { "type": "string", "format": "date-time" }
+  }
+}

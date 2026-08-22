@@ -34,12 +34,12 @@ UUID 세션으로 case 소유권을 분리한다. 이 값은 사용자 신원을
 | KOR/ENG i18n | **구현** | 헤더 선택 메뉴로 M3 입력·review·workspace·2D 무대 카피를 전환하고 선택을 localStorage에 보존 |
 | UI 카피 정리 | **구현** | 설명형 슬로건·면책을 제거하고 provenance와 hash는 요청 시 펼침 |
 | 입력 | **구현** | MASTER_CUE XLSX/PDF/JSON 한 칸과 STAGE_SPEC 폼을 받음 |
-| Script Sidebar | **로컬 코드 구현·배포 전** | 별도 대본 업로드 없이 MASTER_CUE dialogue·stage direction·trigger·note를 event별 읽기 전용 발췌로 표시. timeline 선택 시 스크롤·강조하고 발췌 선택 시 같은 event로 이동 |
+| Script Sidebar | **로컬 코드 구현·배포 전** | DOCX 우선·PDF 보조 → 서버 Upstage Script Extractor → `standby.script-projection.v1` 실제 대사·지문. exact event ID만 자동 연결하고 나머지는 사람이 현재 event에 연결. MASTER_CUE fallback 없음 |
 | 로컬 파일 방어 | **구현** | 확장자·signature·50 MiB·SHA-256 검사. 미리 정한 파일명 없음 |
-| JSON Editor 직행 | **구현** | STANDBY CueSheet JSON은 로컬 구조 검사를 통과하면 Upstage 호출 없이 `/workspace` Editor로 이동. reviewed case가 없으므로 Storyboard Agent도 호출하지 않고 로컬 대본 발췌·정적 snapshot·인접 motion을 사용. 공개 CueSheet JSON에는 `estimated_duration_sec`·`costume_change_duration_sec`를 두지 않음 |
+| JSON Editor 직행 | **구현** | STANDBY CueSheet JSON은 로컬 구조 검사를 통과하면 `/workspace` Editor로 이동. reviewed case가 없어 Storyboard Agent는 호출하지 않지만, 대본 DOCX/PDF는 case-independent Script projection endpoint로 구조화 가능. 공개 CueSheet JSON에는 duration 추정 필드 없음 |
 | 서버 JSON 전달 | **구현** | API로 받은 원본 JSON bytes/hash는 보존하고 Upstage 전송 때만 JSON Pointer 행의 임시 XLSX로 변환 |
 | 무대 사양 | **구현** | crossover, 환복 시간, route time, route ID/capacity, 인물·소품 초기 배치 |
-| Upstage 추출 | **구현** | 저장·live smoke가 확인된 기존 역할 Agent 결과를 모두 UNREVIEWED로 격리. 현재 공개 입력은 Master Cue만 호출하며 별도 Script 업로드는 없고, Stage Spec은 코드가 폼 JSON에서 추출 |
+| Upstage 추출 | **구현** | 저장·live smoke가 확인된 기존 역할 Agent 결과를 모두 UNREVIEWED/NON_AUTHORITATIVE로 격리. 입력 화면의 Master Cue 추출과 별개로 Sidebar 대본은 case-independent Script projection endpoint에서 처리 |
 | Stage Spec Extractor | **Studio 설정·서버 배선 구현 / live smoke 대기** | Config #1 `agt_PxbxmhXXT8iqdzs5WmHfUz`. locator·quote가 붙은 `stage_facts` 후보를 만들되 전부 UNREVIEWED |
 | Fact Normalizer | **Studio 설정·서버 배선 구현 / live smoke 대기** | Config #1 `agt_6tn639gGApNdV9SdRfAjnE`. raw fact를 allowlist schema의 NON_AUTHORITATIVE normalized type/value로 추천. 추천값은 읽기 전용, 사용자화는 Agent가 고른 type의 값만 편집 |
 | Storyboard Recomposer | **Studio 설정·서버 배선 구현 / live smoke 대기** | Config #1 `agt_go8aoJTVDvEwK8mwXh5gEi`. reviewed graph와 인접 snapshot으로 NON_AUTHORITATIVE transition을 비동기 생성·cache |

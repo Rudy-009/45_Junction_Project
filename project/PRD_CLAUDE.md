@@ -51,16 +51,17 @@
 ## 2. 세 논리 역할과 현재 MVP 입력
 
 제품 검증 모델은 `SCRIPT`·`CUESHEET`·`STAGE_SPEC` 세 역할을 구분한다. 다만 현재 MVP의 물리 입력 슬롯은
-`MASTER_CUE` 파일과 `STAGE_SPEC` 폼 두 개다. **별도 SCRIPT 업로드 슬롯을 다시 만들지 않는다.** 현재
-workspace의 대본 보기는 MASTER_CUE에 이미 포함된 dialogue·stage direction·trigger·note만 사용한다.
+`MASTER_CUE` 파일과 `STAGE_SPEC` 폼 두 개다. **입력 화면에 세 번째 SCRIPT 카드를 다시 만들지 않는다.**
+workspace의 대본 보기는 패널 안에서 DOCX(우선) 또는 PDF(보조)를 연결해 Upstage가 구조화한 실제
+대사·지문만 사용한다. 사용자에게 대본 JSON을 요구하지 않는다.
 
 ### 2-1. 대본 (SCRIPT)
 
 - 대사, 지시문, 등·퇴장, 씬 구분
 - 씬별 길이와 누적 타임코드 (레퍼런스 대본에 이미 존재)
 - 화자는 **배역명**으로 기재됨 → 큐시트의 배우명과 매핑 필요
-- 위 원문 대본 업로드·추출은 현재 공개 MVP 입력 경로가 아니다. MASTER_CUE에 옮겨진 대본 관련 필드만
-  읽기 전용 event 발췌와 기존 evidence로 사용하며, 없는 원문을 Agent가 보충하지 않는다
+- 위 원문 대본은 입력 화면의 세 번째 카드가 아니라 Script Sidebar에서 연결한다. 서버의 Script Extractor가
+  `standby.script-projection.v1`을 만들며, exact event ID가 없는 구간은 사람이 현재 event에 연결한다
 
 ### 2-2. 큐시트 (CUESHEET)
 
@@ -292,8 +293,9 @@ Storyboard는 timeline 클릭마다 긴 Upstage job을 동기 대기하지 않�
 인접 pair 사전 생성이 아니라 **선택 시 lazy 실행**이며, 늦게 도착한 이전 event 응답은 현재 선택을 덮을 수 없다. 화면에 보이는 `beats`와
 `missing_evidence`는 읽기 전용 보조 결과이며, 정적 snapshot과 deterministic verdict가 언제나 정본이다.
 
-구조화 JSON Editor 직행은 계속 즉시 열린다. 이 로컬 경로는 reviewed case가 없으므로 현재 Storyboard
-Agent를 호출하지 않고, MASTER_CUE 기반 대본 발췌·정적 snapshot·인접 semantic motion만 제공한다.
+구조화 JSON Editor 직행은 계속 즉시 열린다. 이 로컬 경로는 reviewed case가 없어 Storyboard Agent를
+호출하지 않지만, 대본 DOCX/PDF는 case-independent Script projection endpoint로 구조화할 수 있다.
+정적 snapshot·인접 semantic motion은 그대로 제공한다.
 향후 preview Agent를 붙이더라도 `PREVIEW / NON_AUTHORITATIVE`이며 verified workspace나 세 근거를 갖춘 finding으로 승격하지 않는다.
 공개 CueSheet JSON에는 `estimated_duration_sec`와 `costume_change_duration_sec`를 두지 않는다. 시간 관련
 verdict는 Agent가 장면 길이를 추정해서 만드는 대신, reviewed fact의 명시적 min/max 근거가 있을 때만 계산한다.
@@ -306,9 +308,13 @@ loading scene을 사용한다. 이 loop는 실제 진행률이 아니며 상태�
 ### Script Sidebar — 읽기 전용 timeline 연결
 
 - 워크스페이스 내부 좌측에서 접고 펼치는 보조 패널이다. 전역 내비게이션이나 세 번째 화면이 아니다
-- 별도 SCRIPT 업로드 없이 MASTER_CUE의 dialogue·stage direction·trigger·note만 event별 발췌로 묶는다
+- 입력 화면에 SCRIPT 카드를 추가하지 않는다. 패널에서 DOCX(우선) 또는 PDF(보조)를 연결하고, 서버가
+  Upstage Script Extractor 결과를 strict `standby.script-projection.v1`으로 투영한다
+- exact `event_id`가 있는 실제 `DIALOGUE`·`STAGE_DIRECTION`만 자동으로 event별 발췌에 묶고,
+  나머지는 사람이 선택한 현재 event에 연결한다
+- MASTER_CUE trigger·note, finding evidence, reviewed event label을 대본 fallback으로 표시하지 않는다
 - timeline event 선택은 해당 발췌를 스크롤·강조하고, 발췌 선택은 동일 event로 이동한다
-- 발췌는 수정할 수 없고 fact·review·snapshot·verdict를 만들거나 바꾸지 않는다
+- 발췌는 수정할 수 없고 localStorage에 남지 않으며 fact·review·snapshot·verdict를 만들거나 바꾸지 않는다
 
 
 ---
@@ -351,7 +357,7 @@ Git 비유가 정확하다.
 
 | # | 항목 | 합격 기준 |
 |---|---|---|
-| A1 | 현재 MVP 입력 수용 | MASTER_CUE PDF·XLSX·JSON + stage spec 폼. 별도 Script 업로드 없음 |
+| A1 | 현재 MVP 입력 수용 | MASTER_CUE PDF·XLSX·JSON + stage spec 폼. workspace에서 SCRIPT DOCX 우선·PDF 보조 연결 |
 | A2 | Upstage 추출 | Parse → Classify → 유형별 Extract가 hero fact와 source quote 반환 |
 | A3 | 사람 검토 | 핵심 fact와 event link를 사람이 승인. 미승인 값은 판정에 쓰이지 않음 |
 | A4 | hero 판정 | `VR-01`이 `AVAILABLE 58–62s` vs `REQUIRED 66–68s`로 `VIOLATION` |

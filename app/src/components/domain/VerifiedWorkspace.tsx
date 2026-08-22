@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, CircleHelp, ShieldAlert } from 'lucide-react';
 import { StageSimulator, type StageMotion } from './StageSimulator';
-import { ScriptSidebar, type ScriptSidebarEntry } from './ScriptSidebar';
+import { ScriptSidebar } from './ScriptSidebar';
 import type {
   Finding,
   FindingVerdict,
@@ -12,6 +12,7 @@ import type {
 import type { StageEntity, Zone } from '@/types/ui';
 import { cn } from '@/lib/utils';
 import { useI18n, type MessageKey } from '@/lib/i18n';
+import type { ScriptProjection, ScriptProjectionSegment, ScriptSidebarEntry } from '@/types/script';
 
 const ZONE_LABEL: Record<StageZone, Zone> = {
   STAGE_RIGHT_WING: '상수윙',
@@ -47,10 +48,24 @@ function findingSummaryKey(finding: Finding): MessageKey {
 
 export function VerifiedWorkspace({
   workspace,
+  script,
+  scriptEntries,
+  unlinkedScriptSegments,
+  scriptBusy,
+  scriptError,
+  onLinkScriptSegment,
+  onScriptFile,
   storyboardState,
   onStoryboardRequest,
 }: {
   workspace: WorkspaceSnapshot;
+  script: ScriptProjection | null;
+  scriptEntries: ScriptSidebarEntry[];
+  unlinkedScriptSegments: ScriptProjectionSegment[];
+  scriptBusy: boolean;
+  scriptError: string | null;
+  onLinkScriptSegment: (segmentId: string, eventId: string) => void;
+  onScriptFile: (file: File) => void;
   storyboardState?: StoryboardAgentState;
   onStoryboardRequest?: (eventId: string) => void;
 }) {
@@ -79,41 +94,6 @@ export function VerifiedWorkspace({
       };
     },
   ), [previousEvent, selectedEvent]);
-  const scriptEntries = useMemo<ScriptSidebarEntry[]>(() => workspace.events.map((event) => {
-    const scriptEvidence = workspace.findings
-      .filter((finding) => finding.event_id === event.event_id)
-      .flatMap((finding) => finding.evidence)
-      .filter((evidence) => evidence.role === 'SCRIPT' && evidence.quote?.trim());
-    const seen = new Set<string>();
-    const evidenceLines = scriptEvidence.flatMap((evidence) => {
-      const text = evidence.quote?.trim();
-      if (!text) return [];
-      const key = `${evidence.locator ?? ''}\u0000${text}`;
-      if (seen.has(key)) return [];
-      seen.add(key);
-      return [{
-        kind: 'SCRIPT_EVIDENCE' as const,
-        text,
-        ...(evidence.locator ? { locator: evidence.locator } : {}),
-      }];
-    });
-    const graphEvent = workspace.event_graph.events.find((item) => item.event_id === event.event_id);
-    const reviewedLabel = graphEvent?.source_refs.length && graphEvent.label.trim()
-      ? [{ kind: 'EVENT_LABEL' as const, text: graphEvent.label.trim() }]
-      : [];
-
-    return {
-      eventId: event.event_id,
-      sceneLabel: event.label,
-      sourceLabel: evidenceLines.length > 0
-        ? 'SCRIPT EVIDENCE'
-        : reviewedLabel.length > 0
-          ? 'REVIEWED EVENT'
-          : 'NO LINKED TEXT',
-      lines: evidenceLines.length > 0 ? evidenceLines : reviewedLabel,
-    };
-  }), [workspace.event_graph.events, workspace.events, workspace.findings]);
-
   const handleSelectEvent = (eventId: string) => {
     if (eventId === selectedEventId) return;
 
@@ -154,7 +134,13 @@ export function VerifiedWorkspace({
       <div className="flex min-h-0 flex-1">
         <ScriptSidebar
           entries={scriptEntries}
+          script={script}
+          unlinkedSegments={unlinkedScriptSegments}
+          busy={scriptBusy}
+          error={scriptError}
           selectedEventId={selectedEventId}
+          onScriptFile={onScriptFile}
+          onLinkSegment={onLinkScriptSegment}
           onSelectEvent={handleSelectEvent}
         />
 

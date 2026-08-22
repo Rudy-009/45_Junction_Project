@@ -317,14 +317,53 @@ export type ProductionArtifact = {
   created_at: string;
 };
 
+export type ScriptProjectionSegment = {
+  segment_id: string;
+  sequence_index: number;
+  kind: "DIALOGUE" | "STAGE_DIRECTION";
+  text: string;
+  speaker: string | null;
+  event_id: string | null;
+  locator: string;
+  source_quote: string;
+  provenance: {
+    raw_fact_id: string;
+    raw_fact_sha256: string;
+  };
+};
+
+export type ScriptProjection = {
+  contract_version: "standby.script-projection.v1";
+  projection_id: string;
+  authority: "NON_AUTHORITATIVE";
+  source: {
+    filename: string;
+    sha256: string;
+    media_type: string;
+  };
+  provenance: {
+    provider: "UPSTAGE_AGENT";
+    source_role: "SCRIPT";
+    origin: "USER_PROVIDED";
+    provider_job_id: string;
+    agent_id: string;
+    config_id: string | null;
+    adapter_version: string;
+    raw_response_sha256: string;
+  };
+  segments: ScriptProjectionSegment[];
+  created_at: string;
+};
+
 export type Operation = {
   operation_id: string;
-  kind: "EXTRACT_SOURCE" | "RUN_PRODUCTION_AGENT";
+  kind: "EXTRACT_SOURCE" | "RUN_PRODUCTION_AGENT" | "PROJECT_SCRIPT";
   status: "QUEUED" | "RUNNING" | "SUCCEEDED" | "FAILED";
   result_source: "CONTROLLED_FIXTURE" | "UPSTAGE" | "MIXED" | null;
   resource_ref:
     | { type: "extraction_run"; id: string }
-    | { type: "production_artifact"; id: string };
+    | { type: "production_artifact"; id: string }
+    | { type: "script_projection"; id: string };
   error: { code: string; message: string } | null;
   created_at: string;
   updated_at: string;

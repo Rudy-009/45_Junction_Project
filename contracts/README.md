@@ -8,6 +8,7 @@ STANDBY가 소유하는 strict contract다.
 | `source.v1.schema.json` | 불변 입력과 source hash |
 | `extraction.v1.schema.json` | provider raw lineage와 `UNREVIEWED` fact 후보 |
 | `stage-spec.v1.schema.json` | named zone, route time, initial state |
+| `script-projection.v1.schema.json` | DOCX/PDF를 Upstage로 구조화한 읽기 전용 실제 대사·지문 |
 | `review-snapshot.v1.schema.json` | 사람이 승인한 fact/link의 동결 snapshot |
 | `event-graph.v1.schema.json` | 순서와 시간을 가진 compiled event/action graph |
 | `verification.v1.schema.json` | 결정론적 finding과 3-role evidence |

@@ -72,7 +72,11 @@ const app = await buildApp({
   allowAnonymous,
   ...(apiToken ? { apiToken } : {}),
   ...(upstageProvider
-    ? { extractionProvider: upstageProvider, productionAgentProvider: upstageProvider }
+    ? {
+        extractionProvider: upstageProvider,
+        productionAgentProvider: upstageProvider,
+        scriptProjectionProvider: upstageProvider,
+      }
     : {}),
 });
 await app.listen({ host: "0.0.0.0", port });

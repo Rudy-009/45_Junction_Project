@@ -186,6 +186,12 @@
   letter-spacing: 0;
 }
 
+.script-loading-wordmark {
+  display: inline-flex;
+  gap: 0.22em;
+  font-size: 0.75rem;
+}
+
 .standby-loading-letter {
   color: var(--foreground);
   opacity: 0.18;

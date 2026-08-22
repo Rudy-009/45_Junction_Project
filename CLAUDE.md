@@ -109,8 +109,8 @@ npm run build
 8. **`INSUFFICIENT_EVIDENCE` 회색이 비활성처럼 보이면 안 된다.** 의도된 상태다
 9. **모서리 0px, 그림자 없음, 1px 경계.** 색은 verdict와 person/prop 인코딩에만
 10. **사람=원+cyan, 소품=사각형+amber.** 도형과 색 **둘 다**로 구분한다 (색각 접근성)
-11. **Script Sidebar는 워크스페이스 내부의 접이식 읽기 전용 보조 패널만 허용한다.** MASTER_CUE의
-    dialogue·stage direction·trigger·note에서만 구성하며 timeline 선택과 양방향으로 위치를 맞춘다
+11. **Script Sidebar는 워크스페이스 내부의 접이식 읽기 전용 보조 패널만 허용한다.** DOCX 우선·PDF
+    보조로 받은 대본을 Upstage가 구조화한 실제 대사·지문만 표시하며 timeline과 위치를 맞춘다
 
 ### 명시적 금지 목록
 
@@ -118,7 +118,7 @@ npm run build
 별도 Final 2D 화면 · revision lineage 패널 · EXPORT LOG · Zoom 슬라이더 ·
 Ctrl+F 검색 · JSON raw 뷰 · 실제 건축 도면 · 라이트모드 토글 ·
 **시뮬레이터 드래그앤드롭** · **연속 scrub/비인접 event 경로 애니메이션** ·
-Agent가 만든 좌표·실제 blocking 경로 · 반복/bounce/particle motion · **Script 업로드 입력 복원**
+Agent가 만든 좌표·실제 blocking 경로 · 반복/bounce/particle motion · **입력 화면의 Script 카드 복원**
 
 ---
 
@@ -197,11 +197,13 @@ verdict 색은 저채도 파스텔이라 정상 시야에서 구분되지만, **
 
 ### Script Sidebar — 허용되는 유일한 사이드바
 
-- 새 입력이나 별도 화면이 아니라 **워크스페이스 내부의 접이식 읽기 전용 패널**이다
-- 별도 Script 파일을 업로드하지 않는다. MASTER_CUE에 이미 있는 dialogue·stage direction·trigger·note만
-  event별 대본 발췌로 구성한다
+- 입력 화면의 세 번째 카드나 별도 화면이 아니라 **워크스페이스 내부의 접이식 읽기 전용 패널**이다
+- 패널에서 DOCX(우선) 또는 PDF(보조)를 받아 서버의 Upstage Script Extractor로
+  `standby.script-projection.v1`을 만든다. 사용자에게 대본 JSON을 요구하지 않는다
+- exact `event_id`가 있는 실제 `DIALOGUE`·`STAGE_DIRECTION`만 자동 연결하고, 나머지는 사람이 현재
+  event에 연결한다. MASTER_CUE trigger·note나 event label로 대체하지 않는다
 - timeline event를 선택하면 해당 발췌로 스크롤하고 강조한다. 발췌를 선택하면 같은 event로 이동한다
-- 원문을 생성·수정하거나 fact·snapshot·verdict authority를 얻지 않는다
+- 대본 원문은 localStorage에 보존하지 않으며 fact·snapshot·verdict authority를 얻지 않는다
 
 ### 시뮬레이터는 읽기 전용이다
 

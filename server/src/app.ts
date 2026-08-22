@@ -4,7 +4,12 @@ import multipart from "@fastify/multipart";
 import rateLimit from "@fastify/rate-limit";
 import Fastify, { type FastifyRequest } from "fastify";
 import { DomainError } from "./domain/errors.js";
-import { assertSourceFile, MAX_SOURCE_FILE_BYTES, sanitizeFilename } from "./domain/source-file.js";
+import {
+  assertScriptProjectionFile,
+  assertSourceFile,
+  MAX_SOURCE_FILE_BYTES,
+  sanitizeFilename,
+} from "./domain/source-file.js";
 import type {
   CellPatch,
   ExtractionAdapter,
@@ -16,6 +21,7 @@ import type {
 import { sha256 } from "./lib/hash.js";
 import type { ExtractionProvider } from "./providers/extraction-provider.js";
 import type { ProductionAgentProvider } from "./providers/production-agent-provider.js";
+import type { ScriptProjectionProvider } from "./providers/script-projection-provider.js";
 import { InMemoryStore } from "./store/in-memory-store.js";
 
 declare module "fastify" {
@@ -31,6 +37,7 @@ export type ServerConfig = {
   logger?: boolean;
   extractionProvider?: ExtractionProvider;
   productionAgentProvider?: ProductionAgentProvider;
+  scriptProjectionProvider?: ScriptProjectionProvider;
 };
 
 const SOURCE_ROLES = new Set<SourceRole>(["SCRIPT", "MASTER_CUE", "STAGE_SPEC"]);
@@ -86,6 +93,7 @@ export async function buildApp(
   store = new InMemoryStore(
     config.extractionProvider ?? null,
     config.productionAgentProvider ?? null,
+    config.scriptProjectionProvider ?? null,
   ),
 ) {
   const app = Fastify({
@@ -181,6 +189,57 @@ export async function buildApp(
   });
 
   app.get("/healthz", async () => ({ status: "ok" }));
+
+  app.post(
+    "/v1/script-projections",
+    { config: { rateLimit: { max: 20, timeWindow: "1 hour" } } },
+    async (request, reply) => {
+      if (!request.isMultipart()) {
+        throw new DomainError(
+          415,
+          "SOURCE_MEDIA_TYPE_INVALID",
+          "Script projection requires multipart/form-data.",
+        );
+      }
+      const part = await request.file();
+      if (!part || part.fieldname !== "file") {
+        throw new DomainError(400, "INVALID_ARGUMENT", "file is required.");
+      }
+      const filename = sanitizeFilename(part.filename);
+      const bytes = await part.toBuffer();
+      if (Object.keys(part.fields).some((field) => field !== "file")) {
+        throw new DomainError(400, "INVALID_ARGUMENT", "Only the file field is supported.");
+      }
+      assertScriptProjectionFile(filename, part.mimetype, bytes);
+      const fingerprint = {
+        filename,
+        media_type: part.mimetype,
+        sha256: sha256(bytes),
+      };
+      const response = store.withIdempotency(
+        `${request.standbyActorId}:POST:/v1/script-projections`,
+        idempotencyKey(request),
+        fingerprint,
+        () =>
+          store.startScriptProjection({
+            actorId: request.standbyActorId,
+            bytes,
+            mediaType: part.mimetype,
+            originalFilename: filename,
+          }),
+      );
+      reply.header("Operation-Location", `/v1/operations/${response.operation_id}`);
+      return reply.status(202).send(response);
+    },
+  );
+
+  app.get<{ Params: { projectionId: string } }>(
+    "/v1/script-projections/:projectionId",
+    async (request) => {
+      store.assertScriptProjectionOwner(request.params.projectionId, request.standbyActorId);
+      return store.getScriptProjection(request.params.projectionId);
+    },
+  );
 
   app.post("/v1/cases", async (request, reply) => {
     const body = bodyRecord(request);

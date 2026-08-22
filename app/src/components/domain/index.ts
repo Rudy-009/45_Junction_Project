@@ -4,4 +4,3 @@ export { FactReviewPanel } from './FactReviewPanel';
 export type { FactReviewCommand } from './FactReviewPanel';
 export { VerifiedWorkspace } from './VerifiedWorkspace';
 export { ScriptSidebar } from './ScriptSidebar';
-export type { ScriptExcerptLine, ScriptSidebarEntry } from './ScriptSidebar';

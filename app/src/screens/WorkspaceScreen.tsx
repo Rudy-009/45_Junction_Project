@@ -5,7 +5,6 @@ import {
   ScriptSidebar,
   StageSimulator,
   VerifiedWorkspace,
-  type ScriptSidebarEntry,
 } from '@/components/domain';
 import type { StageMotion } from '@/components/domain/StageSimulator';
 import type { StageEntity } from '@/types';
@@ -13,9 +12,11 @@ import type { CueSheet, CueEvent, Action, Direction } from '@/types/cue-sheet';
 import type { Contradiction } from '@/types/validation';
 import type { StoryboardAgentArtifact, StoryboardAgentState } from '@/types/standby';
 import { cn } from '@/lib/utils';
-import { createStandbyBrowserApi } from '@/lib/standby-api';
+import { createStandbyBrowserApi, StandbyApiError } from '@/lib/standby-api';
 import { useNavigate } from '@tanstack/react-router';
 import { useI18n } from '@/lib/i18n';
+import { buildScriptSidebarEntries, unlinkedScriptSegments } from '@/lib/script-projection';
+import type { ScriptEventLinks, ScriptProjection } from '@/types/script';
 
 // ─── Helpers ───────────────────────────────────────────────
 
@@ -91,6 +92,10 @@ export function WorkspaceScreen() {
   const selectEvent = useCueSheetStore((s) => s.selectEvent);
   const [stageMotion, setStageMotion] = useState<StageMotion>();
   const [storyboardState, setStoryboardState] = useState<StoryboardAgentState>({ status: 'IDLE' });
+  const [script, setScript] = useState<ScriptProjection | null>(null);
+  const [scriptLinks, setScriptLinks] = useState<ScriptEventLinks>({});
+  const [scriptBusy, setScriptBusy] = useState(false);
+  const [scriptError, setScriptError] = useState<string | null>(null);
   const storyboardRequestVersion = useRef(0);
 
   const selectedCue = useMemo(
@@ -102,39 +107,55 @@ export function WorkspaceScreen() {
     () => cueSheet?.cues.flatMap((cue) => cue.events.map((event) => ({ cueId: cue.cue_id, event }))) ?? [],
     [cueSheet],
   );
-  const scriptEntries = useMemo<ScriptSidebarEntry[]>(() => cueSheet?.cues.flatMap((cue) =>
-    cue.events.map((event) => {
-      const description = event.trigger.description?.trim();
-      const notes = event.notes?.trim();
-      const speaker = event.trigger.character_id
-        ? cueSheet.characters.find((character) => character.id === event.trigger.character_id)?.name
-        : undefined;
-      const triggerKind = event.trigger.type === 'dialogue'
-        ? 'DIALOGUE' as const
-        : event.trigger.type === 'scene_change'
-          ? 'STAGE_DIRECTION' as const
-          : 'TRIGGER' as const;
-      const lines: ScriptSidebarEntry['lines'] = [];
+  const scriptTimelineEvents = useMemo(() => verifiedWorkspace
+    ? verifiedWorkspace.events.map((event) => ({ eventId: event.event_id, sceneLabel: event.label }))
+    : cueSheet?.cues.flatMap((cue) => cue.events.map((event) => ({
+      eventId: event.event_id,
+      sceneLabel: cue.scene_number,
+    }))) ?? [], [cueSheet, verifiedWorkspace]);
+  const scriptEntries = useMemo(
+    () => buildScriptSidebarEntries(script, scriptTimelineEvents, scriptLinks),
+    [script, scriptLinks, scriptTimelineEvents],
+  );
+  const unlinkedSegments = useMemo(
+    () => unlinkedScriptSegments(script, scriptTimelineEvents, scriptLinks),
+    [script, scriptLinks, scriptTimelineEvents],
+  );
 
-      if (description) {
-        lines.push({
-          kind: triggerKind,
-          text: description,
-          ...(event.trigger.type === 'dialogue' && speaker ? { speaker } : {}),
-        });
+  const connectScript = async (file: File) => {
+    setScriptError(null);
+    const extension = file.name.split('.').pop()?.toLowerCase();
+    if (extension !== 'docx' && extension !== 'pdf') {
+      setScriptError(t('workspace.scriptFileType'));
+      return;
+    }
+    const api = createStandbyBrowserApi();
+    if (!api) {
+      setScriptError(t('workspace.scriptApiMissing'));
+      return;
+    }
+    setScriptBusy(true);
+    try {
+      const operation = await api.startScriptProjection(file);
+      const completed = await api.waitForOperation(operation.operation_id);
+      if (completed.resource_ref.type !== 'script_projection') {
+        throw new Error(t('workspace.scriptInvalid'));
       }
-      if (notes && notes !== description) {
-        lines.push({ kind: 'NOTE', text: notes });
-      }
+      const projection = await api.getScriptProjection(completed.resource_ref.id);
+      setScript(projection);
+      setScriptLinks({});
+    } catch (error) {
+      setScriptError(error instanceof StandbyApiError
+        ? `${error.code}: ${error.message}`
+        : error instanceof Error ? error.message : t('workspace.scriptInvalid'));
+    } finally {
+      setScriptBusy(false);
+    }
+  };
 
-      return {
-        eventId: event.event_id,
-        sceneLabel: cue.scene_number,
-        sourceLabel: 'MASTER_CUE TRIGGER',
-        lines,
-      };
-    }),
-  ) ?? [], [cueSheet]);
+  const linkScriptSegment = (segmentId: string, eventId: string) => {
+    setScriptLinks((current) => ({ ...current, [segmentId]: eventId }));
+  };
   const entities = useMemo<StageEntity[]>(() => {
     if (!cueSheet || !selectedCue) return [];
     return buildStageEntities(cueSheet, selectedCue.cue_id, selectedEventId ?? undefined);
@@ -188,6 +209,13 @@ export function WorkspaceScreen() {
     return (
       <VerifiedWorkspace
         workspace={verifiedWorkspace}
+        script={script}
+        scriptEntries={scriptEntries}
+        unlinkedScriptSegments={unlinkedSegments}
+        scriptBusy={scriptBusy}
+        scriptError={scriptError}
+        onLinkScriptSegment={linkScriptSegment}
+        onScriptFile={(file) => void connectScript(file)}
         storyboardState={storyboardState}
         onStoryboardRequest={(eventId) => void requestStoryboard(eventId)}
       />
@@ -263,7 +291,13 @@ export function WorkspaceScreen() {
       <div className="flex min-h-0 flex-1">
         <ScriptSidebar
           entries={scriptEntries}
+          script={script}
+          unlinkedSegments={unlinkedSegments}
+          busy={scriptBusy}
+          error={scriptError}
           selectedEventId={selectedEventId}
+          onScriptFile={(file) => void connectScript(file)}
+          onLinkSegment={linkScriptSegment}
           onSelectEvent={(eventId) => {
             const target = timelineEvents.find((item) => item.event.event_id === eventId);
             if (target) handleSelectEvent(target.cueId, eventId);

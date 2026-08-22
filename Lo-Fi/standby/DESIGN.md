@@ -146,11 +146,14 @@ fact별 승인·거절 기록은 그대로 보존한다.
 
 ### Script Sidebar — 워크스페이스 내부의 읽기 전용 event 인덱스
 
-- 좌측에서 접고 펼칠 수 있는 보조 패널이다. 새 화면·새 업로드 슬롯·다목적 내비게이션이 아니다
-- 별도 SCRIPT 파일을 받지 않는다. MASTER_CUE의 dialogue·stage direction·trigger·note만 event별 발췌로 묶는다
+- 좌측에서 접고 펼칠 수 있는 보조 패널이다. 새 화면·입력 화면의 세 번째 카드·다목적 내비게이션이 아니다
+- 패널 안에서 DOCX(우선) 또는 PDF(보조)를 연결한다. 서버의 Upstage Script Extractor가 만든
+  `standby.script-projection.v1`의 실제 대사·지문만 표시하고 MASTER_CUE 문구로 대신하지 않는다
+- exact `event_id`가 있는 구간만 자동 연결한다. 나머지는 `이벤트 연결 대기`에 남기고, 사람이 현재
+  timeline event를 선택한 뒤 연결한다
 - timeline에서 event를 고르면 해당 발췌가 보이도록 스크롤하고 강조한다
 - 발췌를 누르면 같은 event의 timeline·stage snapshot으로 이동한다
-- 발췌는 편집할 수 없고 fact·review·snapshot·verdict authority를 갖지 않는다
+- 발췌는 편집할 수 없고 localStorage에 남지 않으며 fact·review·snapshot·verdict authority를 갖지 않는다
 
 ### 패널 — 무대 시뮬레이터
 
@@ -363,7 +366,7 @@ open finding이 있는 동안 무대 패널은 `EVIDENCE PREVIEW` 모드이며 `
 병렬 3버튼 · 별도 Final 2D 화면 · Master v2 재검증 화면 · revision lineage 패널 ·
 `EXPORT LOG` · `Source 교체` · 입력 계약 체크리스트 · Zoom 슬라이더 ·
 Ctrl+F 검색 · JSON raw 뷰 · 실제 도면 · 연속 scrub 애니메이션 · 비인접 event 경로 animation ·
-반복/bounce/particle motion · Agent가 만든 좌표/실제 blocking 경로 · Script 업로드 슬롯
+반복/bounce/particle motion · Agent가 만든 좌표/실제 blocking 경로 · 입력 화면의 Script 업로드 카드
 
 ## Upstage Agent 연결 상태
 

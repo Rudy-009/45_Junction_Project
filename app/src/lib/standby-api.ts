@@ -1,4 +1,5 @@
 import type { FactCandidate, FactNormalizerArtifact, WorkspaceSnapshot } from '@/types/standby';
+import type { ScriptProjection } from '@/types/script';
 
 export type SourceRole = "SCRIPT" | "MASTER_CUE" | "STAGE_SPEC";
 export type SourceOrigin = "REAL_REFERENCE" | "USER_PROVIDED" | "CONTROLLED_FIXTURE";
@@ -26,7 +27,8 @@ export type StandbyOperation = {
   result_source: "CONTROLLED_FIXTURE" | "UPSTAGE" | "MIXED" | null;
   resource_ref:
     | { type: "extraction_run"; id: string }
-    | { type: "production_artifact"; id: string };
+    | { type: "production_artifact"; id: string }
+    | { type: "script_projection"; id: string };
   error: { code: string; message: string } | null;
 };
 
@@ -112,6 +114,16 @@ export class StandbyApi {
     });
   }
 
+  startScriptProjection(file: File) {
+    const form = new FormData();
+    form.append("file", file);
+    return this.request<StandbyOperation>("/v1/script-projections", {
+      method: "POST",
+      body: form,
+      idempotent: true,
+    });
+  }
+
   getOperation(operationId: string) {
     return this.request<StandbyOperation>(`/v1/operations/${operationId}`);
   }
@@ -122,6 +134,10 @@ export class StandbyApi {
 
   getProductionArtifact<T>(artifactId: string) {
     return this.request<T>(`/v1/production-artifacts/${artifactId}`);
+  }
+
+  getScriptProjection(projectionId: string) {
+    return this.request<ScriptProjection>(`/v1/script-projections/${projectionId}`);
   }
 
   async waitForOperation(

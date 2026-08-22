@@ -1,5 +1,6 @@
 import { extractControlledFixture } from "../domain/extraction.js";
 import { DomainError } from "../domain/errors.js";
+import { projectScriptSegments } from "../domain/script-projection.js";
 import {
   validateProductionAgentOutput,
   type ProductionOutputAllowlist,
@@ -21,6 +22,7 @@ import type {
   FactReviewCommand,
   FactNormalizationRecommendationMap,
   FactNormalizerArtifactPayload,
+  InternalSourceVersion,
   InternalReviewSnapshot,
   Operation,
   Origin,
@@ -29,6 +31,7 @@ import type {
   ProductionArtifact,
   ReviewRecord,
   ReviewSnapshot,
+  ScriptProjection,
   SourceRole,
   SourceVersion,
   WorkspaceSnapshot,
@@ -38,6 +41,7 @@ import { verifyProduction } from "../domain/verifier.js";
 import { canonicalJson, hashJson, sha256 } from "../lib/hash.js";
 import type { ExtractionProvider } from "../providers/extraction-provider.js";
 import type { ProductionAgentProvider } from "../providers/production-agent-provider.js";
+import type { ScriptProjectionProvider } from "../providers/script-projection-provider.js";
 
 const ROLES: SourceRole[] = ["SCRIPT", "MASTER_CUE", "STAGE_SPEC"];
 const REQUIRED_SOURCE_ROLES: SourceRole[] = ["MASTER_CUE"];
@@ -77,17 +81,21 @@ export class InMemoryStore {
   private readonly cases = new Map<string, CaseRecord>();
   private readonly operations = new Map<string, Operation>();
   private readonly operationCaseIds = new Map<string, string>();
+  private readonly operationActorIds = new Map<string, string>();
   private readonly extractionRuns = new Map<string, ExtractionRunRecord>();
   private readonly productionArtifacts = new Map<string, ProductionArtifact>();
   private readonly productionArtifactCaseIds = new Map<string, string>();
   private readonly productionCache = new Map<string, string>();
   private readonly latestFactNormalizerArtifactByCase = new Map<string, string>();
+  private readonly scriptProjections = new Map<string, ScriptProjection>();
+  private readonly scriptProjectionOwnerIds = new Map<string, string>();
   private readonly idempotency = new Map<string, IdempotencyRecord>();
   private sequence = 0;
 
   constructor(
     private readonly upstageProvider: ExtractionProvider | null = null,
     private readonly productionAgentProvider: ProductionAgentProvider | null = null,
+    private readonly scriptProjectionProvider: ScriptProjectionProvider | null = null,
   ) {}
 
   private id(prefix: string): string {
@@ -323,6 +331,54 @@ export class InMemoryStore {
     return structuredClone(operation);
   }
 
+  startScriptProjection(input: {
+    actorId: string;
+    bytes: Uint8Array;
+    mediaType: string;
+    originalFilename: string;
+  }): Operation {
+    if (!this.scriptProjectionProvider) {
+      throw new DomainError(
+        503,
+        "UPSTAGE_NOT_CONFIGURED",
+        "Script projection adapter is not configured.",
+      );
+    }
+
+    const projectionId = this.id("script_projection");
+    const sourceHash = sha256(input.bytes);
+    const createdAt = this.now();
+    const source: InternalSourceVersion = {
+      contract_version: "standby.source.v1",
+      source_id: this.id("source"),
+      case_id: projectionId,
+      role: "SCRIPT",
+      sha256: sourceHash,
+      origin: "USER_PROVIDED",
+      authority: "UNREVIEWED",
+      media_type: input.mediaType,
+      original_filename: input.originalFilename,
+      created_at: createdAt,
+      content: null,
+      bytes: Uint8Array.from(input.bytes),
+    };
+    const operation: Operation = {
+      operation_id: this.id("operation"),
+      kind: "PROJECT_SCRIPT",
+      status: "QUEUED",
+      result_source: null,
+      resource_ref: { type: "script_projection", id: projectionId },
+      error: null,
+      created_at: createdAt,
+      updated_at: createdAt,
+    };
+    this.operations.set(operation.operation_id, operation);
+    this.operationActorIds.set(operation.operation_id, input.actorId);
+    this.scriptProjectionOwnerIds.set(projectionId, input.actorId);
+    queueMicrotask(() => void this.executeScriptProjection(source, operation, projectionId));
+    return structuredClone(operation);
+  }
+
   getOperation(operationId: string): Operation {
     const operation = this.operations.get(operationId);
     if (!operation) {
@@ -341,6 +397,14 @@ export class InMemoryStore {
     const artifact = this.productionArtifacts.get(artifactId);
     if (!artifact) throw new DomainError(404, "RESOURCE_NOT_FOUND", "Production artifact not found.");
     return structuredClone(artifact);
+  }
+
+  getScriptProjection(projectionId: string): ScriptProjection {
+    const projection = this.scriptProjections.get(projectionId);
+    if (!projection) {
+      throw new DomainError(404, "RESOURCE_NOT_FOUND", "Script projection not found.");
+    }
+    return structuredClone(projection);
   }
 
   getFactNormalizationRecommendations(caseId: string): FactNormalizationRecommendationMap {
@@ -434,6 +498,13 @@ export class InMemoryStore {
   }
 
   assertOperationOwner(operationId: string, actorId: string): void {
+    const directOwnerId = this.operationActorIds.get(operationId);
+    if (directOwnerId !== undefined) {
+      if (directOwnerId !== actorId) {
+        throw new DomainError(404, "RESOURCE_NOT_FOUND", "Operation not found.");
+      }
+      return;
+    }
     const caseId = this.operationCaseIds.get(operationId);
     if (!caseId) throw new DomainError(404, "RESOURCE_NOT_FOUND", "Operation not found.");
     this.assertCaseOwner(caseId, actorId);
@@ -449,6 +520,13 @@ export class InMemoryStore {
     const caseId = this.productionArtifactCaseIds.get(artifactId);
     if (!caseId) throw new DomainError(404, "RESOURCE_NOT_FOUND", "Production artifact not found.");
     this.assertCaseOwner(caseId, actorId);
+  }
+
+  assertScriptProjectionOwner(projectionId: string, actorId: string): void {
+    const ownerId = this.scriptProjectionOwnerIds.get(projectionId);
+    if (!ownerId || ownerId !== actorId) {
+      throw new DomainError(404, "RESOURCE_NOT_FOUND", "Script projection not found.");
+    }
   }
 
   getReviewQueue(caseId: string): { items: FactCandidate[]; next_cursor: null } {
@@ -827,6 +905,79 @@ export class InMemoryStore {
       snapshot,
       revision,
     });
+  }
+
+  private async executeScriptProjection(
+    source: InternalSourceVersion,
+    operation: Operation,
+    projectionId: string,
+  ): Promise<void> {
+    operation.status = "RUNNING";
+    operation.updated_at = this.now();
+    try {
+      if (!this.scriptProjectionProvider) {
+        throw new DomainError(
+          503,
+          "UPSTAGE_NOT_CONFIGURED",
+          "Script projection adapter is not configured.",
+        );
+      }
+      const result = await this.scriptProjectionProvider.projectScript(source);
+      if (
+        result.run.role !== "SCRIPT" ||
+        result.run.provider !== "UPSTAGE" ||
+        result.run.source_id !== source.source_id ||
+        result.run.schema_version !== "standby.extraction.v1" ||
+        !result.run.provider_job_id ||
+        !result.run.agent_id ||
+        !/^[a-f0-9]{64}$/.test(result.run.raw_response_sha256) ||
+        result.facts.some(
+          (fact) => fact.source_id !== source.source_id || fact.origin !== source.origin,
+        )
+      ) {
+        throw new DomainError(
+          502,
+          "UPSTAGE_SCRIPT_PROJECTION_INVALID",
+          "Script projection provenance is incomplete.",
+        );
+      }
+      if (!source.original_filename || !source.media_type) {
+        throw new Error("Validated script projection source metadata is missing.");
+      }
+      const projection: ScriptProjection = {
+        contract_version: "standby.script-projection.v1",
+        projection_id: projectionId,
+        authority: "NON_AUTHORITATIVE",
+        source: {
+          filename: source.original_filename,
+          sha256: source.sha256,
+          media_type: source.media_type,
+        },
+        provenance: {
+          provider: "UPSTAGE_AGENT",
+          source_role: "SCRIPT",
+          origin: "USER_PROVIDED",
+          provider_job_id: result.run.provider_job_id,
+          agent_id: result.run.agent_id,
+          config_id: result.run.config_id,
+          adapter_version: result.run.adapter_version,
+          raw_response_sha256: result.run.raw_response_sha256,
+        },
+        segments: projectScriptSegments(result.facts),
+        created_at: this.now(),
+      };
+      this.scriptProjections.set(projectionId, projection);
+      operation.status = "SUCCEEDED";
+      operation.result_source = "UPSTAGE";
+      operation.updated_at = this.now();
+    } catch (error) {
+      operation.status = "FAILED";
+      operation.error = {
+        code: error instanceof DomainError ? error.code : "SCRIPT_PROJECTION_FAILED",
+        message: error instanceof DomainError ? error.message : "Script projection failed.",
+      };
+      operation.updated_at = this.now();
+    }
   }
 
   private async executeProductionAgent(input: {

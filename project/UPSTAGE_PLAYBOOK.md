@@ -234,8 +234,9 @@ normalization type selector는 두지 않는다.
 | cache | `review_snapshot_id + cue_revision_id + from/to event ID + Agent ID + Config ID + input hash` |
 | trust | event/entity/zone/fact ID를 서버 allowlist로 strict 검증. 좌표·곡선·새 event·duration을 추정하지 않음. `beats`·`missing_evidence`는 정적 snapshot이나 deterministic verdict를 만들거나 수정하지 않으며 실패·timeout은 정적 snapshot fallback |
 
-JSON Editor 직행은 review snapshot이 없으므로 현재 Storyboard Agent를 호출하지 않는다. 로컬 대본 발췌·
-정적 snapshot·인접 semantic motion만 제공한다. reviewed workspace에서는 timeline 클릭마다 긴 job을 동기
+JSON Editor 직행은 review snapshot이 없으므로 현재 Storyboard Agent를 호출하지 않는다. 대본 DOCX/PDF는
+case-independent Script projection endpoint로 구조화하고, 정적 snapshot·인접 semantic motion을 제공한다.
+reviewed workspace에서는 timeline 클릭마다 긴 job을 동기
 대기하지 않으며, 늦게 도착한 이전 event 응답이 현재 선택을 덮지 못하게 selection/version을 검사한다.
 
 #### D. Rehearsal Brief
@@ -253,10 +254,13 @@ JSON Editor 직행은 review snapshot이 없으므로 현재 Storyboard Agent를
 
 ### 3-2. Script Sidebar 경계
 
-현재 공개 MVP에는 별도 SCRIPT 업로드 슬롯을 다시 만들지 않는다. 워크스페이스의 접이식 Script Sidebar는
-MASTER_CUE에 이미 포함된 dialogue·stage direction·trigger·note만 event별로 읽어 보여 주는 보조 인덱스다.
+현재 공개 MVP 입력 화면에는 세 번째 SCRIPT 업로드 카드를 다시 만들지 않는다. 워크스페이스의 접이식
+Script Sidebar에서 DOCX(우선) 또는 PDF(보조)를 연결한다. 서버는 Upstage Script Extractor 결과를
+`standby.script-projection.v1`으로 strict 투영하고 실제 대사·지문만 보여 준다. MASTER_CUE 문구나
+reviewed event label은 대본 fallback이 아니다.
 timeline 선택은 같은 event 발췌를 스크롤·강조하고, 발췌 선택은 같은 event로 이동한다. 이 패널은 읽기
-전용이며 Agent가 원문을 보충하거나 fact·snapshot·verdict authority를 만드는 경로가 아니다.
+전용이고 localStorage에 원문을 남기지 않으며 Agent가 원문을 보충하거나 fact·snapshot·verdict authority를
+만드는 경로가 아니다. raw fact의 exact `event_id`만 자동 연결하고, 나머지는 사람이 현재 event에 연결한다.
 
 ### 중요한 미확정 경계
 
