@@ -1,0 +1,25 @@
+# macOS
+.DS_Store
+
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+
+# JavaScript
+node_modules/
+.next/
+dist/
+build/
+coverage/
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+
+# Editors
+.idea/
+.vscode/
