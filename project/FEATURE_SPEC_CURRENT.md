@@ -2,8 +2,8 @@
 
 | 항목 | 내용 |
 |---|---|
-| 문서 상태 | 공개 데모 런타임 코드 대조 + 2026-08-23 목표 계약 분리 |
-| 기준 브랜치 | `main` + `feat/public-demo-ux` |
+| 문서 상태 | 공개 데모 런타임 코드 대조 + 촬영용 fast path 반영 |
+| 기준 브랜치 | `feat/demo-fast-path` |
 | 목적 | 현재 배포 동작과 후속 운영화를 구분한다 |
 | 제품 목표 | [PRD_CLAUDE.md](PRD_CLAUDE.md) |
 | UI 계약 | [`../Lo-Fi/standby/DESIGN.md`](../Lo-Fi/standby/DESIGN.md) |
@@ -46,6 +46,7 @@ UUID 세션으로 case 소유권을 분리한다. 이 값은 사용자 신원을
 | Rehearsal Brief | **Studio 설정·서버 배선 구현 / live smoke 대기** | Config #1 `agt_9iLkb7fqwdEtaBv48t9tQA`. 결정론적 finding과 evidence를 무대감독용 확인 질문·unknown으로 요약. 새 verdict/finding 생성 금지 |
 | 인접 event semantic transition | **로컬 코드 구현·배포 전** | 인접한 다음 event의 바뀐 entity만 짧게 전환. jump/back·초기 로드는 정적, reduced-motion은 정적 |
 | 장시간 추출 | **구현** | 서버 최대 10분·브라우저 최대 11분 polling, 결과 미리보기와 `S T A N D B Y`가 왼쪽부터 순차 점등되는 로딩 화면 표시. reduced-motion에서는 고정 wordmark |
+| 촬영용 XLSX fast path | **구현** | 승인된 reference XLSX의 SHA-256이 일치할 때만 3.2초 로딩 후 원문이 아닌 8-event `CONTROLLED_FIXTURE` Editor로 이동. 다른 XLSX/PDF는 기존 Upstage 실경로 유지 |
 | Fact review | **구현** | raw field·locator·quote를 보고 승인/제외, 13개 normalized fact와 EVENT_STATE snapshot을 구조화 편집 |
 | Review snapshot | **구현** | 현재 결정을 불변 digest로 동결. 미결정 fact는 authority를 얻지 않음 |
 | Compiler | **구현** | 승인된 normalized envelope만 event graph·stage snapshot으로 변환 |
@@ -83,6 +84,12 @@ MASTER_CUE JSON 파일 선택
   → 같은 case ID의 workspace
   → 이벤트 선택 → stage snapshot + finding + 계산 + 세 근거
                    + Script Sidebar의 같은 event 발췌 스크롤·강조
+
+촬영 승인 reference XLSX 선택 (SHA-256 exact match)
+  → 1.5초 Master Cue 추출 상태
+  → 1.7초 Upstage 추천값 구성 상태
+  → 8-event CONTROLLED_FIXTURE workspace
+  → event 선택·ERROR/WARNING popup·이 위치로 이동·셀 편집·저장
 ```
 
 파일을 다시 선택하면 이전 case·fact review·workspace는 즉시 초기화된다. 원문 role의 `REVIEWED`는
@@ -92,6 +99,11 @@ JSON 직행은 구조화 결과를 빠르게 확인·편집하기 위한 로컬 
 거치지 않으므로 서버의 `VerifiedWorkspace`나 세 근거를 갖춘 authoritative finding으로 표시하지 않는다.
 씬 길이와 환복 소요 시간을 JSON에서 추정하지 않는다. 따라서 JSON 직행 경로는 duration 기반 경고를 만들지
 않고, 시간 판정은 verifier 경로에서 사람이 검토한 명시적 `min_ms`·`max_ms` 근거가 있을 때만 수행한다.
+
+촬영용 XLSX fast path도 같은 로컬 Editor 계열이다. 원본 XLSX 내용이나 Upstage 결과를 가장하지 않고,
+파일 bytes의 exact SHA-256을 데모 선택 신호로만 사용한다. 저장소에는 원본 대본·큐시트와 파생 JSON을
+넣지 않으며, 화면 데이터는 별도 통제 fixture다. 따라서 이 경로의 ERROR/WARNING은 로컬 validator의
+시연 결과이고 authoritative Upstage provenance 또는 서버 verifier 결과라고 발표하지 않는다.
 
 ---
 
@@ -158,6 +170,14 @@ typecheck·production build와 두 패키지의 `npm audit` 0건을 확인했다
 | 다음 P1 | **XLSX 왕복** | 원본 sheet·열·서식을 유지한 새 파일과 re-import 동일 fact |
 | 다음 P2 | **refresh/영속성** | 동일 hash 재호출 금지, DB 저장, 새 fact UNREVIEWED gate |
 | 운영 제품 전환 시 | **계정·권한** | OAuth/JWT, DB 수준 owner/RLS, 세션 복구를 한 milestone으로 구현 |
+
+### 촬영 직전 합격선
+
+- 승인된 reference XLSX가 4초 안에 workspace로 이동한다.
+- E1–E8 timeline, 등장·퇴장 상태, ERROR/WARNING popup과 `이 Event로 이동`이 보인다.
+- 큐시트 셀 편집 → 미반영 변경 → 저장이 한 테이크 안에서 끝난다.
+- 일반 XLSX/PDF와 서버 verified flow는 제거하지 않는다.
+- 촬영용 fixture를 실제 Upstage 분석 결과나 실제 공연 안전 판정이라고 말하지 않는다.
 
 네 Agent의 cache 계약은 각각 `source hash`, `raw fact-set digest`, `review/revision`, `verifier result hash`에 Agent/Config ID와
 실제 input hash를 더한다. 같은 key에서는 Upstage를 재호출하지 않는다. timeline 클릭은 cached storyboard를

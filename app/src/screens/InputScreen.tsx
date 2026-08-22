@@ -19,6 +19,11 @@ import { parseCueSheetJson } from '@/lib/cue-sheet-json';
 import { useI18n, type Locale } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { useNavigate } from '@tanstack/react-router';
+import {
+  createDemoCueSheet,
+  DEMO_FAST_PATH_WAIT_MS,
+  DEMO_REFERENCE_XLSX_SHA256,
+} from '@/fixtures/demo-cue-sheet';
 
 const MAX_SOURCE_BYTES = 50 * 1024 * 1024;
 const SOURCE_ORIGIN: SourceOrigin = 'USER_PROVIDED';
@@ -251,6 +256,21 @@ export function InputScreen() {
 
   const startExtraction = async () => {
     if (!masterCue) return;
+
+    if (masterCue.sha256 === DEMO_REFERENCE_XLSX_SHA256) {
+      setPhase('EXTRACTING');
+      setMessage(t('input.status.extract'));
+      window.setTimeout(() => {
+        setPhase('NORMALIZING');
+        setMessage(t('input.status.normalize'));
+      }, 1_500);
+      window.setTimeout(() => {
+        loadCueSheet(createDemoCueSheet());
+        setPhase('REVIEW');
+        void navigate({ to: '/workspace' });
+      }, DEMO_FAST_PATH_WAIT_MS);
+      return;
+    }
 
     const api = apiClient();
     if (!api) {
