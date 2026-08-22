@@ -59,6 +59,11 @@ Vercel에는 공개값 `VITE_STANDBY_API_BASE_URL`, `VITE_SUPABASE_URL`,
 공유 `demo-user`의 데이터로 처리되므로, 공개 데모가 끝나면 두 플래그를 먼저
 `false`로 되돌린 뒤 재배포한다.
 
+TEST JSON 경로만 빠르게 공개하려면 추가로 `STANDBY_ALLOW_ANON_TEST_JSON=true`를
+`/v1` 요청마다 `x-standby-anon-test=1` 헤더를 실어 보내는 클라이언트와 함께
+사용한다. 헤더는 TEST JSON 업로드 플로우에서만 세팅되며, 데모 종료 시 즉시 `false`로
+돌려주세요.
+
 ## 구현된 흐름
 
 1. `POST /v1/cases` — 검증 case 생성

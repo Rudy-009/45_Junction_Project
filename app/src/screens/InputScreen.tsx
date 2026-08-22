@@ -281,12 +281,30 @@ export function InputScreen() {
   };
 
   const ready = Boolean(masterCue);
-  const authenticated = authBypassEnabled || Boolean(authEmail);
+  const isTestJsonMode = useMemo(
+    () => masterCueInputKind === 'MASTER_CUE_JSON',
+    [masterCueInputKind],
+  );
+  const authenticated = authBypassEnabled || Boolean(authEmail) || isTestJsonMode;
 
-  const apiClient = () => {
-    const baseUrl = import.meta.env.VITE_STANDBY_API_BASE_URL as string | undefined;
-    return baseUrl && (import.meta.env.DEV || authBypassEnabled || authConfigured)
-      ? new StandbyApi({ baseUrl, getAccessToken: getStandbyAccessToken })
+  const apiClient = (options: { testJsonMode: boolean }) => {
+    const { testJsonMode } = options;
+    const baseUrl =
+      import.meta.env.VITE_STANDBY_API_BASE_URL as string | undefined
+      ?? import.meta.env.VITE_STANDBY_API_URL as string | undefined
+      ?? import.meta.env.VITE_API_BASE_URL as string | undefined;
+    return baseUrl && (import.meta.env.DEV || authBypassEnabled || authConfigured || testJsonMode)
+      ? new StandbyApi({
+          baseUrl,
+          getAccessToken: () => getStandbyAccessToken({
+            allowUnauthenticatedTestJson: testJsonMode,
+          }),
+          getRequestHeaders: testJsonMode
+            ? async () => ({
+                'x-standby-anon-test': '1',
+              })
+            : undefined,
+        })
       : null;
   };
 
@@ -299,7 +317,7 @@ export function InputScreen() {
       return;
     }
 
-    const api = apiClient();
+    const api = apiClient({ testJsonMode: isTestJsonMode });
     if (!api) {
       setPhase('FAILED');
       setMessage(
@@ -312,9 +330,16 @@ export function InputScreen() {
       setPhase('UPLOADING');
       setMessage(t('input.status.upload'));
       const createdCase = await api.createCase(`STANDBY ${new Date().toLocaleString('ko-KR')}`);
-      const uploads = [
-        api.uploadSourceFile(createdCase.case_id, 'MASTER_CUE', masterCue.file, masterCue.origin),
-      ];
+      const uploads: Promise<unknown>[] = [];
+      if (isTestJsonMode) {
+        const masterCuePayload = JSON.parse(await masterCue.file.text());
+        uploads.push(api.uploadSource(createdCase.case_id, 'MASTER_CUE', masterCuePayload, {
+          origin: masterCue.origin,
+          mediaType: 'application/json',
+        }));
+      } else {
+        uploads.push(api.uploadSourceFile(createdCase.case_id, 'MASTER_CUE', masterCue.file, masterCue.origin));
+      }
       if (stageErrors.length === 0) {
         uploads.push(api.uploadStageSpec(createdCase.case_id, stageSpec, SOURCE_ORIGIN));
       }
@@ -322,7 +347,10 @@ export function InputScreen() {
 
       setPhase('EXTRACTING');
       setMessage(t('input.status.extract'));
-      const operation = await api.startExtraction(createdCase.case_id, 'UPSTAGE_AGENT');
+      const operation = await api.startExtraction(
+        createdCase.case_id,
+        isTestJsonMode ? 'CONTROLLED_FIXTURE' : 'UPSTAGE_AGENT',
+      );
       await api.waitForOperation(operation.operation_id);
       const queue = await api.getReviewQueue(createdCase.case_id);
 
@@ -341,7 +369,7 @@ export function InputScreen() {
   };
 
   const completeReview = async (reviews: FactReviewCommand[]) => {
-    const api = apiClient();
+    const api = apiClient({ testJsonMode: isTestJsonMode });
     if (!api || !caseId) {
       setPhase('FAILED');
       setMessage(t('input.error.noCase'));
@@ -374,7 +402,7 @@ export function InputScreen() {
           <h1 className="text-2xl font-medium">{t('input.title')}</h1>
         </header>
 
-        {!import.meta.env.DEV && !authBypassEnabled && (
+        {!import.meta.env.DEV && !authBypassEnabled && !isTestJsonMode && (
           <AuthPanel
             configured={authConfigured}
             email={authEmail}

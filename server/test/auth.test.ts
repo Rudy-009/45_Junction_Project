@@ -83,3 +83,21 @@ test("demo auth bypass permits domain requests without a bearer token", async ()
     await app.close();
   }
 });
+
+test("anonymous test-json bypass permits requests with the marker header", async () => {
+  const app = await buildApp({
+    allowedOrigins: ["http://localhost:5173"],
+    allowAnonymousTestJson: true,
+  });
+  try {
+    const created = await app.inject({
+      method: "POST",
+      url: "/v1/cases",
+      headers: { "x-standby-anon-test": "1", "idempotency-key": "test-json-allow" },
+      payload: { title: "test json rehearsal" },
+    });
+    assert.equal(created.statusCode, 201, created.body);
+  } finally {
+    await app.close();
+  }
+});
