@@ -124,6 +124,7 @@ clean control → finding 0건
 | M3-A 인증·운영 runtime | **코드 완료** | Supabase JWT/owner 경계와 Railway image/config |
 | M3-A 외부 provision | **대기** | Railway와 Supabase 로그인, URL/secret 설정, live smoke |
 | 다음 P0 | **reference fidelity** | 실제 한국어 대본·17열 Master Cue를 gold fact와 대조 |
+| 다음 P1 | **OAuth 인증 통합** | OAuth Provider(Apple/Google) 연동으로 사용자별 권한 경계를 보강하고, 테스트 JSON 우회를 정상 인증 플로우로 대체 |
 | 다음 P1 | **XLSX 왕복** | 원본 sheet·열·서식을 유지한 새 파일과 re-import 동일 fact |
 | 다음 P2 | **refresh/영속성** | 동일 hash 재호출 금지, DB 저장, 새 fact UNREVIEWED gate |
 
