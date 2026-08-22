@@ -1,0 +1,102 @@
+@import "tailwindcss";
+
+/*
+ * STANDBY design system — Technical Blueprint / Compiler IDE (DARK).
+ * Square corners, 1px borders, no shadows. Color is reserved for verdicts
+ * and for the person/prop dual encoding (shape + color, for accessibility).
+ */
+
+@theme inline {
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
+  --radius-xl: 0px;
+  --font-sans: Inter, "Noto Sans KR", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-elevated: var(--elevated);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+
+  --color-violation: var(--violation-fg);
+  --color-violation-bg: var(--violation-bg);
+  --color-review: var(--review-fg);
+  --color-review-bg: var(--review-bg);
+  --color-consistent: var(--consistent-fg);
+  --color-consistent-bg: var(--consistent-bg);
+  --color-insufficient: var(--insufficient-fg);
+  --color-insufficient-bg: var(--insufficient-bg);
+  --color-edited: var(--edited-fg);
+  --color-edited-bg: var(--edited-bg);
+
+  --color-person: var(--person);
+  --color-prop: var(--prop);
+}
+
+:root {
+  --background: #0e1011;
+  --surface: #16191a;
+  --elevated: #1e2223;
+  --border: #2e3436;
+  --border-strong: #4a5254;
+  --foreground: #e6e8e8;
+  --muted-foreground: #9aa2a3;
+  --muted: #22282a;
+
+  --violation-fg: #ff8a80;
+  --violation-bg: #3a1512;
+  --review-fg: #ffcc66;
+  --review-bg: #3a2c0a;
+  --consistent-fg: #7ee2a8;
+  --consistent-bg: #0f3320;
+  --insufficient-fg: #b6bfc0;
+  --insufficient-bg: #24292a;
+  --edited-fg: #9db4ff;
+  --edited-bg: #1b2450;
+
+  /* dual encoding: person = circle + cyan, prop = square + amber */
+  --person: #4dd0e1;
+  --prop: #ffb74d;
+
+  color-scheme: dark;
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  input {
+    color: inherit;
+  }
+}
+
+@utility mono {
+  font-family: var(--font-mono);
+  font-feature-settings: "tnum" 1;
+}
+
+@keyframes standby-slide-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@utility slide-up-panel {
+  animation: standby-slide-up 180ms ease-out;
+}

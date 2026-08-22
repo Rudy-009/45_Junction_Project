@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>STANDBY production/local comparison</title>
+    <style>
+      body { margin: 0; padding: 24px; background: #111; color: #eee; font: 14px/1.4 sans-serif; }
+      h1, h2 { margin: 0 0 12px; }
+      section { margin-bottom: 32px; }
+      .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+      figure { margin: 0; }
+      figcaption { margin-bottom: 8px; font-weight: 700; }
+      img { display: block; width: 100%; height: auto; border: 1px solid #555; }
+      .mobile img { max-width: 390px; }
+    </style>
+  </head>
+  <body>
+    <h1>STANDBY production/local visual comparison</h1>
+    <section>
+      <h2>Input · desktop</h2>
+      <div class="pair">
+        <figure><figcaption>Production</figcaption><img src="production-input-desktop.jpg" alt="Production input desktop" /></figure>
+        <figure><figcaption>Local source</figcaption><img src="local-input-desktop.jpg" alt="Local input desktop" /></figure>
+      </div>
+    </section>
+    <section>
+      <h2>Workspace E3 finding · desktop</h2>
+      <div class="pair">
+        <figure><figcaption>Production</figcaption><img src="production-workspace-e3-desktop.jpg" alt="Production workspace desktop" /></figure>
+        <figure><figcaption>Local source</figcaption><img src="local-workspace-e3-desktop.jpg" alt="Local workspace desktop" /></figure>
+      </div>
+    </section>
+    <section class="mobile">
+      <h2>Input · mobile</h2>
+      <div class="pair">
+        <figure><figcaption>Production</figcaption><img src="production-input-mobile.jpg" alt="Production input mobile" /></figure>
+        <figure><figcaption>Local source</figcaption><img src="local-input-mobile.jpg" alt="Local input mobile" /></figure>
+      </div>
+    </section>
+  </body>
+</html>
