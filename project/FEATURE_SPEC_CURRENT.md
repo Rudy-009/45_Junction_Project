@@ -2,15 +2,17 @@
 
 | 항목 | 내용 |
 |---|---|
-| 문서 상태 | 공개 런타임 코드 대조 + R0~R2 반영 |
+| 문서 상태 | 공개 런타임 코드 대조 + R0~R3·R6 반영 |
 | 기준 브랜치 | `feat/goal-r0r6` |
 | 목적 | 현재 배포 동작과 후속 운영화를 구분한다 |
 | 제품 목표 | [PRD_CLAUDE.md](PRD_CLAUDE.md) |
 | UI 계약 | [`../Lo-Fi/standby/DESIGN.md`](../Lo-Fi/standby/DESIGN.md) |
 
 > 코드와 이 문서가 다르면 코드가 우선한다. 현재 공개 MVP는 로그인 없이 익명 브라우저 세션으로 실행한다.
-> 아래 네 Agent는 Studio Config `#1` 저장과 서버 배선까지 구현됐다. 아직 각 Agent의 실제 API 응답을
-> 확인하는 live smoke는 끝나지 않았으므로 `운영 검증 완료`로 표현하지 않는다.
+> 아래 네 Agent는 Studio Config `#1` 저장과 서버 배선까지 구현됐다. 실제 API live smoke에서
+> Stage Spec Extractor·Fact Normalizer·Storyboard Recomposer는 성공했고 Rehearsal Brief의 허용 목록 밖
+> event 참조도 provenance를 보존하는 fail-closed fallback으로 보정했다. 다만 최신 전체 재실행은 Upstage
+> `/v2` 요청의 HTTP 403에서 중단되므로 아직 `네 Agent 운영 검증 완료`로 표현하지 않는다.
 
 ---
 
@@ -40,11 +42,11 @@ UUID 세션으로 case 소유권을 분리한다. 이 값은 사용자 신원을
 | 서버 JSON 전달 | **구현** | API로 받은 원본 JSON bytes/hash는 보존하고 Upstage 전송 때만 JSON Pointer 행의 임시 XLSX로 변환 |
 | 무대 사양 | **구현** | crossover, 환복 시간, route time, route ID/capacity, 인물·소품 초기 배치 |
 | Upstage 추출 | **구현** | Agent 결과를 모두 UNREVIEWED/NON_AUTHORITATIVE로 격리한다. Sidebar 대본도 현재 case의 source·review queue·snapshot으로 수렴하며, 읽기 전용 projection은 같은 case ID를 명시한다 |
-| Stage Spec Extractor | **Studio 설정·서버 배선 구현 / live smoke 대기** | Config #1 `agt_PxbxmhXXT8iqdzs5WmHfUz`. locator·quote가 붙은 `stage_facts` 후보를 만들되 전부 UNREVIEWED |
-| Fact Normalizer | **Studio 설정·서버 배선 구현 / live smoke 대기** | Config #1 `agt_6tn639gGApNdV9SdRfAjnE`. raw fact를 allowlist schema의 NON_AUTHORITATIVE normalized type/value로 추천. 추천값은 읽기 전용, 사용자화는 Agent가 고른 type의 값만 편집 |
-| Storyboard Recomposer | **Studio 설정·서버 배선 구현 / live smoke 대기** | Config #1 `agt_go8aoJTVDvEwK8mwXh5gEi`. reviewed graph와 인접 snapshot으로 NON_AUTHORITATIVE transition을 비동기 생성·cache |
-| Rehearsal Brief | **Studio 설정·서버 배선 구현 / live smoke 대기** | Config #1 `agt_9iLkb7fqwdEtaBv48t9tQA`. 결정론적 finding과 evidence를 무대감독용 확인 질문·unknown으로 요약. 새 verdict/finding 생성 금지 |
-| 인접 event semantic transition | **로컬 코드 구현·배포 전** | 인접한 다음 event의 바뀐 entity만 짧게 전환. jump/back·초기 로드는 정적, reduced-motion은 정적 |
+| Stage Spec Extractor | **Studio 설정·서버 배선 구현 / 개별 live smoke 성공** | Config #1 `agt_PxbxmhXXT8iqdzs5WmHfUz`. locator·quote가 붙은 `stage_facts` 후보를 만들되 전부 UNREVIEWED |
+| Fact Normalizer | **Studio 설정·서버 배선 구현 / 개별 live smoke 성공** | Config #1 `agt_6tn639gGApNdV9SdRfAjnE`. raw fact를 allowlist schema의 NON_AUTHORITATIVE normalized type/value로 추천. 허용 밖 type은 Agent provenance를 보존한 결정론적 fallback으로 격리 |
+| Storyboard Recomposer | **Studio 설정·서버 배선 구현 / 개별 live smoke 성공** | Config #1 `agt_go8aoJTVDvEwK8mwXh5gEi`. reviewed graph와 인접 snapshot으로 NON_AUTHORITATIVE transition을 비동기 생성·cache. JSON 부재 시 provenance를 보존한 정적 fallback |
+| Rehearsal Brief | **Studio 설정·서버 배선·fallback 구현 / 전체 live smoke 재확인 대기** | Config #1 `agt_9iLkb7fqwdEtaBv48t9tQA`. 결정론적 finding과 evidence를 무대감독용 확인 질문·unknown으로 요약. 허용 목록 밖 event/finding 참조는 거부하고 provenance를 남긴 빈 결정론적 brief로 격리 |
+| 인접 event semantic transition | **구현·운영 배포** | 인접한 다음 event의 바뀐 entity만 짧게 전환. jump/back·초기 로드는 정적, reduced-motion은 정적 |
 | 장시간 추출 | **구현** | 서버 최대 10분·브라우저 최대 11분 polling, 결과 미리보기와 `S T A N D B Y`가 왼쪽부터 순차 점등되는 로딩 화면 표시. reduced-motion에서는 고정 wordmark |
 | 촬영용 XLSX fast path | **운영 코드 제거** | 특정 SHA-256에 의한 클라이언트 분기와 8-event 로컬 fixture를 제거했다. XLSX/PDF/JSON은 모두 실제 API 경로를 사용하며 `CONTROLLED_FIXTURE`는 서버 자동 테스트에서만 사용한다 |
 | Fact review | **구현** | raw field·locator·quote를 보고 승인/제외, 13개 normalized fact와 EVENT_STATE snapshot을 구조화 편집 |
@@ -64,8 +66,8 @@ UUID 세션으로 case 소유권을 분리한다. 이 값은 사용자 신원을
 | 서체 | **구현** | 본문·라벨은 시스템 기본 서체, STANDBY 로고·추출 loading wordmark만 JetBrains Mono |
 | 데이터 영속성 | **미구현** | 프로세스 재시작 시 case·review·snapshot이 사라짐 |
 | 실제 reference fidelity | **미검증** | 합성 live smoke는 통과했지만 공연 원본 gold fact 대조는 아직 없음 |
-| XLSX 왕복·refresh | **구현·배포 전** | 원본 bytes에서 수정 셀과 명시적 이벤트 행 추가·삭제만 적용해 새 XLSX를 만든다. 시트·서식·빈 행/열은 보존하며 동일 hash는 Upstage를 재호출하지 않고, 변경 hash의 새 fact는 UNREVIEWED로 되돌린다 |
-| 표준 실행본 export | **구현·배포 전** | 같은 revision을 EVENT·TRIGGER·DEPARTMENT·ACTION·CAST·LOCATION·NOTES 단일 양식으로 매핑하고, 누락값은 빈칸으로 둔 Word `.docx`와 브라우저 PDF 인쇄본을 제공한다 |
+| XLSX 왕복·refresh | **구현·운영 배포** | 원본 bytes에서 수정 셀과 명시적 이벤트 행 추가·삭제만 적용해 새 XLSX를 만든다. 시트·서식·빈 행/열은 보존하며 동일 hash는 Upstage를 재호출하지 않고, 변경 hash의 새 fact는 UNREVIEWED로 되돌린다 |
+| 표준 실행본 export | **구현·운영 배포** | 같은 revision을 EVENT·TRIGGER·DEPARTMENT·ACTION·CAST·LOCATION·NOTES 단일 양식으로 매핑하고, 누락값은 빈칸으로 둔 Word `.docx`와 브라우저 PDF 인쇄본을 제공한다 |
 
 ---
 
@@ -140,7 +142,7 @@ clean control → finding 0건
 다른 익명 세션 → case read 404
 ```
 
-프런트 production build는 secret 없이 생성된다. 서버 자동 테스트는 19건이며, app/server의
+프런트 production build는 secret 없이 생성된다. 서버 자동 테스트는 42건이며, app/server의
 typecheck·production build와 두 패키지의 `npm audit` 0건을 확인했다.
 
 ---
@@ -152,11 +154,11 @@ typecheck·production build와 두 패키지의 `npm audit` 0건을 확인했다
 | M3-B review→workspace E2E | **코드 완료** | 한 case ID로 review/snapshot/verifier/workspace 연결 |
 | M3-A 공개 데모 runtime | **완료** | 로그인 없는 세션 격리, Railway API, server-only Upstage key |
 | M3-A 장시간 extraction UX | **완료** | 10분 server timeout, 11분 client polling, 결과 미리보기와 순차 점등 STANDBY wordmark, reduced-motion 고정 표시 |
-| 다음 P0 | **Agent live smoke** | Studio Config #1과 서버 배선은 완료. 네 Agent의 실제 응답·strict decoder·cache/fallback을 fixture로 고정 |
+| 다음 P0 | **Agent live smoke 재확인** | 세 Agent 성공과 Rehearsal Brief 거부 응답까지 관찰했다. fallback 배포 후 전체 재실행은 Upstage HTTP 403 해소 뒤 네 provenance·strict decoder·cache를 한 번에 재확인 |
 | 다음 P0 | **semantic transition** | 인접 verified snapshot만 180–360ms 전환, jump/back·reduced-motion·Agent 실패는 정적 fallback |
 | 다음 P0 | **reference fidelity** | 실제 한국어 대본·17열 Master Cue를 gold fact와 대조 |
-| 다음 P1 | **XLSX 왕복** | 원본 sheet·열·서식을 유지한 새 파일과 re-import 동일 fact |
-| 다음 P2 | **refresh/영속성** | 동일 hash 재호출 금지, DB 저장, 새 fact UNREVIEWED gate |
+| 완료 | **XLSX 왕복·refresh** | 원본 sheet·열·서식·빈칸 유지, 이벤트 추가·삭제, 동일 hash 재호출 금지, 변경 source의 새 fact UNREVIEWED gate |
+| R5 범위 밖 | **영속성** | DB 저장·계정 복구·RLS는 이번 복구 목표에서 제외 |
 | 운영 제품 전환 시 | **계정·권한** | OAuth/JWT, DB 수준 owner/RLS, 세션 복구를 한 milestone으로 구현 |
 
 ### 촬영 직전 합격선
