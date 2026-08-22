@@ -10,6 +10,7 @@ import {
 import { AppHeader } from "@/components/layout/AppHeader";
 import { InputScreen } from "@/screens/InputScreen";
 import { WorkspaceScreen } from "@/screens/WorkspaceScreen";
+import { ArrowCompare } from "@/screens/ArrowCompare";
 import "./styles.css";
 
 const rootRoute = createRootRoute({
@@ -33,8 +34,14 @@ const workspaceRoute = createRoute({
   component: WorkspaceScreen,
 });
 
+const arrowCompareRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/arrow-compare",
+  component: ArrowCompare,
+});
+
 const router = createRouter({
-  routeTree: rootRoute.addChildren([indexRoute, workspaceRoute]),
+  routeTree: rootRoute.addChildren([indexRoute, workspaceRoute, arrowCompareRoute]),
 });
 
 declare module "@tanstack/react-router" {

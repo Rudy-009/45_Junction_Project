@@ -63,10 +63,10 @@
             { "type": "character_enter", "character_id": "char_hyunseo", "direction": "stage_left", "prop_id": "", "carried_by": "", "from": "stage_left", "to": "stage_left", "costume_change_duration_sec": 0, "costume_description": "" },
             { "type": "character_enter", "character_id": "char_jungmin", "direction": "stage_left", "prop_id": "", "carried_by": "", "from": "stage_left", "to": "stage_left", "costume_change_duration_sec": 0, "costume_description": "" }
           ],
-          "notes": "캐스트는 전 배우를 의미한다. 안내멘트 종료 후 막 open, 객석조명 off, 전체조명 in, 기자회견 장면 조명 정보가 함께 적혀 있다."
+          "notes": "캐스트 등장"
         }
       ],
-      "notes": "N#1 We're all adventurers [3](#docchat-group-doc1p1h1--doc1p3h1--doc1p4h1)"
+      "notes": "We're all adventurers"
     },
     {
       "cue_id": "cue_002",
@@ -78,9 +78,28 @@
         {
           "event_id": "evt_002_001",
           "trigger": {
+            "type": "scene_change",
+            "character_id": "",
+            "description": "N#1 종료 후 캐스트 퇴장"
+          },
+          "actions": [
+            { "type": "character_exit", "character_id": "char_hyewon", "direction": "stage_left", "prop_id": "", "carried_by": "", "from": "stage_left", "to": "stage_left", "costume_change_duration_sec": 0, "costume_description": "" },
+            { "type": "character_exit", "character_id": "char_jungwon", "direction": "stage_left", "prop_id": "", "carried_by": "", "from": "stage_left", "to": "stage_left", "costume_change_duration_sec": 0, "costume_description": "" },
+            { "type": "character_exit", "character_id": "char_eunbi", "direction": "stage_left", "prop_id": "", "carried_by": "", "from": "stage_left", "to": "stage_left", "costume_change_duration_sec": 0, "costume_description": "" },
+            { "type": "character_exit", "character_id": "char_yurim", "direction": "stage_left", "prop_id": "", "carried_by": "", "from": "stage_left", "to": "stage_left", "costume_change_duration_sec": 0, "costume_description": "" },
+            { "type": "character_exit", "character_id": "char_yunseo", "direction": "stage_left", "prop_id": "", "carried_by": "", "from": "stage_left", "to": "stage_left", "costume_change_duration_sec": 0, "costume_description": "" },
+            { "type": "character_exit", "character_id": "char_minseo", "direction": "stage_left", "prop_id": "", "carried_by": "", "from": "stage_left", "to": "stage_left", "costume_change_duration_sec": 0, "costume_description": "" },
+            { "type": "character_exit", "character_id": "char_hyunseo", "direction": "stage_left", "prop_id": "", "carried_by": "", "from": "stage_left", "to": "stage_left", "costume_change_duration_sec": 0, "costume_description": "" },
+            { "type": "character_exit", "character_id": "char_jungmin", "direction": "stage_left", "prop_id": "", "carried_by": "", "from": "stage_left", "to": "stage_left", "costume_change_duration_sec": 0, "costume_description": "" }
+          ],
+          "notes": "캐스트 퇴장"
+        },
+        {
+          "event_id": "evt_002_002",
+          "trigger": {
             "type": "lighting_cue",
             "character_id": "",
-            "description": "암전 후 정원 하수 무대대기 완료, 식탁 의자 수건 준비, 하수 조명 in"
+            "description": "정원 하수 무대대기 완료, 식탁 의자 수건 준비, 하수 조명 in"
           },
           "actions": [
             {
@@ -139,10 +158,10 @@
               "costume_description": ""
             }
           ],
-          "notes": "정원 하수 무대대기 완료와 식탁 의자 수건 준비가 직접 보인다."
+          "notes": "정원 하수 무대대기 완료와 식탁 의자 수건 준비"
         }
       ],
-      "notes": "D#1 암전 cue [2](#docchat-group-doc1p1h1--doc1p2h46)"
+      "notes": "암전 cue"
     },
     {
       "cue_id": "cue_003",
@@ -171,10 +190,10 @@
               "costume_description": ""
             }
           ],
-          "notes": "정원과 혜원이 손 잡고 무대 중앙으로 가는 동선 메모가 있다."
+          "notes": ""
         }
       ],
-      "notes": "S#1 마루, 우현의 우주이야기 [3](#docchat-group-doc1p2h57--doc1p3h1--doc1p4h1)"
+      "notes": "마루, 우현의 우주이야기"
     },
     {
       "cue_id": "cue_004",
@@ -200,7 +219,7 @@
             { "type": "character_enter", "character_id": "char_hyunseo", "direction": "stage_right", "prop_id": "", "carried_by": "", "from": "stage_right", "to": "stage_right", "costume_change_duration_sec": 0, "costume_description": "" },
             { "type": "character_enter", "character_id": "char_jungmin", "direction": "stage_right", "prop_id": "", "carried_by": "", "from": "stage_right", "to": "stage_right", "costume_change_duration_sec": 0, "costume_description": "" }
           ],
-          "notes": "전주 시작과 함께 캐스트 입장이 직접 적혀 있다."
+          "notes": "캐스트 입장"
         },
         {
           "event_id": "evt_004_002",
@@ -210,10 +229,10 @@
             "description": "N#2 후주 종료 후 하수 조명 in"
           },
           "actions": [],
-          "notes": "후주 종료 후 다음 장면 전환을 위한 하수 조명 in이 적혀 있다."
+          "notes": "다음 장면 전환"
         }
       ],
-      "notes": "N#2 A million miles away [3](#docchat-group-doc1p2h61--doc1p3h1--doc1p4h1)"
+      "notes": "A million miles away"
     },
     {
       "cue_id": "cue_005",
@@ -264,10 +283,10 @@
               "costume_description": ""
             }
           ],
-          "notes": "은비와 혜원이 상수 침대로 이동하고, 은비가 장바구니를 들고 입장한다."
+          "notes": "은비와 혜원 상수 침대 이동"
         }
       ],
-      "notes": "S#2 수연의 등장, 마루 침실이동 [4](#docchat-group-doc1p1h1--doc1p2h114--doc1p3h1--doc1p4h1)"
+      "notes": "수연의 등장, 마루 침실이동"
     },
     {
       "cue_id": "cue_006",
@@ -318,10 +337,10 @@
               "costume_description": "의사가운"
             }
           ],
-          "notes": "민서가 입장하며 통화 장면을 시작하고, 민서 휴대폰 공기계와 의사가운 정보가 있다."
+          "notes": "민서 입장 및 의사 연기"
         }
       ],
-      "notes": "S#3 우현과 의사의 통화 [4](#docchat-group-doc1p1h1--doc1p2h117--doc1p3h1--doc1p4h1)"
+      "notes": "우현과 의사의 통화"
     },
     {
       "cue_id": "cue_007",
@@ -338,10 +357,10 @@
             "description": "정원: 아빠가 손 꼭 잡아줄 테니까, 아무 걱정 하지 말고 편안하게 자자"
           },
           "actions": [],
-          "notes": "유림, 윤서가 무대에 등장하지만 대사는 없다고 적혀 있다."
+          "notes": "유림, 윤서 무대 등장 메모"
         }
       ],
-      "notes": "S#4 마루의 방으로 들어간 우현 [3](#docchat-group-doc1p2h140--doc1p3h1--doc1p4h1)"
+      "notes": "마루의 방으로 들어간 우현"
     },
     {
       "cue_id": "cue_008",
@@ -367,7 +386,7 @@
             { "type": "character_enter", "character_id": "char_hyunseo", "direction": "stage_left", "prop_id": "", "carried_by": "", "from": "stage_left", "to": "stage_left", "costume_change_duration_sec": 0, "costume_description": "" },
             { "type": "character_enter", "character_id": "char_jungmin", "direction": "stage_left", "prop_id": "", "carried_by": "", "from": "stage_left", "to": "stage_left", "costume_change_duration_sec": 0, "costume_description": "" }
           ],
-          "notes": "전주 시작시 캐스트 입장."
+          "notes": "캐스트 입장"
         },
         {
           "event_id": "evt_008_002",
@@ -386,10 +405,10 @@
             { "type": "character_exit", "character_id": "char_hyunseo", "direction": "stage_left", "prop_id": "", "carried_by": "", "from": "stage_left", "to": "stage_left", "costume_change_duration_sec": 0, "costume_description": "" },
             { "type": "character_exit", "character_id": "char_jungmin", "direction": "stage_left", "prop_id": "", "carried_by": "", "from": "stage_left", "to": "stage_left", "costume_change_duration_sec": 0, "costume_description": "" }
           ],
-          "notes": "노래 마지막 소절 후 캐스트 퇴장."
+          "notes": "캐스트 퇴장"
         }
       ],
-      "notes": "N#3 기쁨, 슬픔, 아름다운 마음 [4](#docchat-group-doc1p1h1--doc1p2h155--doc1p3h1--doc1p4h1)"
+      "notes": "기쁨, 슬픔, 아름다운 마음"
     },
     {
       "cue_id": "cue_009",
@@ -451,10 +470,10 @@
               "costume_description": ""
             }
           ],
-          "notes": "하수 무대대기 완료와 하수 조명 in이 직접 적혀 있다."
+          "notes": "하수 무대대기 완료"
         }
       ],
-      "notes": "D#2 암전 cue [2](#docchat-group-doc1p1h1--doc1p2h195)"
+      "notes": "암전 cue"
     },
     {
       "cue_id": "cue_010",
@@ -483,7 +502,7 @@
               "costume_description": ""
             }
           ],
-          "notes": "은비 퇴장."
+          "notes": "은비 퇴장"
         },
         {
           "event_id": "evt_010_002",
@@ -505,7 +524,7 @@
               "costume_description": ""
             }
           ],
-          "notes": "정원 퇴장."
+          "notes": "정원 퇴장"
         },
         {
           "event_id": "evt_010_003",
@@ -538,7 +557,7 @@
               "costume_description": ""
             }
           ],
-          "notes": "정원 퇴장 후 유림, 윤서 입장."
+          "notes": "정원 퇴장 후 유림, 윤서 입장"
         },
         {
           "event_id": "evt_010_004",
@@ -659,10 +678,10 @@
               "costume_description": ""
             }
           ],
-          "notes": "침대 세트 out, 식탁 의자 꼬깔모자 in, 이후 꼬깔모자 out과 마루가방 in이 적혀 있다."
+          "notes": "침대 세트 out, 식탁 의자 꼬깔모자 in"
         }
       ],
-      "notes": "S#5 마루의 생일파티, 별1,2의 대화 [3](#docchat-group-doc1p2h202--doc1p3h1--doc1p4h1)"
+      "notes": "마루의 생일파티, 별1,2의 대화"
     },
     {
       "cue_id": "cue_011",
@@ -702,10 +721,10 @@
               "costume_description": ""
             }
           ],
-          "notes": "윤서, 유림 하수 단상 무대대기 완료가 직접 적혀 있다."
+          "notes": "하수 단상 무대대기 완료"
         }
       ],
-      "notes": "D#3 암전 cue [2](#docchat-group-doc1p1h1--doc1p2h219)"
+      "notes": "암전 cue"
     },
     {
       "cue_id": "cue_012",
@@ -722,10 +741,10 @@
             "description": "정원: 이제 얼마 안 남았는데. 조금이라도 더 잘해주고 싶은데"
           },
           "actions": [],
-          "notes": "정원이 무대 센터에 도달하면 가로등 느낌 탑 조명 in 메모가 있다."
+          "notes": "가로등 느낌 탑 조명 in 메모"
         }
       ],
-      "notes": "S#6 밖으로 나온 우현, 뒤따라가는 별1,2 [3](#docchat-group-doc1p2h225--doc1p3h1--doc1p4h1)"
+      "notes": "밖으로 나온 우현, 뒤따라가는 별1,2"
     },
     {
       "cue_id": "cue_013",
@@ -751,7 +770,7 @@
             { "type": "character_enter", "character_id": "char_hyunseo", "direction": "stage_left", "prop_id": "", "carried_by": "", "from": "stage_left", "to": "stage_left", "costume_change_duration_sec": 0, "costume_description": "" },
             { "type": "character_enter", "character_id": "char_jungmin", "direction": "stage_left", "prop_id": "", "carried_by": "", "from": "stage_left", "to": "stage_left", "costume_change_duration_sec": 0, "costume_description": "" }
           ],
-          "notes": "캐스트 입장."
+          "notes": "캐스트 입장"
         },
         {
           "event_id": "evt_013_002",
@@ -784,10 +803,10 @@
               "costume_description": ""
             }
           ],
-          "notes": "은비, 혜원 중퇴."
+          "notes": "은비, 혜원 중퇴"
         }
       ],
-      "notes": "N#4 UGLY [3](#docchat-group-doc1p2h245--doc1p3h1--doc1p4h1)"
+      "notes": "UGLY"
     },
     {
       "cue_id": "cue_014",
@@ -827,10 +846,10 @@
               "costume_description": ""
             }
           ],
-          "notes": "은비, 혜원 하수 무대대기 완료."
+          "notes": "은비, 혜원 하수 무대대기 완료"
         }
       ],
-      "notes": "D#4 암전 cue [2](#docchat-group-doc1p1h1--doc1p2h279)"
+      "notes": "암전 cue"
     },
     {
       "cue_id": "cue_015",
@@ -870,10 +889,10 @@
               "costume_description": ""
             }
           ],
-          "notes": "혜원이 퇴장하며 마루가방 out."
+          "notes": "혜원 퇴장, 마루가방 out"
         }
       ],
-      "notes": "S#7 학예회날 아침 [3](#docchat-group-doc1p2h287--doc1p3h1--doc1p4h1)"
+      "notes": "학예회날 아침"
     },
     {
       "cue_id": "cue_016",
@@ -897,10 +916,10 @@
             { "type": "character_enter", "character_id": "char_hyunseo", "direction": "stage_left", "prop_id": "", "carried_by": "", "from": "stage_left", "to": "stage_left", "costume_change_duration_sec": 0, "costume_description": "" },
             { "type": "character_enter", "character_id": "char_jungmin", "direction": "stage_left", "prop_id": "", "carried_by": "", "from": "stage_left", "to": "stage_left", "costume_change_duration_sec": 0, "costume_description": "" }
           ],
-          "notes": "정원, 은비 제외 캐스트 입장으로 읽힌다."
+          "notes": "정원, 은비 제외 캐스트 입장"
         }
       ],
-      "notes": "N#5 혜성 [3](#docchat-group-doc1p2h293--doc1p3h1--doc1p4h1)"
+      "notes": "혜성"
     },
     {
       "cue_id": "cue_017",
@@ -950,7 +969,7 @@
               "costume_description": ""
             }
           ],
-          "notes": "혜원, 은비 퇴장."
+          "notes": "혜원, 은비 퇴장"
         },
         {
           "event_id": "evt_017_003",
@@ -972,10 +991,10 @@
               "costume_description": ""
             }
           ],
-          "notes": "정원이 한숨 쉬며 쫓아 나감."
+          "notes": "정원이 한숨 쉬며 쫓아 나감"
         }
       ],
-      "notes": "S#8 학예회에 늦은 우현 [3](#docchat-group-doc1p2h335--doc1p3h1--doc1p4h1)"
+      "notes": "학예회에 늦은 우현"
     },
     {
       "cue_id": "cue_018",
@@ -1002,10 +1021,10 @@
             "description": "은비: 하 듣기 싫어. 매번 똑같은 변명, 똑같은 약속. 나 이제 진짜 지쳤어."
           },
           "actions": [],
-          "notes": "N#6 세션큐로 연결."
+          "notes": "N#6 세션큐 연결"
         }
       ],
-      "notes": "S#9 다그치는 수연 [3](#docchat-group-doc1p2h349--doc1p3h1--doc1p4h1)"
+      "notes": "다그치는 수연"
     },
     {
       "cue_id": "cue_019",
@@ -1022,7 +1041,7 @@
             "description": "은비 솔로 시작"
           },
           "actions": [],
-          "notes": "은비 솔로 중심 넘버."
+          "notes": "은비 솔로 중심 넘버"
         },
         {
           "event_id": "evt_019_002",
@@ -1044,10 +1063,10 @@
               "costume_description": ""
             }
           ],
-          "notes": "은비 퇴장."
+          "notes": "은비 퇴장"
         }
       ],
-      "notes": "N#6 Good for you [3](#docchat-group-doc1p2h353--doc1p3h1--doc1p4h1)"
+      "notes": "Good for you"
     },
     {
       "cue_id": "cue_020",
@@ -1074,10 +1093,10 @@
             "description": "정원: 여보, 너무 슬퍼하지 마. 당신 곁에 항상 있을 거야."
           },
           "actions": [],
-          "notes": "N#7 세션큐로 연결."
+          "notes": "N#7 세션큐 연결"
         }
       ],
-      "notes": "S#10 우현의 시한부 고백 [3](#docchat-group-doc1p2h395--doc1p3h1--doc1p4h1)"
+      "notes": "우현의 시한부 고백"
     },
     {
       "cue_id": "cue_021",
@@ -1103,7 +1122,7 @@
             { "type": "character_enter", "character_id": "char_hyunseo", "direction": "stage_left", "prop_id": "", "carried_by": "", "from": "stage_left", "to": "stage_left", "costume_change_duration_sec": 0, "costume_description": "" },
             { "type": "character_enter", "character_id": "char_jungmin", "direction": "stage_left", "prop_id": "", "carried_by": "", "from": "stage_left", "to": "stage_left", "costume_change_duration_sec": 0, "costume_description": "" }
           ],
-          "notes": "전주에 캐스트 입장."
+          "notes": "전주에 캐스트 입장"
         },
         {
           "event_id": "evt_021_002",
@@ -1122,10 +1141,10 @@
             { "type": "character_exit", "character_id": "char_hyunseo", "direction": "stage_left", "prop_id": "", "carried_by": "", "from": "stage_left", "to": "stage_left", "costume_change_duration_sec": 0, "costume_description": "" },
             { "type": "character_exit", "character_id": "char_jungmin", "direction": "stage_left", "prop_id": "", "carried_by": "", "from": "stage_left", "to": "stage_left", "costume_change_duration_sec": 0, "costume_description": "" }
           ],
-          "notes": "캐스트 퇴장 후 바로 암전."
+          "notes": "캐스트 퇴장 후 바로 암전"
         }
       ],
-      "notes": "N#7 하나의 답 [3](#docchat-group-doc1p2h401--doc1p3h1--doc1p4h1)"
+      "notes": "하나의 답"
     },
     {
       "cue_id": "cue_022",
@@ -1165,7 +1184,7 @@
               "costume_description": ""
             }
           ],
-          "notes": "현서, 정민 입장."
+          "notes": "현서, 정민 입장"
         },
         {
           "event_id": "evt_022_002",
@@ -1175,10 +1194,10 @@
             "description": "혜원: 우리 아빠 거짓말쟁이 아니야! 진짜 바빠서 못 온 거란 말이야!"
           },
           "actions": [],
-          "notes": "N#8 세션큐 직전 대사."
+          "notes": "N#8 세션큐 직전 대사"
         }
       ],
-      "notes": "S#11 마루를 놀리는 친구들 [3](#docchat-group-doc1p2h433--doc1p3h1--doc1p4h1)"
+      "notes": "마루를 놀리는 친구들"
     },
     {
       "cue_id": "cue_023",
@@ -1207,7 +1226,7 @@
               "costume_description": ""
             }
           ],
-          "notes": "유치원 가방/마루가방 관련 이벤트."
+          "notes": "마루가방 관련 이벤트"
         },
         {
           "event_id": "evt_023_002",
@@ -1217,10 +1236,10 @@
             "description": "혜원: 안돼 나한테 정말 소중한 거야"
           },
           "actions": [],
-          "notes": "가방을 둘러싼 갈등."
+          "notes": "가방을 둘러싼 갈등"
         }
       ],
-      "notes": "N#8 Larger than life [3](#docchat-group-doc1p2h447--doc1p3h1--doc1p4h1)"
+      "notes": "Larger than life"
     },
     {
       "cue_id": "cue_024",
@@ -1260,7 +1279,7 @@
               "costume_description": ""
             }
           ],
-          "notes": "정원, 은비 하수 무대대기 완료."
+          "notes": "정원, 은비 하수 무대대기 완료"
         },
         {
           "event_id": "evt_024_002",
@@ -1292,7 +1311,7 @@
               "costume_description": ""
             }
           ],
-          "notes": "혜원 빠르게 지나감."
+          "notes": "혜원 빠르게 지나감"
         },
         {
           "event_id": "evt_024_004",
@@ -1314,7 +1333,7 @@
               "costume_description": ""
             }
           ],
-          "notes": "은비가 상수 쪽으로 이동하는 장면 전환."
+          "notes": "은비 상수 이동"
         },
         {
           "event_id": "evt_024_005",
@@ -1354,10 +1373,10 @@
             "description": "혜원: 약속!"
           },
           "actions": [],
-          "notes": "장면 끝 암전."
+          "notes": "장면 끝 암전"
         }
       ],
-      "notes": "S#12 우현이 마루에게 사과 [3](#docchat-group-doc1p2h476--doc1p3h1--doc1p4h1)"
+      "notes": "우현이 마루에게 사과"
     },
     {
       "cue_id": "cue_025",
@@ -1387,7 +1406,7 @@
           "notes": ""
         }
       ],
-      "notes": "S#13 놀이공원에 온 가족들 [3](#docchat-group-doc1p2h489--doc1p3h1--doc1p4h1)"
+      "notes": "놀이공원에 온 가족들"
     },
     {
       "cue_id": "cue_026",
@@ -1396,7 +1415,7 @@
       "estimated_duration_sec": 0,
       "backstage_crossover_time_override_sec": 0,
       "events": [],
-      "notes": "N#9 한 페이지가 될 수 있게 [3](#docchat-group-doc1p2h523--doc1p3h1--doc1p4h1)"
+      "notes": "한 페이지가 될 수 있게"
     },
     {
       "cue_id": "cue_027",
@@ -1458,7 +1477,7 @@
               "costume_description": ""
             }
           ],
-          "notes": "하수와 상수에 각각 무대대기 완료."
+          "notes": "상하 무대대기 완료"
         },
         {
           "event_id": "evt_027_002",
@@ -1481,7 +1500,7 @@
           "notes": ""
         }
       ],
-      "notes": "S#14 우현의 이별 고백 / 별1,2의 대화 [3](#docchat-group-doc1p2h528--doc1p3h1--doc1p4h1)"
+      "notes": "우현의 이별 고백 / 별1,2의 대화"
     },
     {
       "cue_id": "cue_028",
@@ -1490,7 +1509,7 @@
       "estimated_duration_sec": 0,
       "backstage_crossover_time_override_sec": 0,
       "events": [],
-      "notes": "N#10 기쁨, 슬픔 reprise [3](#docchat-group-doc1p2h546--doc1p3h1--doc1p4h1)"
+      "notes": "기쁨, 슬픔 reprise"
     },
     {
       "cue_id": "cue_029",
@@ -1519,7 +1538,7 @@
               "costume_description": ""
             }
           ],
-          "notes": "혜원은 자고 있다가 씬 시작."
+          "notes": "혜원은 자고 있다가 씬 시작"
         },
         {
           "event_id": "evt_029_002",
@@ -1539,10 +1558,10 @@
             "description": "은비: 다 잘 할 수 있겠어?"
           },
           "actions": [],
-          "notes": "N#11 세션큐."
+          "notes": "N#11 세션큐"
         }
       ],
-      "notes": "S#15 마루와 수연의 대화 [3](#docchat-group-doc1p2h575--doc1p3h1--doc1p4h1)"
+      "notes": "마루와 수연의 대화"
     },
     {
       "cue_id": "cue_030",
@@ -1592,10 +1611,10 @@
               "costume_description": ""
             }
           ],
-          "notes": "상하수 교차와 앞으로 나오는 동선 메모."
+          "notes": "상하수 교차 동선"
         }
       ],
-      "notes": "N#11 Goodbye [3](#docchat-group-doc1p2h594--doc1p3h1--doc1p4h1)"
+      "notes": "Goodbye"
     },
     {
       "cue_id": "cue_031",
@@ -1604,7 +1623,7 @@
       "estimated_duration_sec": 60,
       "backstage_crossover_time_override_sec": 0,
       "events": [],
-      "notes": "긴 암전, 약 1분. 별들의 대화와 뉴스 음성 S.E.가 포함된다 [3](#docchat-group-doc1p2h613--doc1p3h1--doc1p4h1)"
+      "notes": "긴 암전, 약 1분. 별들의 대화와 뉴스 음성 S.E. 포함"
     },
     {
       "cue_id": "cue_032",
@@ -1634,7 +1653,7 @@
           "notes": ""
         }
       ],
-      "notes": "S#17 우주비행사가 된 마루 [3](#docchat-group-doc1p2h621--doc1p3h1--doc1p4h1)"
+      "notes": "우주비행사가 된 마루"
     },
     {
       "cue_id": "cue_033",
@@ -1660,10 +1679,10 @@
             { "type": "character_enter", "character_id": "char_hyunseo", "direction": "stage_left", "prop_id": "", "carried_by": "", "from": "stage_left", "to": "stage_left", "costume_change_duration_sec": 0, "costume_description": "" },
             { "type": "character_enter", "character_id": "char_jungmin", "direction": "stage_left", "prop_id": "", "carried_by": "", "from": "stage_left", "to": "stage_left", "costume_change_duration_sec": 0, "costume_description": "" }
           ],
-          "notes": "뛰어다니며 캐스트 입장."
+          "notes": "뛰어다니며 캐스트 입장"
         }
       ],
-      "notes": "N#12 Fantasy [3](#docchat-group-doc1p2h633--doc1p3h1--doc1p4h1)"
+      "notes": "Fantasy"
     },
     {
       "cue_id": "cue_034",
@@ -1672,7 +1691,7 @@
       "estimated_duration_sec": 0,
       "backstage_crossover_time_override_sec": 0,
       "events": [],
-      "notes": "N#13 Goodbye reprise / 커튼콜. 노래 끝난 직후 암전 없이 막 close, 막 닫히면 객석 조명 on [3](#docchat-group-doc1p2h641--doc1p3h1--doc1p4h1)"
+      "notes": "Goodbye reprise / 커튼콜. 노래 끝난 직후 암전 없이 막 close, 막 닫히면 객석 조명 on"
     }
   ]
 }
