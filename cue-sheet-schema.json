@@ -68,7 +68,7 @@
       "description": "큐(씬) 목록 - 시간순 정렬",
       "items": {
         "type": "object",
-        "required": ["cue_id", "scene_number", "scene_type"],
+        "required": ["cue_id", "scene_number", "scene_type", "events"],
         "properties": {
           "cue_id": { "type": "string", "description": "큐 고유 ID (예: cue_001)" },
           "scene_number": { "type": "string", "description": "씬 번호 (예: S#001, N#201)" },
@@ -87,35 +87,10 @@
             "description": "이 씬에서의 백스테이지 이동 시간 오버라이드(초). 미지정 시 venue 기본값 사용",
             "minimum": 0
           },
-          "stage_left_movements": {
+          "events": {
             "type": "array",
-            "description": "상수(Stage Left, 관객 기준 오른쪽) 인물 이동",
-            "items": { "$ref": "#/definitions/character_movement" }
-          },
-          "stage_right_movements": {
-            "type": "array",
-            "description": "하수(Stage Right, 관객 기준 왼쪽) 인물 이동",
-            "items": { "$ref": "#/definitions/character_movement" }
-          },
-          "backstage_crossovers": {
-            "type": "array",
-            "description": "백스테이지 상수↔하수 이동",
-            "items": { "$ref": "#/definitions/backstage_crossover" }
-          },
-          "stage_left_props": {
-            "type": "array",
-            "description": "상수 소품 이동",
-            "items": { "$ref": "#/definitions/prop_movement" }
-          },
-          "stage_right_props": {
-            "type": "array",
-            "description": "하수 소품 이동",
-            "items": { "$ref": "#/definitions/prop_movement" }
-          },
-          "costume_changes": {
-            "type": "array",
-            "description": "의상 환복 정보",
-            "items": { "$ref": "#/definitions/costume_change" }
+            "description": "이벤트 목록 - 배열 순서가 실행 순서",
+            "items": { "$ref": "#/definitions/event" }
           },
           "notes": { "type": "string", "description": "비고" }
         }
@@ -123,63 +98,87 @@
     }
   },
   "definitions": {
-    "character_movement": {
+    "event": {
       "type": "object",
-      "required": ["character_id", "action"],
+      "description": "하나의 이벤트 (인물/소품 입퇴장, 환복 등)",
+      "required": ["event_id", "trigger", "actions"],
       "properties": {
-        "character_id": { "type": "string", "description": "인물 ID 참조" },
-        "action": {
-          "type": "string",
-          "enum": ["enter", "exit"],
-          "description": "등장(enter) / 퇴장(exit)"
-        }
-      }
-    },
-    "backstage_crossover": {
-      "type": "object",
-      "description": "백스테이지를 통한 상수↔하수 이동",
-      "required": ["character_id", "from", "to"],
-      "properties": {
-        "character_id": { "type": "string", "description": "인물 ID 참조" },
-        "from": {
-          "type": "string",
-          "enum": ["stage_left", "stage_right"],
-          "description": "출발 방향"
+        "event_id": { "type": "string", "description": "이벤트 고유 ID (예: evt_001)" },
+        "trigger": { "$ref": "#/definitions/trigger" },
+        "actions": {
+          "type": "array",
+          "description": "이 트리거에 의해 동시에 발생하는 액션들",
+          "items": { "$ref": "#/definitions/action" }
         },
-        "to": {
+        "notes": { "type": "string", "description": "비고" }
+      }
+    },
+    "trigger": {
+      "type": "object",
+      "description": "이벤트 발동 조건",
+      "required": ["type"],
+      "properties": {
+        "type": {
           "type": "string",
-          "enum": ["stage_left", "stage_right"],
-          "description": "도착 방향"
+          "enum": ["dialogue", "scene_change", "lighting_cue", "sound_cue"],
+          "description": "트리거 유형: dialogue(대사) / scene_change(씬전환) / lighting_cue(조명큐) / sound_cue(음향큐)"
+        },
+        "character_id": {
+          "type": "string",
+          "description": "대사 트리거일 경우, 해당 대사를 하는 인물 ID"
+        },
+        "description": {
+          "type": "string",
+          "description": "트리거 상세 설명 (예: '민수: 나 이제 갈게' 대사 후)"
         }
       }
     },
-    "prop_movement": {
+    "action": {
       "type": "object",
-      "required": ["prop_id", "action"],
+      "description": "이벤트 발동 시 실행되는 단일 액션",
+      "required": ["type"],
       "properties": {
-        "prop_id": { "type": "string", "description": "소품 ID 참조" },
-        "action": {
+        "type": {
           "type": "string",
-          "enum": ["in", "out"],
-          "description": "소품 무대 진입(in) / 무대 퇴장(out)"
+          "enum": ["character_enter", "character_exit", "backstage_crossover", "prop_in", "prop_out", "costume_change"],
+          "description": "액션 유형"
+        },
+        "character_id": {
+          "type": "string",
+          "description": "대상 인물 ID"
+        },
+        "direction": {
+          "type": "string",
+          "enum": ["stage_left", "stage_right"],
+          "description": "입장/퇴장/소품 이동 방향 (상수 or 하수)"
+        },
+        "prop_id": {
+          "type": "string",
+          "description": "소품 ID (prop_in, prop_out 시 사용)"
         },
         "carried_by": {
           "type": "string",
           "description": "소품을 함께 이동시키는 인물 ID (없으면 스태프 세팅)"
-        }
-      }
-    },
-    "costume_change": {
-      "type": "object",
-      "required": ["character_id", "duration_sec"],
-      "properties": {
-        "character_id": { "type": "string", "description": "인물 ID 참조" },
-        "duration_sec": {
+        },
+        "from": {
+          "type": "string",
+          "enum": ["stage_left", "stage_right"],
+          "description": "백스테이지 이동 출발 (backstage_crossover 시)"
+        },
+        "to": {
+          "type": "string",
+          "enum": ["stage_left", "stage_right"],
+          "description": "백스테이지 이동 도착 (backstage_crossover 시)"
+        },
+        "costume_change_duration_sec": {
           "type": "number",
-          "description": "환복 소요 시간(초)",
+          "description": "환복 소요 시간(초) (costume_change 시)",
           "minimum": 0
         },
-        "description": { "type": "string", "description": "환복 내용 설명" }
+        "costume_description": {
+          "type": "string",
+          "description": "환복 내용 (예: 교복 → 사복)"
+        }
       }
     }
   }
