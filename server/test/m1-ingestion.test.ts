@@ -266,7 +266,10 @@ test("Upstage adapter uploads one file per role, polls jobs, and returns only UN
     if (url.endsWith("/v2/responses") && init?.method === "POST") {
       const body = JSON.parse(String(init.body)) as Record<string, unknown>;
       createBodies.push(body);
-      assert.equal("config_id" in body, false);
+      assert.equal(
+        body.config_id,
+        body.model === "agt_script" ? "cfg_script" : "cfg_cue",
+      );
       return Response.json({ id: body.model === "agt_script" ? "job-script" : "job-cue" });
     }
     if (url.includes("job-script")) {
@@ -294,6 +297,7 @@ test("Upstage adapter uploads one file per role, polls jobs, and returns only UN
   const provider = new UpstageAgentProvider({
     apiKey: "secret-test-key",
     agentIds: { SCRIPT: "agt_script", MASTER_CUE: "agt_cue" },
+    configIds: { SCRIPT: "cfg_script", MASTER_CUE: "cfg_cue" },
     fetchImpl: mockFetch,
     pollIntervalMs: 0,
     timeoutMs: 1_000,
@@ -310,7 +314,11 @@ test("Upstage adapter fails closed when a generated fact has no evidence quote",
   const mockFetch: typeof fetch = async (input, init) => {
     const url = String(input);
     if (url.endsWith("/v2/files")) return Response.json({ id: "file-1" });
-    if (url.endsWith("/v2/responses") && init?.method === "POST") return Response.json({ id: "job-1" });
+    if (url.endsWith("/v2/responses") && init?.method === "POST") {
+      const body = JSON.parse(String(init.body)) as Record<string, unknown>;
+      assert.equal("config_id" in body, false);
+      return Response.json({ id: "job-1" });
+    }
     return Response.json({
       id: "job-1",
       status: "completed",

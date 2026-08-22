@@ -15,11 +15,12 @@
 
 ## 1. 한 문장 현황
 
-현재 STANDBY는 **하드코딩된 공연 fixture를 탐색·편집·재현하는 프런트 데모**와
-**실제 PDF/XLSX 입력·Upstage Agent 추출·사람 검토 게이트를 제공하는 Fastify 백엔드**가 각각 동작한다.
-프런트 API client는 추가됐지만 기존 화면에는 아직 배선되지 않았다.
+현재 STANDBY는 **사람 또는 별도 변환기가 만든 `cue-sheet-schema` JSON을 브라우저에서 검증·재현하는
+프런트**와 **실제 PDF/XLSX 입력·Upstage Agent 추출·사람 검토 게이트를 제공하는 Fastify 백엔드**가
+각각 동작한다. 프런트 API client는 존재하지만 현재 두 화면에는 배선되지 않았다.
 
-따라서 현재 웹 화면에서 보이는 finding과 근거는 실제 업로드 문서를 분석한 결과가 아니다.
+따라서 현재 웹 화면의 모순과 무대 상태는 업로드한 JSON에서 계산되지만, 원 대본·Master Cue를
+Upstage가 추출한 결과는 아니다. 두 데이터 흐름은 아직 연결되지 않았다.
 
 ---
 
@@ -28,24 +29,25 @@
 | 영역 | 상태 | 현재 동작 |
 |---|---|---|
 | 두 화면 라우팅 | **구현** | `/` 입력, `/workspace` 워크스페이스만 존재 |
-| 세 입력 UI | **부분 구현** | SCRIPT·CUESHEET 카드와 STAGE_SPEC 폼을 표시하고 로컬 상태를 수정할 수 있음 |
-| 파일 업로드 | **백엔드 구현 / UI 미배선** | SCRIPT PDF/DOCX, MASTER_CUE XLSX/PDF를 multipart로 받고 byte SHA-256을 고정. 기존 dropzone은 아직 호출하지 않음 |
-| Upstage 추출 | **adapter 구현 / UI 미배선** | Files API → 역할별 Agent job → polling → strict decoder를 구현. 실 Agent ID로 live smoke는 미실행 |
-| Fact/authority 검토 | **UI fixture** | REVIEWED 배지는 토글되지만 추출 fact나 판정 입력과 연결되지 않음 |
-| 이벤트 타임라인 | **부분 구현** | E1~E8 선택·이전·다음 가능. 재생 버튼은 다음 이벤트로 한 번 이동할 뿐 연속 재생하지 않음 |
-| 이벤트별 2D 무대 | **구현** | E1~E8별 정적 스냅샷, 인물/소품 위치, ENTER/EXIT 방향·라벨 표시 |
-| finding 표시 | **UI fixture** | E3 `VIOLATION`, E5 `REVIEW`, E6 `INSUFFICIENT_EVIDENCE` 상세를 하드코딩 데이터로 표시 |
-| Evidence Trace | **UI fixture** | finding 상세에 SCRIPT·CUESHEET·STAGE_SPEC 근거 카드 3개 표시 |
-| 큐시트 탐색 | **구현** | 행 marker, 선택 행, 열 표시 토글, 패널 내부 가로 스크롤 지원 |
-| 큐시트 편집 | **인메모리 구현** | 셀 수정은 draft로 유지하고, 저장할 때 revision을 생성한 뒤 E3를 재판정 |
-| 수정 이력 | **인메모리 구현** | 현재 탭 안에서 revision 목록·hover preview·과거 revision 불러오기 지원 |
-| finding 결정 기록 | **인메모리 구현** | `DECISION_RECORDED` 버튼 상태만 현재 탭에 보존 |
-| 원본 hash/revision 영속성 | **미구현** | 새로고침하면 편집·이력·결정이 모두 사라짐. 프런트는 백엔드 hash 계약을 사용하지 않음 |
+| 세 입력 UI | **미구현** | 현재 입력 화면은 통합 JSON 하나만 받으며 SCRIPT·MASTER_CUE·STAGE_SPEC 원본을 받지 않음 |
+| JSON 입력 | **구현** | `.json`을 읽어 `metadata`, `venue`, `characters`, `props`, `cues[].events` 최소 구조를 확인하고 Zustand에 적재 |
+| 원문 파일 업로드 | **백엔드 구현 / UI 미배선** | SCRIPT PDF/DOCX, MASTER_CUE XLSX/PDF를 multipart로 받고 byte SHA-256을 고정 |
+| Upstage 추출 | **live adapter 검증 / UI 미배선** | Files API → 역할별 Agent/Config #1 job → polling → strict decoder를 합성 Script PDF + Master Cue PDF/XLSX로 실제 통과 |
+| Fact/authority 검토 | **백엔드 구현 / UI 없음** | review queue와 snapshot API는 있으나 현재 화면에서 확인·승인할 수 없음 |
+| 이벤트 타임라인 | **구현** | JSON의 cue/event를 가로 타임라인에 렌더링하고 선택 이벤트로 자동 스크롤 |
+| 이벤트별 2D 무대 | **구현** | 선택 이벤트까지 action을 순서대로 재생산해 인물/소품의 무대·상수윙·하수윙 상태와 ENTER/EXIT 표시 |
+| 모순 표시 | **로컬 JSON 기준 구현** | 8개 규칙을 `ERROR`/`WARNING`으로 계산해 입력 미리보기, 타임라인, 이벤트 상세에 표시 |
+| Evidence Trace | **현재 UI 없음** | 로컬 모순은 SCRIPT·MASTER_CUE·STAGE_SPEC locator/quote 3종 근거를 갖지 않음 |
+| 큐시트 탐색 | **구현** | cue/event 타임라인 선택과 event/cue 상세 열람 지원 |
+| 큐시트 편집 | **화면 미구현** | store에 update/add/remove action은 있으나 현재 화면에서 호출하지 않음 |
+| 수정 이력 | **미구현** | store에 revision 껍데기만 있고 snapshot 저장·복원은 TODO |
+| finding 결정 기록 | **미구현** | `DECISION_RECORDED` UI와 서버 연결 없음 |
+| 원본 hash/revision 영속성 | **미구현** | 새로고침하면 JSON과 선택 상태가 사라지고 프런트는 백엔드 hash 계약을 사용하지 않음 |
 | XLSX import/export | **미구현** | 실제 엑셀 읽기·서식 보존·새 파일 내보내기 없음 |
 | refresh/변경 감지 | **미구현** | source hash 비교, 변경 문서 재추출, UNREVIEWED 게이트 없음 |
 | 프런트–백엔드 연결 | **client 구현 / 화면 미배선** | `app/src/lib/standby-api.ts`에 case→upload→operation→review→snapshot client가 있으나 화면은 fixture 상태 |
 | 백엔드 API 수직 슬라이스 | **구현** | case→source→비동기 extraction→review→snapshot→workspace→cue revision 흐름을 메모리에서 제공 |
-| 실제 Upstage 연동 | **코드 구현 / live 미검증** | API key·역할별 Agent ID를 env로 받고 `/v2/files`, `/v2/responses`, polling을 실행 |
+| 실제 Upstage 연동 | **합성 live smoke 통과** | 역할별 저장 Config #1로 PDF/PDF와 PDF/XLSX를 실행해 12 Script + 5 Cue + 3 Stage facts와 전건 `UNREVIEWED`를 확인. 실제 원본 fidelity는 미검증 |
 | 결정론적 verifier | **부분 구현** | 백엔드는 `VR-01 QUICK_CHANGE_IMPOSSIBLE` 통제 fixture만 계산 |
 | strict JSON 계약 | **계약·decoder·테스트 구현** | 역할별 `script_facts`/`cue_facts`, locator·quote를 fail-closed로 검사하고 새 fact를 `UNREVIEWED`로 격리 |
 | 데이터베이스 | **미구현** | 백엔드 재시작 시 case·review·revision이 모두 사라지는 in-memory store |
@@ -56,48 +58,29 @@
 
 ### 3-1. 입력 화면 `/`
 
-1. SCRIPT와 CUESHEET 카드에는 미리 정해진 파일명·hash·origin이 표시된다.
-2. 각 REVIEWED 배지는 화면 안에서만 토글할 수 있다.
-3. STAGE_SPEC에서 다음 값을 로컬로 수정할 수 있다.
-   - 상수/하수 wing 유무
-   - crossover `true` / `false` / `UNKNOWN`
-   - route와 최소·최대 시간
-   - actors, props, costumes의 initial state
-4. dropzone에 파일을 놓아도 파일명·hash·내용은 바뀌지 않는다.
-5. `Upstage 추출 시작`을 누르면 입력값 검증이나 네트워크 요청 없이 워크스페이스로 이동한다.
+1. `.json` 파일 하나를 드래그하거나 선택한다.
+2. 브라우저에서 JSON을 파싱하고 필수 최상위 필드와 `cues[].events` 존재만 최소 검사한다.
+3. 성공하면 공연명, 인물·소품·cue 수, backstage crossover 여부와 모순 건수를 표시한다.
+4. 데이터는 Zustand 메모리에만 적재되며 백엔드와 Upstage를 호출하지 않는다.
+5. JSON이 로드된 경우에만 `워크스페이스 열기`가 활성화된다.
 
 ### 3-2. 워크스페이스 `/workspace`
 
-- 위·아래 패널은 같은 높이를 유지하며 `패널 전환`으로 무대와 큐시트 위치를 맞바꾼다.
-- 타임라인 이벤트를 선택하면 해당 이벤트가 활성화되고 finding 팝업이 아래 패널만 덮는다.
-- 현재 이벤트가 바뀌면 2D 무대는 그 이벤트의 정적 스냅샷으로 즉시 바뀐다.
+- 상단 260px 무대, 중앙 event/cue 상세, 하단 180px 가로 타임라인으로 고정되어 있다.
+- 타임라인 cue/event를 선택하면 상세와 2D 무대가 해당 시점 상태로 즉시 바뀐다.
 - 사람은 원+cyan, 소품은 사각형+amber로 표시한다.
 - `ENTER`는 무대 안쪽 방향과 `등장`, `EXIT`는 wing 방향과 `퇴장`으로 표시한다.
-- 팝업의 `이 위치로 이동`은 연결된 큐시트 셀에 포커스를 옮기고 finding marker는 유지한다.
-- `DECISION_RECORDED`는 verdict나 원본을 변경하지 않는다.
+- 모순은 `ERROR`/`WARNING` 카드와 타임라인 marker로 표시된다.
+- 패널 swap, finding 팝업, Evidence Trace, 셀 이동, 결정 기록은 현재 화면에 없다.
 
-### 3-3. 큐시트 편집과 재판정
+### 3-3. 현재 로컬 검증 규칙
 
-1. 셀 클릭 후 입력한 값은 저장 전까지 draft다.
-2. `모두 취소`는 현재 draft 전체를 버린다.
-3. `저장`은 현재 메모리의 행에 patch를 반영하고 revision을 하나 만든다.
-4. 저장 직후 재판정하는 것은 E3 한 건뿐이다.
-5. R3 `환복시간`에서 처음 발견한 정수가 `66` 이상이면 E3는 `CONSISTENT`, 그 외에는 `VIOLATION`이 된다.
-6. 예: `58s`를 `70s`로 바꾸고 저장하면 E3가 `CONSISTENT`로 바뀐다.
-7. 저장 이력은 현재 브라우저 탭의 React state에만 있으며 서버에 기록되지 않는다.
+`duplicate_enter`, `no_backstage_crossover`, `insufficient_crossover_time`,
+`prop_location_contradiction`, `prop_already_on_stage`, `prop_not_on_stage`,
+`exit_without_enter`, `insufficient_costume_time`을 순서 기반 상태 머신으로 계산한다.
 
-### 3-4. 현재 fixture
-
-| 이벤트 | 표시 상태 | 규칙/의미 |
-|---|---|---|
-| E3 | `VIOLATION` | `VR-01`, available `58–62s` vs required `66–68s` |
-| E5 | `REVIEW` | `VR-03` 소품 연속성 검토 fixture |
-| E6 | `INSUFFICIENT_EVIDENCE` | `VR-02` 동선 판정에 필요한 근거 부족 fixture |
-| 그 외 | `CONSISTENT` | finding 상세 없음 |
-
-제품 도메인의 finding verdict는 `VIOLATION` / `REVIEW` / `INSUFFICIENT_EVIDENCE` 세 가지다.
-현재 프런트의 `Verdict` 타입은 화면 집계 상태인 `CONSISTENT`와 편집 표시인 `EDITED`도 함께 담고 있다.
-이는 현재 구현상의 타입 혼합이며, `CONSISTENT`·`EDITED`를 hard finding verdict로 해석하면 안 된다.
+이 결과는 PRD의 hard finding 계약과 아직 다르다. `ERROR`/`WARNING`만 있고
+`INSUFFICIENT_EVIDENCE`와 세 source evidence가 없으므로 백엔드 verifier 결과로 소개하면 안 된다.
 
 ---
 
@@ -155,15 +138,17 @@ cue revision으로 환복시간 70s
 ```mermaid
 flowchart LR
   U[사용자] --> A[Vite React app]
-  A --> F[하드코딩 fixture와 React state]
+  A --> J[cue-sheet-schema JSON]
+  J --> V[브라우저 로컬 validator와 Zustand]
+  V --> W[타임라인·상세·2D 무대]
   A --> CL[standby-api client]
   CL -. 화면 미배선 .-> S[Fastify server]
   S --> M[in-memory store]
   S --> C[strict JSON contracts]
-  S --> UP[Upstage Files + Agent Jobs API]
+  S --> UP[Upstage Files + Script/Master Cue Agent Config #1]
 ```
 
-현재 시연 가능한 경로는 `사용자 → app fixture`이고, 테스트 가능한 백엔드 경로는
+현재 시연 가능한 경로는 `사용자 → 통합 JSON → app 로컬 validator`이고, 테스트 가능한 백엔드 경로는
 `API client/test → server fixture → deterministic VR-01`이다. 둘을 하나의 E2E 기능으로 소개하면 안 된다.
 
 ---
@@ -173,21 +158,22 @@ flowchart LR
 다음 흐름은 지금 프런트에서 동작해야 한다.
 
 ```text
-E3 카드 클릭
-  → VIOLATION 팝업과 58–62s vs 66–68s, Evidence Trace 3개 확인
-  → 이 위치로 이동
-  → 큐시트 R3 환복시간 셀 확인
-  → 58s를 70s로 수정하고 저장
-  → E3가 CONSISTENT로 변경
+cue-sheet-schema JSON 선택
+  → 구조 검사와 ERROR/WARNING 요약
+  → 워크스페이스 열기
+  → cue/event 선택
+  → event 상세·모순·2D 무대 상태가 함께 변경
 ```
 
 추가 확인 항목:
 
-- E1~E8 선택 시 무대 snapshot이 달라진다.
+- cue/event 수와 무관하게 타임라인이 가로 스크롤된다.
+- 선택 event까지 action을 재생산한 무대 상태가 표시된다.
 - ENTER/EXIT 이벤트에 방향과 한글 라벨이 함께 보인다.
-- 팝업은 아래 패널만 덮고 위 패널은 유지된다.
-- 패널을 바꿔도 두 패널 높이가 같다.
-- 페이지 전체에는 가로 스크롤이 생기지 않고 큐시트 내부만 스크롤된다.
+- crossover 없음과 반대 wing 재등장/소품 이동이 `ERROR`로 표시된다.
+
+PRD 기준 핵심 데모인 세 원문 업로드 → UNREVIEWED fact review → Evidence Trace 3개 →
+결정론적 verdict 흐름은 아직 프런트 E2E로 동작하지 않는다.
 
 ---
 
@@ -195,17 +181,19 @@ E3 카드 클릭
 
 | 우선 | 간극 | 완료 조건 |
 |---|---|---|
-| P0 | 실제 입력 수집 UI 배선 | 기존 dropzone·STAGE_SPEC 폼이 구현된 API client를 호출해 immutable source+hash를 서버에 등록함 |
-| P0 | Upstage live smoke | 실제 역할별 Agent ID로 PDF/XLSX 1건씩 실행해 Studio 출력이 decoder 계약과 일치하는지 고정함 |
+| P0 | 실제 입력 수집 UI 배선 | SCRIPT·MASTER_CUE·STAGE_SPEC 입력이 API client를 호출해 immutable source+hash를 서버에 등록함 |
+| P0 | 실제 reference fidelity | 실제 한국어 대본·17열 Master Cue의 locator, 병합 셀, 줄바꿈, critical token을 사람이 원문과 대조해 gold fact 기준으로 고정함 |
 | P0 | 프런트–백엔드 연결 | 입력→review queue→snapshot→workspace가 fixture import 없이 한 case ID로 이어짐 |
 | P0 | 검증 규칙 완성 | `VR-01`, `VR-02`, `VR-03`이 reviewed fact와 세 source evidence로 결정론적으로 실행됨 |
+| P0 | UI 계약 복구 | 현재 JSON workspace를 PRD의 두 화면·Evidence Trace·`INSUFFICIENT_EVIDENCE` 계약과 정렬함 |
 | P1 | 영속성과 권한 | 사용자별 case 접근 제어, DB/object storage, audit log를 갖춤 |
 | P1 | 연속 재생 동기화 | 재생 중 타임라인·큐시트·무대가 같은 이벤트로 계속 진행됨 |
 | P1 | XLSX 왕복 | 원본 구조·sheet·서식을 유지한 새 파일을 내보내고 재수입 시 같은 fact를 얻음 |
 | P2 | refresh gate | hash가 같은 문서는 재호출하지 않고 새 fact는 승인 전 UNREVIEWED로 격리함 |
 
-하드코딩 콘텐츠를 실제 API 데이터로 교체하는 작업은 별도 작업으로 다룬다. 그 전까지는
-프런트 fixture와 백엔드 fixture를 같은 데이터 흐름이라고 가정하지 않는다.
+통합 JSON 로컬 validator와 백엔드의 reviewed-fact verifier는 서로 다른 데이터 모델이다. 연결 작업에서
+둘 중 하나를 암묵적으로 정본으로 삼지 말고, 백엔드 workspace projection을 프런트 표시 모델로 명시적으로
+변환해야 한다.
 
 ---
 

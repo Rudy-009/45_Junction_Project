@@ -173,7 +173,7 @@ export type ProviderRunSummary = {
   provider: "UPSTAGE" | "CONTROLLED_FIXTURE" | "STANDBY_FORM";
   provider_job_id: string | null;
   agent_id: string | null;
-  config_id: null;
+  config_id: string | null;
   adapter_version: string;
   schema_version: "standby.extraction.v1";
   raw_response_sha256: string;

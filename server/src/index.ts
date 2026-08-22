@@ -19,11 +19,20 @@ const agentIds = {
   ...(scriptAgentId ? { SCRIPT: scriptAgentId } : {}),
   ...(masterCueAgentId ? { MASTER_CUE: masterCueAgentId } : {}),
 };
+const configIds = {
+  ...(process.env.UPSTAGE_CONFIG_ID_SCRIPT
+    ? { SCRIPT: process.env.UPSTAGE_CONFIG_ID_SCRIPT }
+    : {}),
+  ...(process.env.UPSTAGE_CONFIG_ID_MASTER_CUE
+    ? { MASTER_CUE: process.env.UPSTAGE_CONFIG_ID_MASTER_CUE }
+    : {}),
+};
 
 const extractionProvider = process.env.UPSTAGE_API_KEY
   ? new UpstageAgentProvider({
       apiKey: process.env.UPSTAGE_API_KEY,
       agentIds,
+      configIds,
       pollIntervalMs: Number(process.env.UPSTAGE_POLL_INTERVAL_MS ?? 2_000),
       timeoutMs: Number(process.env.UPSTAGE_TIMEOUT_MS ?? 120_000),
     })

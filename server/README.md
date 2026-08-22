@@ -19,7 +19,10 @@ npm run dev
 고유한 `Idempotency-Key` 헤더도 필요하다.
 
 실제 추출에는 `.env`에 `UPSTAGE_API_KEY`, `UPSTAGE_AGENT_ID_SCRIPT`,
-`UPSTAGE_AGENT_ID_MASTER_CUE`를 설정한다. API key나 Agent ID를 브라우저 번들에 넣지 않는다.
+`UPSTAGE_AGENT_ID_MASTER_CUE`, `UPSTAGE_CONFIG_ID_SCRIPT`,
+`UPSTAGE_CONFIG_ID_MASTER_CUE`를 설정한다. `.env.example`의 Agent/Config ID는
+2026-08-22 Studio Code 패널에서 확인한 저장 Config #1 값이다. API key나 Agent ID를
+브라우저 번들에 넣지 않는다.
 SCRIPT는 PDF/DOCX, MASTER_CUE는 XLSX/PDF multipart 파일을 받고 STAGE_SPEC은 JSON으로 받는다.
 파일은 50 MiB 이하이며 확장자·MIME·signature를 모두 통과해야 한다.
 
@@ -45,6 +48,11 @@ npm run build
 Hero fixture에서는 승인 전 E3가 `INSUFFICIENT_EVIDENCE`, 승인 후 58–62초 대
 66–68초가 `VIOLATION`, R3 환복시간을 70초로 고치면 finding 0건과 `CONSISTENT`가 된다.
 
+2026-08-22 저장 Agent/Config #1에 합성 Script PDF와 Master Cue PDF/XLSX를 실제 전송한 live smoke도
+통과했다. 두 형식 모두 Files API, job polling, strict decoder를 거쳐 Script 12개, Master Cue 5개,
+Stage Spec 3개 fact를 만들었고 전부 `UNREVIEWED`였다. 이는 연결과 계약 검증이며 실제 공연 원본의
+추출 정확도 검증은 아니다. sanitized 결과는 `qa/upstage-live-smoke-2026-08-22.json`에 있다.
+
 ## 신뢰·보안 경계
 
 - LLM/추출기는 fact **후보만** 만든다. verdict는 `src/domain/verifier.ts`가 계산한다.
@@ -61,7 +69,7 @@ Hero fixture에서는 승인 전 E3가 `INSUFFICIENT_EVIDENCE`, 승인 후 58–
 ## 아직 없는 것
 
 - 업로드 object storage와 악성 파일/zip bomb 검사
-- 실제 역할별 Agent ID를 사용한 live smoke와 결과 schema 고정
+- 실제 한국어 대본·17열 Master Cue reference에 대한 추출 fidelity·locator 검증
 - PostgreSQL/Supabase 영속화와 row-level authorization
 - XLSX 원형 보존 export
 - 감사 로그, 보존 기간, 삭제 작업, 운영 관측성
