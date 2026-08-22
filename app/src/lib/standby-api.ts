@@ -1,9 +1,13 @@
-import type { FactCandidate, WorkspaceSnapshot } from '@/types/standby';
+import type { FactCandidate, FactNormalizerArtifact, WorkspaceSnapshot } from '@/types/standby';
 
 export type SourceRole = "SCRIPT" | "MASTER_CUE" | "STAGE_SPEC";
 export type SourceOrigin = "REAL_REFERENCE" | "USER_PROVIDED" | "CONTROLLED_FIXTURE";
 export type ExtractionAdapter = "CONTROLLED_FIXTURE" | "UPSTAGE_AGENT";
 export type OperationStatus = "QUEUED" | "RUNNING" | "SUCCEEDED" | "FAILED";
+export type ProductionAgentRole = "FACT_NORMALIZER" | "STORYBOARD_RECOMPOSER" | "REHEARSAL_BRIEF";
+
+const DEMO_SESSION_KEY = "standby.demo-session.v1";
+const UUID_V4_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export type SourceVersion = {
   source_id: string;
@@ -16,12 +20,18 @@ export type SourceVersion = {
   original_filename: string | null;
 };
 
-export type ExtractionOperation = {
+export type StandbyOperation = {
   operation_id: string;
   status: OperationStatus;
   result_source: "CONTROLLED_FIXTURE" | "UPSTAGE" | "MIXED" | null;
-  resource_ref: { type: "extraction_run"; id: string };
+  resource_ref:
+    | { type: "extraction_run"; id: string }
+    | { type: "production_artifact"; id: string };
   error: { code: string; message: string } | null;
+};
+
+export type ExtractionOperation = StandbyOperation & {
+  resource_ref: { type: "extraction_run"; id: string };
 };
 
 type ApiErrorBody = {
@@ -94,14 +104,30 @@ export class StandbyApi {
     });
   }
 
+  startProductionAgent(caseId: string, role: ProductionAgentRole, eventId?: string) {
+    return this.request<StandbyOperation>(`/v1/cases/${caseId}/production-agent-runs`, {
+      method: "POST",
+      body: JSON.stringify({ role, ...(eventId ? { event_id: eventId } : {}) }),
+      idempotent: true,
+    });
+  }
+
   getOperation(operationId: string) {
-    return this.request<ExtractionOperation>(`/v1/operations/${operationId}`);
+    return this.request<StandbyOperation>(`/v1/operations/${operationId}`);
+  }
+
+  getFactNormalizerArtifact(artifactId: string) {
+    return this.request<FactNormalizerArtifact>(`/v1/production-artifacts/${artifactId}`);
+  }
+
+  getProductionArtifact<T>(artifactId: string) {
+    return this.request<T>(`/v1/production-artifacts/${artifactId}`);
   }
 
   async waitForOperation(
     operationId: string,
     options: { intervalMs?: number; timeoutMs?: number; signal?: AbortSignal } = {},
-  ): Promise<ExtractionOperation> {
+  ): Promise<StandbyOperation> {
     const intervalMs = options.intervalMs ?? 1_000;
     const deadline = Date.now() + (options.timeoutMs ?? 660_000);
     while (Date.now() <= deadline) {
@@ -139,11 +165,15 @@ export class StandbyApi {
 
   reviewFacts(
     caseId: string,
-    reviews: Array<{
-      fact_id: string;
-      decision: "REVIEWED" | "REJECTED";
-      corrected_value?: unknown;
-    }>,
+    reviews: Array<
+      | {
+          fact_id: string;
+          decision: "REVIEWED";
+          source: "UPSTAGE_RECOMMENDATION" | "CUSTOM";
+          corrected_value: unknown;
+        }
+      | { fact_id: string; decision: "REJECTED" }
+    >,
   ) {
     return this.request<{ items: unknown[] }>(`/v1/cases/${caseId}/fact-reviews:batch`, {
       method: "POST",
@@ -184,4 +214,17 @@ export class StandbyApi {
     }
     return json;
   }
+}
+
+function getDemoSessionId() {
+  const current = localStorage.getItem(DEMO_SESSION_KEY);
+  if (current && UUID_V4_PATTERN.test(current)) return current;
+  const created = crypto.randomUUID();
+  localStorage.setItem(DEMO_SESSION_KEY, created);
+  return created;
+}
+
+export function createStandbyBrowserApi(): StandbyApi | null {
+  const baseUrl = import.meta.env.VITE_STANDBY_API_BASE_URL as string | undefined;
+  return baseUrl ? new StandbyApi({ baseUrl, getSessionId: getDemoSessionId }) : null;
 }
