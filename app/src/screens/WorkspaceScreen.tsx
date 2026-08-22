@@ -35,7 +35,7 @@ function actionSummary(action: Action, cueSheet: CueSheet): string {
     case 'backstage_crossover': return `${charName} ${dirLabel(action.from)}→${dirLabel(action.to)}`;
     case 'prop_in': return `${propName} in${carriedBy ? ` (${carriedBy})` : ''} ${dir}`;
     case 'prop_out': return `${propName} out${carriedBy ? ` (${carriedBy})` : ''} ${dir}`;
-    case 'costume_change': return `${charName} 환복 ${action.costume_change_duration_sec ?? 0}s`;
+    case 'costume_change': return `${charName} 환복`;
     default: return action.type;
   }
 }
@@ -475,7 +475,7 @@ function CueOverview({
   cueSheet: _cueSheet,
   contradictions,
 }: {
-  cue: CueEvent extends never ? never : { cue_id: string; scene_number: string; scene_type: string; events: CueEvent[]; notes?: string; estimated_duration_sec?: number };
+  cue: CueEvent extends never ? never : { cue_id: string; scene_number: string; scene_type: string; events: CueEvent[]; notes?: string };
   cueSheet: CueSheet;
   contradictions: Contradiction[];
 }) {

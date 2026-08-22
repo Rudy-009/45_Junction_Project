@@ -6,8 +6,6 @@ interface CharacterTracking {
   last_exit_direction: Direction | null;
   last_exit_cue: string | null;
   last_exit_scene: string | null;
-  pending_costume_change_sec: number;
-  costume_change_cue_idx: number;
 }
 
 interface PropTracking {
@@ -35,8 +33,6 @@ export function validateCueSheet(data: CueSheet): ValidationResult {
       last_exit_direction: null,
       last_exit_cue: null,
       last_exit_scene: null,
-      pending_costume_change_sec: 0,
-      costume_change_cue_idx: -1,
     };
   }
   for (const prop of data.props) {
@@ -51,9 +47,7 @@ export function validateCueSheet(data: CueSheet): ValidationResult {
   const charNames = Object.fromEntries(data.characters.map(c => [c.id, c.name]));
   const propNames = Object.fromEntries(data.props.map(p => [p.id, p.name]));
 
-  for (let cueIdx = 0; cueIdx < data.cues.length; cueIdx++) {
-    const cue = data.cues[cueIdx];
-    const crossoverTime = cue.backstage_crossover_time_override_sec ?? data.venue.backstage_crossover_time_sec ?? 0;
+  for (const cue of data.cues) {
 
     for (const event of cue.events) {
       for (const action of event.actions) {
@@ -78,7 +72,7 @@ export function validateCueSheet(data: CueSheet): ValidationResult {
               });
             }
 
-            // Rule: no_backstage_crossover / insufficient_crossover_time
+            // Rule: no_backstage_crossover. Timing is not inferred from cue duration.
             if (!state.on_stage && state.last_exit_direction && action.direction && state.last_exit_direction !== action.direction) {
               if (!data.venue.has_backstage_crossover) {
                 contradictions.push({
@@ -90,28 +84,10 @@ export function validateCueSheet(data: CueSheet): ValidationResult {
                   description: `'${name}'이(가) ${dirName(state.last_exit_direction)}로 퇴장 후 ${dirName(action.direction)}에서 등장하지만, 백스테이지 통로가 없습니다.`,
                   details: { character_id: charId, character_name: name, exit_direction: state.last_exit_direction, enter_direction: action.direction, exited_at_cue: state.last_exit_cue ?? '', exited_at_scene: state.last_exit_scene ?? '' },
                 });
-              } else if (crossoverTime > 0) {
-                let availableTime = 0;
-                for (let i = Math.max(0, state.costume_change_cue_idx); i < cueIdx; i++) {
-                  availableTime += data.cues[i].estimated_duration_sec ?? 0;
-                }
-                const neededTime = crossoverTime + state.pending_costume_change_sec;
-                if (availableTime > 0 && neededTime > availableTime) {
-                  contradictions.push({
-                    severity: 'WARNING',
-                    rule: 'insufficient_crossover_time',
-                    cue_id: cue.cue_id,
-                    scene_number: cue.scene_number,
-                    event_id: event.event_id,
-                    description: `'${name}'이(가) ${dirName(state.last_exit_direction)}에서 ${dirName(action.direction)}으로 이동하는데 시간이 부족할 수 있습니다. (필요: ${neededTime}초, 가용: ${availableTime}초)`,
-                    details: { character_id: charId, character_name: name, needed_sec: neededTime, available_sec: availableTime },
-                  });
-                }
               }
             }
 
             state.on_stage = true;
-            state.pending_costume_change_sec = 0;
             break;
           }
           case 'character_exit': {
@@ -223,24 +199,8 @@ export function validateCueSheet(data: CueSheet): ValidationResult {
           case 'costume_change': {
             const charId = action.character_id;
             if (!charId || !characterState[charId]) break;
-            const state = characterState[charId];
-            state.pending_costume_change_sec = action.costume_change_duration_sec ?? 0;
-            state.costume_change_cue_idx = cueIdx;
-
-            // Check if costume time exceeds scene duration
-            const duration = cue.estimated_duration_sec ?? 0;
-            if (duration > 0 && (action.costume_change_duration_sec ?? 0) > duration) {
-              const name = charNames[charId] ?? charId;
-              contradictions.push({
-                severity: 'WARNING',
-                rule: 'insufficient_costume_time',
-                cue_id: cue.cue_id,
-                scene_number: cue.scene_number,
-                event_id: event.event_id,
-                description: `'${name}'의 환복 시간(${action.costume_change_duration_sec}초)이 해당 씬 소요 시간(${duration}초)보다 깁니다.`,
-                details: { character_id: charId, character_name: name, costume_change_sec: action.costume_change_duration_sec ?? 0, scene_duration_sec: duration },
-              });
-            }
+            // The JSON contract records that a change occurs, not an estimated duration.
+            // Timing findings require separately reviewed min/max evidence in the verifier path.
             break;
           }
         }
