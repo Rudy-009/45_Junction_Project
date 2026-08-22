@@ -308,9 +308,14 @@ export class UpstageAgentProvider implements ExtractionProvider {
       throw new DomainError(502, "UPSTAGE_REQUEST_FAILED", "Upstage API request failed.");
     }
     if (!response.ok) {
-      throw new DomainError(502, "UPSTAGE_REQUEST_FAILED", "Upstage API request failed.", {
+      throw new DomainError(
+        502,
+        "UPSTAGE_REQUEST_FAILED",
+        `Upstage API request failed with status ${response.status}.`,
+        {
         upstream_status: response.status,
-      });
+        },
+      );
     }
     let json: unknown;
     try {
