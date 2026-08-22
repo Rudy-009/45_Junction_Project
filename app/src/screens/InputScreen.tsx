@@ -18,6 +18,7 @@ import { parseCueSheetJson } from '@/lib/cue-sheet-json';
 import { useI18n, type Locale } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { useNavigate } from '@tanstack/react-router';
+import type { CueSheet } from '@/types/cue-sheet';
 
 const MAX_SOURCE_BYTES = 50 * 1024 * 1024;
 const SOURCE_ORIGIN: SourceOrigin = 'USER_PROVIDED';
@@ -31,6 +32,7 @@ const ZONES = [
 ] as const;
 
 type SourceInputKind = 'MASTER_CUE';
+type InputErrorKind = SourceInputKind | 'RAW_JSON';
 type Crossover = 'UNKNOWN' | 'AVAILABLE' | 'UNAVAILABLE';
 type SubmitPhase = 'IDLE' | 'UPLOADING' | 'EXTRACTING' | 'NORMALIZING' | 'REVIEW' | 'FAILED';
 
@@ -123,13 +125,11 @@ async function inspectSourceFile(kind: SourceInputKind, file: File, locale: Loca
   const isPdf = String.fromCharCode(...signature) === '%PDF-';
   const isZip = signature[0] === 0x50 && signature[1] === 0x4b;
   const text = new TextDecoder().decode(bytes);
-
   if (extension === 'pdf' && !isPdf) throw new Error(locale === 'ko' ? '확장자와 PDF 파일 서명이 일치하지 않습니다.' : 'The extension does not match the PDF file signature.');
   if ((extension === 'docx' || extension === 'xlsx') && !isZip) {
     throw new Error(locale === 'ko' ? '확장자와 Office 파일 서명이 일치하지 않습니다.' : 'The extension does not match the Office file signature.');
   }
   if (extension === 'json') parseCueSheetJson(text, locale);
-
   return { file, sha256: await sha256(bytes), origin: SOURCE_ORIGIN };
 }
 
@@ -137,11 +137,12 @@ export function InputScreen() {
   const { locale, t } = useI18n();
   const navigate = useNavigate();
   const clearWorkspace = useStandbyWorkspaceStore((state) => state.clear);
+  const loadCueSheet = useCueSheetStore((state) => state.loadCueSheet);
   const clearCueSheet = useCueSheetStore((state) => state.clearCueSheet);
   const setReviewFlowContext = useReviewFlowStore((state) => state.setReviewContext);
   const clearReviewFlow = useReviewFlowStore((state) => state.clear);
   const [masterCue, setMasterCue] = useState<SelectedSource | null>(null);
-  const [sourceErrors, setSourceErrors] = useState<Partial<Record<SourceInputKind, string>>>({});
+  const [sourceErrors, setSourceErrors] = useState<Partial<Record<InputErrorKind, string>>>({});
   const [crossover, setCrossover] = useState<Crossover>('UNKNOWN');
   const [minimumChangeSeconds, setMinimumChangeSeconds] = useState('60');
   const [routes, setRoutes] = useState<RouteDraft[]>([
@@ -232,6 +233,35 @@ export function InputScreen() {
       setSourceErrors((current) => ({
         ...current,
         [kind]: error instanceof Error ? error.message : locale === 'ko' ? '파일을 확인할 수 없습니다.' : 'Could not inspect the file.',
+      }));
+    }
+  };
+
+  const openRawJson = async (file: File) => {
+    clearReviewFlow();
+    clearWorkspace();
+    clearCueSheet();
+    setSourceErrors((current) => ({ ...current, RAW_JSON: undefined }));
+    try {
+      if (extensionOf(file.name) !== 'json') {
+        throw new Error(locale === 'ko' ? '.json 형식만 사용할 수 있습니다.' : 'Only .json files are supported.');
+      }
+      if (file.size === 0) {
+        throw new Error(locale === 'ko' ? '빈 파일은 사용할 수 없습니다.' : 'Empty files are not supported.');
+      }
+      if (file.size > MAX_SOURCE_BYTES) {
+        throw new Error(locale === 'ko' ? '파일은 50MB 이하여야 합니다.' : 'Files must be 50MB or smaller.');
+      }
+      const text = await file.text();
+      const cueSheet: CueSheet = parseCueSheetJson(text, locale);
+      loadCueSheet(cueSheet);
+      await navigate({ to: '/workspace' });
+    } catch (error) {
+      setSourceErrors((current) => ({
+        ...current,
+        RAW_JSON: error instanceof Error
+          ? error.message
+          : locale === 'ko' ? 'JSON 파일을 확인할 수 없습니다.' : 'Could not inspect the JSON file.',
       }));
     }
   };
@@ -330,6 +360,10 @@ export function InputScreen() {
             onRoutes={setRoutes}
             onEntities={setEntities}
           />
+          <RawJsonCard
+            error={sourceErrors.RAW_JSON}
+            onFile={(file) => void openRawJson(file)}
+          />
         </section>
 
         <footer className="mt-5 flex justify-end border border-border bg-surface p-4">
@@ -351,6 +385,66 @@ export function InputScreen() {
         {message && <ExtractionStatus phase={phase} message={message} />}
       </div>
     </main>
+  );
+}
+
+function RawJsonCard({ error, onFile }: { error?: string; onFile: (file: File) => void }) {
+  const { locale } = useI18n();
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [dragging, setDragging] = useState(false);
+
+  return (
+    <article className="border border-border bg-surface lg:col-span-2">
+      <div className="flex items-start justify-between border-b border-border p-4">
+        <div className="flex gap-3">
+          <div className="border border-border p-2"><FileSpreadsheet className="h-4 w-4" /></div>
+          <div>
+            <p className="mono text-xs font-semibold tracking-[0.1em]">RAW JSON</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {locale === 'ko' ? '구조화된 큐시트 JSON을 바로 편집합니다.' : 'Open structured cue sheet JSON directly in the editor.'}
+            </p>
+          </div>
+        </div>
+      </div>
+      <button
+        type="button"
+        className={cn(
+          'm-4 flex min-h-28 w-[calc(100%-2rem)] flex-col items-center justify-center border border-dashed p-5 text-center',
+          dragging ? 'border-foreground bg-muted' : error ? 'border-violation bg-violation-bg' : 'border-border bg-background',
+        )}
+        onClick={() => inputRef.current?.click()}
+        onDragOver={(event) => { event.preventDefault(); setDragging(true); }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={(event) => {
+          event.preventDefault();
+          setDragging(false);
+          const file = event.dataTransfer.files[0];
+          if (file) onFile(file);
+        }}
+      >
+        <UploadCloud className="h-6 w-6 text-muted-foreground" />
+        <span className="mt-3 text-sm font-medium">
+          {locale === 'ko' ? 'JSON 파일 선택 또는 놓기' : 'Choose or drop a JSON file'}
+        </span>
+        <span className="mono mt-1 text-[11px] text-muted-foreground">.json / MAX 50MB</span>
+      </button>
+      <input
+        ref={inputRef}
+        type="file"
+        accept=".json,application/json"
+        className="hidden"
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          if (file) onFile(file);
+          event.target.value = '';
+        }}
+      />
+      {error && (
+        <div className="flex gap-2 border-t border-border p-4 text-xs leading-5 text-violation">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />{error}
+        </div>
+      )}
+    </article>
   );
 }
 
