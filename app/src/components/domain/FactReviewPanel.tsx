@@ -198,15 +198,23 @@ function ExtractedFields({ value }: { value: unknown }) {
   );
 }
 
-export function FactReviewPanel({ facts, recommendations, normalizer, busy, onSubmit }: {
+export function FactReviewPanel({
+  facts,
+  recommendations,
+  normalizer,
+  busy,
+  initialMode,
+  onSubmit,
+}: {
   facts: FactCandidate[];
   recommendations: FactNormalizationRecommendation[];
   normalizer: NormalizerProvenance | null;
   busy: boolean;
+  initialMode: 'RECOMMENDED' | 'CUSTOM';
   onSubmit: (reviews: FactReviewCommand[]) => void;
 }) {
   const { locale, t } = useI18n();
-  const [mode, setMode] = useState<ReviewMode>('RECOMMENDED');
+  const [mode] = useState<ReviewMode>(initialMode);
   const recommendationByFact = useMemo(() => new Map(
     recommendations.map((recommendation) => [recommendation.fact_id, recommendation]),
   ), [recommendations]);
@@ -292,30 +300,9 @@ export function FactReviewPanel({ facts, recommendations, normalizer, busy, onSu
               </div>
             </details>
           )}
-          <div className="mt-3 inline-flex border border-border" role="group" aria-label={t('review.modeLabel')}>
-            <button
-              type="button"
-              aria-pressed={mode === 'RECOMMENDED'}
-              onClick={() => setMode('RECOMMENDED')}
-              className={cn(
-                'border-r border-border px-3 py-1.5 text-xs',
-                mode === 'RECOMMENDED' ? 'bg-foreground text-background' : 'bg-background text-muted-foreground',
-              )}
-            >
-              1. {t('review.recommended')}
-            </button>
-            <button
-              type="button"
-              aria-pressed={mode === 'CUSTOM'}
-              onClick={() => setMode('CUSTOM')}
-              className={cn(
-                'px-3 py-1.5 text-xs',
-                mode === 'CUSTOM' ? 'bg-foreground text-background' : 'bg-background text-muted-foreground',
-              )}
-            >
-              2. {t('review.custom')}
-            </button>
-          </div>
+          <p className="mt-3 text-xs text-muted-foreground">
+            {t('review.mode')} : {mode === 'RECOMMENDED' ? t('review.recommended') : t('review.custom')}
+          </p>
         </div>
         <div className="flex items-center gap-3">
           {mode === 'CUSTOM' && (

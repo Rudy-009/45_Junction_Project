@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import {
   AlertTriangle,
-  Check,
   FileSpreadsheet,
   Info,
   LoaderCircle,
@@ -14,9 +13,7 @@ import {
   createStandbyBrowserApi,
   type SourceOrigin,
 } from '@/lib/standby-api';
-import { FactReviewPanel, type FactReviewCommand } from '@/components/domain';
-import { useCueSheetStore, useStandbyWorkspaceStore } from '@/store';
-import type { FactCandidate, FactNormalizerArtifact } from '@/types/standby';
+import { useCueSheetStore, useReviewFlowStore, useStandbyWorkspaceStore } from '@/store';
 import type { CueSheet } from '@/types/cue-sheet';
 import { parseCueSheetJson } from '@/lib/cue-sheet-json';
 import { useI18n, type Locale } from '@/lib/i18n';
@@ -36,7 +33,7 @@ const ZONES = [
 
 type SourceInputKind = 'MASTER_CUE';
 type Crossover = 'UNKNOWN' | 'AVAILABLE' | 'UNAVAILABLE';
-type SubmitPhase = 'IDLE' | 'UPLOADING' | 'EXTRACTING' | 'NORMALIZING' | 'REVIEW' | 'VERIFYING' | 'SUCCEEDED' | 'FAILED';
+type SubmitPhase = 'IDLE' | 'UPLOADING' | 'EXTRACTING' | 'NORMALIZING' | 'REVIEW' | 'FAILED';
 
 type SelectedSource = {
   file: File;
@@ -141,10 +138,11 @@ async function inspectSourceFile(kind: SourceInputKind, file: File, locale: Loca
 export function InputScreen() {
   const { locale, t } = useI18n();
   const navigate = useNavigate();
-  const setWorkspace = useStandbyWorkspaceStore((state) => state.setWorkspace);
   const clearWorkspace = useStandbyWorkspaceStore((state) => state.clear);
   const loadCueSheet = useCueSheetStore((state) => state.loadCueSheet);
   const clearCueSheet = useCueSheetStore((state) => state.clearCueSheet);
+  const setReviewFlowContext = useReviewFlowStore((state) => state.setReviewContext);
+  const clearReviewFlow = useReviewFlowStore((state) => state.clear);
   const [masterCue, setMasterCue] = useState<SelectedSource | null>(null);
   const [sourceErrors, setSourceErrors] = useState<Partial<Record<SourceInputKind, string>>>({});
   const [crossover, setCrossover] = useState<Crossover>('UNKNOWN');
@@ -157,9 +155,6 @@ export function InputScreen() {
   const [stageHash, setStageHash] = useState('계산 중');
   const [phase, setPhase] = useState<SubmitPhase>('IDLE');
   const [message, setMessage] = useState<string | null>(null);
-  const [caseId, setCaseId] = useState<string | null>(null);
-  const [facts, setFacts] = useState<FactCandidate[]>([]);
-  const [normalizerArtifact, setNormalizerArtifact] = useState<FactNormalizerArtifact | null>(null);
 
   const stageSpec = useMemo(() => ({
     contract_version: 'standby.stage-spec.v1',
@@ -227,9 +222,7 @@ export function InputScreen() {
   const selectSource = async (kind: SourceInputKind, file: File) => {
     setPhase('IDLE');
     setMessage(null);
-    setCaseId(null);
-    setFacts([]);
-    setNormalizerArtifact(null);
+    clearReviewFlow();
     clearWorkspace();
     clearCueSheet();
     setSourceErrors((current) => ({ ...current, [kind]: undefined }));
@@ -286,8 +279,6 @@ export function InputScreen() {
       await api.waitForOperation(operation.operation_id);
       const queue = await api.getReviewQueue(createdCase.case_id);
 
-      setCaseId(createdCase.case_id);
-      setFacts(queue.items);
       setPhase('NORMALIZING');
       setMessage(t('input.status.normalize'));
       const normalizerOperation = await api.startProductionAgent(createdCase.case_id, 'FACT_NORMALIZER');
@@ -298,42 +289,20 @@ export function InputScreen() {
           : 'The Fact Normalizer returned an invalid result reference.');
       }
       const artifact = await api.getFactNormalizerArtifact(completedNormalizer.resource_ref.id);
-      setNormalizerArtifact(artifact);
+      setReviewFlowContext({
+        caseId: createdCase.case_id,
+        facts: queue.items,
+        normalizerArtifact: artifact,
+      });
       setPhase('REVIEW');
       setMessage(t('input.status.review', { count: queue.items.length }));
+      await navigate({ to: '/review/mode' });
     } catch (error) {
       setPhase('FAILED');
       setMessage(
         error instanceof StandbyApiError
           ? `${error.code}: ${error.message}`
           : error instanceof Error ? error.message : t('input.error.extract'),
-      );
-    }
-  };
-
-  const completeReview = async (reviews: FactReviewCommand[]) => {
-    const api = apiClient();
-    if (!api || !caseId) {
-      setPhase('FAILED');
-      setMessage(t('input.error.noCase'));
-      return;
-    }
-    try {
-      setPhase('VERIFYING');
-      setMessage(t('input.status.verify'));
-      await api.reviewFacts(caseId, reviews);
-      await api.freezeReviewSnapshot(caseId);
-      const workspace = await api.getWorkspace(caseId);
-      setWorkspace(caseId, workspace);
-      setPhase('SUCCEEDED');
-      setMessage(t('input.status.done'));
-      await navigate({ to: '/workspace' });
-    } catch (error) {
-      setPhase('FAILED');
-      setMessage(
-        error instanceof StandbyApiError
-          ? `${error.code}: ${error.message}`
-          : error instanceof Error ? error.message : t('input.error.review'),
       );
     }
   };
@@ -373,11 +342,11 @@ export function InputScreen() {
         <footer className="mt-5 flex justify-end border border-border bg-surface p-4">
           <button
             type="button"
-            disabled={!ready || phase === 'REVIEW' || phase === 'VERIFYING'}
+            disabled={!ready || phase === 'REVIEW'}
             onClick={() => void startExtraction()}
             className={cn(
               'flex min-w-52 items-center justify-center gap-2 border px-5 py-3 text-sm font-medium',
-              ready && phase !== 'REVIEW' && phase !== 'VERIFYING'
+              ready && phase !== 'REVIEW'
                 ? 'border-foreground bg-foreground text-background hover:bg-muted-foreground'
                 : 'cursor-not-allowed border-border bg-muted text-muted-foreground',
             )}
@@ -387,21 +356,6 @@ export function InputScreen() {
         </footer>
 
         {message && <ExtractionStatus phase={phase} message={message} />}
-
-        {facts.length > 0 && (phase === 'REVIEW' || phase === 'VERIFYING' || phase === 'FAILED') && (
-          <FactReviewPanel
-            key={caseId}
-            facts={facts}
-            recommendations={normalizerArtifact?.payload.recommendations ?? []}
-            normalizer={normalizerArtifact ? {
-              authority: normalizerArtifact.authority,
-              agentId: normalizerArtifact.agent_id,
-              configId: normalizerArtifact.config_id,
-            } : null}
-            busy={phase === 'VERIFYING'}
-            onSubmit={(reviews) => void completeReview(reviews)}
-          />
-        )}
       </div>
     </main>
   );
@@ -762,10 +716,9 @@ function TimeInput({ label, value, onChange }: { label: string; value: string; o
 }
 
 function ExtractionStatus({ phase, message }: { phase: SubmitPhase; message: string }) {
-  const success = phase === 'SUCCEEDED';
   return (
-    <div className={cn('mt-4 flex gap-3 border p-4', success ? 'border-consistent bg-consistent-bg' : phase === 'FAILED' ? 'border-review bg-review-bg' : 'border-border bg-surface')}>
-      {success ? <Check className="h-5 w-5 shrink-0 text-consistent" /> : phase === 'FAILED' ? <AlertTriangle className="h-5 w-5 shrink-0 text-review" /> : <LoaderCircle className="h-5 w-5 shrink-0 animate-spin" />}
+    <div className={cn('mt-4 flex gap-3 border p-4', phase === 'FAILED' ? 'border-review bg-review-bg' : 'border-border bg-surface')}>
+      {phase === 'FAILED' ? <AlertTriangle className="h-5 w-5 shrink-0 text-review" /> : <LoaderCircle className="h-5 w-5 shrink-0 animate-spin" />}
       <div><p className="mono text-[10px] text-muted-foreground">{phase}</p><p className="mt-1 text-sm leading-6">{message}</p></div>
     </div>
   );
