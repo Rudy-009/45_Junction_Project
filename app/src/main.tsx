@@ -7,7 +7,7 @@ import {
   Outlet,
   RouterProvider,
 } from "@tanstack/react-router";
-import { AppHeader } from "@/components/standby/AppHeader";
+import { AppHeader } from "@/components/layout/AppHeader";
 import { InputScreen } from "@/screens/InputScreen";
 import { WorkspaceScreen } from "@/screens/WorkspaceScreen";
 import "./styles.css";

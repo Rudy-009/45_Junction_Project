@@ -1,13 +1,13 @@
-import type { EntityDef, EntityStateAtEvent, Zone } from "@/lib/standby-data";
-import { cn } from "@/lib/utils";
+import { cn } from '@/lib/utils';
+import type { Zone, StageEntity } from '@/types';
 
-export type StageEntity = EntityDef & EntityStateAtEvent;
+export type { StageEntity as Entity };
 
 export function StageSimulator({
   crossover,
   entities,
 }: {
-  crossover: "true" | "false" | "UNKNOWN";
+  crossover: 'true' | 'false' | 'UNKNOWN';
   entities: StageEntity[];
 }) {
   const byZone = (z: Zone) => entities.filter((e) => e.zone === z);
@@ -21,7 +21,7 @@ export function StageSimulator({
       <Legend />
 
       <div className="flex h-full min-h-[240px] min-w-[760px] items-stretch gap-0">
-        <WingBox label="상수" sub="STAGE RIGHT" side="left" entities={byZone("상수윙")} />
+        <WingBox label="상수" sub="STAGE RIGHT" side="left" entities={byZone('상수윙')} />
 
         <div className="relative flex flex-1 flex-col border-y border-border">
           <div className="relative flex flex-1 items-center justify-center bg-surface">
@@ -29,7 +29,7 @@ export function StageSimulator({
               무대 / STAGE
             </span>
             <div className="flex flex-wrap items-center justify-center gap-4 p-4">
-              {byZone("무대").map((e) => (
+              {byZone('무대').map((e) => (
                 <EntityGlyph key={e.id} entity={e} onStage />
               ))}
             </div>
@@ -42,13 +42,13 @@ export function StageSimulator({
             <div className="absolute top-1/2 right-3 left-3 flex items-center">
               <div
                 className={cn(
-                  "h-0 w-full border-t",
-                  crossover === "true" && "border-solid border-border-strong",
-                  crossover === "UNKNOWN" && "border-dashed border-muted-foreground",
-                  crossover === "false" && "border-solid border-violation",
+                  'h-0 w-full border-t',
+                  crossover === 'true' && 'border-solid border-border-strong',
+                  crossover === 'UNKNOWN' && 'border-dashed border-muted-foreground',
+                  crossover === 'false' && 'border-solid border-violation',
                 )}
               />
-              {crossover === "false" && (
+              {crossover === 'false' && (
                 <span className="mono absolute left-1/2 -translate-x-1/2 bg-background px-2 text-[11px] text-violation">
                   ✕ 통로 없음
                 </span>
@@ -61,8 +61,8 @@ export function StageSimulator({
           label="하수"
           sub="STAGE LEFT"
           side="right"
-          entities={byZone("하수윙")}
-          extra={byZone("하수환복소")}
+          entities={byZone('하수윙')}
+          extra={byZone('하수환복소')}
         />
       </div>
     </div>
@@ -95,7 +95,7 @@ function WingBox({
 }: {
   label: string;
   sub: string;
-  side: "left" | "right";
+  side: 'left' | 'right';
   entities: StageEntity[];
   extra?: StageEntity[];
 }) {
@@ -110,7 +110,7 @@ function WingBox({
           <EntityGlyph key={e.id} entity={e} wingSide={side} />
         ))}
       </div>
-      {extra && (
+      {extra && extra.length > 0 && (
         <div className="border-t border-border bg-surface p-2">
           <div className="mono mb-1 text-[10px] text-muted-foreground">하수환복소</div>
           <div className="flex flex-col items-start gap-2">
@@ -124,11 +124,6 @@ function WingBox({
   );
 }
 
-/**
- * 사람=원+cyan, 소품=사각형+amber — 도형과 색 둘 다로 구분한다.
- * transition은 그 이벤트에서 일어난 무대 출입만 표시한다.
- * 화살표는 좌/우 절대방향이 아니라 무대 쪽 / 윙 쪽을 가리킨다.
- */
 function EntityGlyph({
   entity,
   onStage,
@@ -136,41 +131,48 @@ function EntityGlyph({
 }: {
   entity: StageEntity;
   onStage?: boolean;
-  wingSide?: "left" | "right";
+  wingSide?: 'left' | 'right';
 }) {
-  const person = entity.kind === "person";
-  const t = entity.transition;
-
-  // 무대 위 노드는 어느 쪽에서 들어왔는지 모르므로 위/아래로 안팎을 표현하고,
-  // 윙 노드는 무대가 있는 방향을 기준으로 정한다.
-  const towardStage = onStage ? "▴" : wingSide === "left" ? "▸" : "◂";
-  const towardWing = onStage ? "▾" : wingSide === "left" ? "◂" : "▸";
+  const person = entity.kind === 'person';
+  const transition = entity.transition;
+  const towardStage = onStage ? '▴' : wingSide === 'left' ? '▸' : '◂';
+  const towardWing = onStage ? '▾' : wingSide === 'left' ? '◂' : '▸';
 
   return (
     <div className="flex items-center gap-1.5">
       <div
         className={cn(
-          "flex h-7 w-7 shrink-0 items-center justify-center border text-[10px]",
+          'flex h-7 w-7 shrink-0 items-center justify-center border text-[10px]',
           person
-            ? "rounded-full border-person bg-person/20 text-person"
-            : "border-prop bg-prop/20 text-prop",
+            ? 'rounded-full border-person bg-person/20 text-person'
+            : 'border-prop bg-prop/20 text-prop',
         )}
-        aria-label={person ? "사람" : "소품"}
+        aria-label={person ? '사람' : '소품'}
       >
-        {person ? "●" : "■"}
+        {person ? '●' : '■'}
       </div>
-
+      {entity.connector && (
+        <div
+          className={cn(
+            'h-0 w-6 border-t',
+            entity.connector.reviewed
+              ? 'border-solid border-border-strong'
+              : 'border-dashed border-muted-foreground',
+          )}
+        />
+      )}
       <span className="text-xs whitespace-nowrap">{entity.label}</span>
-
-      {t && (
+      {transition && (
         <span
           className={cn(
-            "mono flex items-center gap-0.5 border px-1 text-[10px] whitespace-nowrap",
-            t === "ENTER" ? "border-enter text-enter" : "border-exit text-exit",
+            'mono flex items-center gap-0.5 border px-1 text-[10px] whitespace-nowrap',
+            transition === 'ENTER'
+              ? 'border-enter text-enter'
+              : 'border-exit text-exit',
           )}
         >
-          <span aria-hidden>{t === "ENTER" ? towardStage : towardWing}</span>
-          {t === "ENTER" ? "등장" : "퇴장"}
+          <span aria-hidden>{transition === 'ENTER' ? towardStage : towardWing}</span>
+          {transition === 'ENTER' ? '등장' : '퇴장'}
         </span>
       )}
     </div>
