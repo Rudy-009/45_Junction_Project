@@ -258,7 +258,7 @@ function ScriptLine({ line }: { line: ScriptExcerptLine }) {
 function ScriptLoading() {
   const { t } = useI18n();
   return (
-    <div className="border-b border-border px-3 py-4" role="status" aria-live="polite">
+    <div className="flex min-h-full flex-col justify-center px-5 py-8" role="status" aria-live="polite">
       <div className="script-loading-wordmark brand-mono" aria-label="STANDBY">
         {'STANDBY'.split('').map((letter, index) => (
           <span
