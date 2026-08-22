@@ -42,7 +42,6 @@ export class StandbyApiError extends Error {
 export type StandbyApiOptions = {
   baseUrl: string;
   getAccessToken: () => string | Promise<string>;
-  getRequestHeaders?: () => Record<string, string> | Promise<Record<string, string>>;
   fetchImpl?: typeof fetch;
 };
 
@@ -75,24 +74,6 @@ export class StandbyApi {
     return this.request<SourceVersion>(`/v1/cases/${caseId}/sources/${role}`, {
       method: "POST",
       body: form,
-      idempotent: true,
-    });
-  }
-
-  uploadSource(
-    caseId: string,
-    role: "SCRIPT" | "MASTER_CUE",
-    content: unknown,
-    options: { origin?: SourceOrigin; mediaType?: string } = {},
-  ) {
-    const origin = options.origin ?? "USER_PROVIDED";
-    return this.request<SourceVersion>(`/v1/cases/${caseId}/sources/${role}`, {
-      method: "POST",
-      body: JSON.stringify({
-        origin,
-        content,
-        media_type: options.mediaType ?? "application/json",
-      }),
       idempotent: true,
     });
   }
@@ -188,12 +169,6 @@ export class StandbyApi {
   ): Promise<T> {
     const token = await this.options.getAccessToken();
     const headers = new Headers(init.headers);
-    const requestHeaders = await this.options.getRequestHeaders?.();
-    if (requestHeaders) {
-      for (const [key, value] of Object.entries(requestHeaders)) {
-        headers.set(key, value);
-      }
-    }
     headers.set("authorization", `Bearer ${token}`);
     if (typeof init.body === "string") headers.set("content-type", "application/json");
     if (init.idempotent) headers.set("idempotency-key", crypto.randomUUID());

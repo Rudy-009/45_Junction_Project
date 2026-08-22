@@ -2,15 +2,7 @@ import { buildApp } from "./app.js";
 import { UpstageAgentProvider } from "./providers/upstage-agent-provider.js";
 import { createSupabaseAuthenticator } from "./security/supabase-auth.js";
 
-function parseBoolean(value: string | undefined): boolean {
-  if (!value) return false;
-  const normalized = value.trim().toLowerCase();
-  return normalized === "true" || normalized === "1" || normalized === "yes" || normalized === "on";
-}
-
 const isProduction = process.env.NODE_ENV === "production";
-const authBypass = process.env.STANDBY_AUTH_BYPASS === "true";
-const allowAnonymousTestJson = parseBoolean(process.env.STANDBY_ALLOW_ANON_TEST_JSON);
 const supabaseUrl = process.env.SUPABASE_URL;
 const authenticateToken = supabaseUrl
   ? createSupabaseAuthenticator({
@@ -19,7 +11,7 @@ const authenticateToken = supabaseUrl
     })
   : undefined;
 const apiToken = process.env.STANDBY_API_TOKEN ?? (isProduction ? undefined : "local-dev-token");
-if (isProduction && !authenticateToken && !authBypass && !allowAnonymousTestJson) {
+if (isProduction && !authenticateToken) {
   throw new Error("SUPABASE_URL is required in production for user JWT verification.");
 }
 
@@ -57,8 +49,6 @@ const extractionProvider = process.env.UPSTAGE_API_KEY
 const app = await buildApp({
   allowedOrigins,
   logger: true,
-  ...(allowAnonymousTestJson ? { allowAnonymousTestJson: true } : {}),
-  ...(authBypass ? { authBypass: true } : {}),
   ...(authenticateToken ? { authenticateToken } : {}),
   ...(apiToken ? { apiToken } : {}),
   ...(extractionProvider ? { extractionProvider } : {}),

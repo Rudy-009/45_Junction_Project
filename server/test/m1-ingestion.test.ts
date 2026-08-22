@@ -91,13 +91,16 @@ test("SCRIPT multipart upload hashes bytes and never echoes file contents", asyn
   assert.equal((replay.json() as { source_id: string }).source_id, source.source_id);
 });
 
-test("real-file API flow reaches human review snapshot with only MASTER_CUE", async () => {
+test("MASTER_CUE JSON file reaches Upstage extraction and human review", async () => {
   const provider: ExtractionProvider = {
     async extract(sources) {
       const roles = ["MASTER_CUE"] as const;
       const facts = roles.map((role) => {
         const current = sources.get(role);
         assert.ok(current);
+        assert.equal(current.media_type, "application/json");
+        assert.equal(current.original_filename, "master.json");
+        assert.ok(current.bytes);
         return {
           fact_id: `fact_${role.toLowerCase()}`,
           fact_type: `${role}_FACT`,
@@ -149,9 +152,9 @@ test("real-file API flow reaches human review snapshot with only MASTER_CUE", as
     for (const upload of [
       {
         role: "MASTER_CUE",
-        filename: "master.xlsx",
-        mediaType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        bytes: Buffer.from([0x50, 0x4b, 0x03, 0x04]),
+        filename: "master.json",
+        mediaType: "application/json",
+        bytes: Buffer.from('{"events":[]}'),
       },
     ] as const) {
       const boundary = `boundary-${upload.role}`;

@@ -3,7 +3,6 @@ import {
   AlertTriangle,
   Check,
   FileSpreadsheet,
-  FileText,
   Info,
   LoaderCircle,
   Plus,
@@ -18,7 +17,7 @@ import {
 import { FactReviewPanel, type FactReviewCommand } from '@/components/domain';
 import { useStandbyWorkspaceStore } from '@/store';
 import type { FactCandidate } from '@/types/standby';
-import { authBypassEnabled, authConfigured, getStandbyAccessToken, supabase } from '@/lib/auth';
+import { authConfigured, getStandbyAccessToken, supabase } from '@/lib/auth';
 import { useI18n, type Locale } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { useNavigate } from '@tanstack/react-router';
@@ -34,7 +33,7 @@ const ZONES = [
   ['STAGE_LEFT_CHANGE', '하수 환복소'],
 ] as const;
 
-type SourceInputKind = 'MASTER_CUE_FILE' | 'MASTER_CUE_JSON';
+type SourceInputKind = 'MASTER_CUE';
 type Crossover = 'UNKNOWN' | 'AVAILABLE' | 'UNAVAILABLE';
 type SubmitPhase = 'IDLE' | 'UPLOADING' | 'EXTRACTING' | 'REVIEW' | 'VERIFYING' | 'SUCCEEDED' | 'FAILED';
 
@@ -66,15 +65,10 @@ const SOURCE_CONFIG: Record<SourceInputKind, {
   accept: string;
   extensions: string[];
 }> = {
-  MASTER_CUE_FILE: {
+  MASTER_CUE: {
     label: 'MASTER CUE',
-    accept: '.xlsx,.pdf',
-    extensions: ['xlsx', 'pdf'],
-  },
-  MASTER_CUE_JSON: {
-    label: 'TEST JSON',
-    accept: '.json',
-    extensions: ['json'],
+    accept: '.xlsx,.pdf,.json',
+    extensions: ['xlsx', 'pdf', 'json'],
   },
 };
 
@@ -154,7 +148,6 @@ export function InputScreen() {
   const setWorkspace = useStandbyWorkspaceStore((state) => state.setWorkspace);
   const clearWorkspace = useStandbyWorkspaceStore((state) => state.clear);
   const [masterCue, setMasterCue] = useState<SelectedSource | null>(null);
-  const [masterCueInputKind, setMasterCueInputKind] = useState<SourceInputKind | null>(null);
   const [sourceErrors, setSourceErrors] = useState<Partial<Record<SourceInputKind, string>>>({});
   const [crossover, setCrossover] = useState<Crossover>('UNKNOWN');
   const [minimumChangeSeconds, setMinimumChangeSeconds] = useState('60');
@@ -168,14 +161,12 @@ export function InputScreen() {
   const [message, setMessage] = useState<string | null>(null);
   const [caseId, setCaseId] = useState<string | null>(null);
   const [facts, setFacts] = useState<FactCandidate[]>([]);
-  const [authEmail, setAuthEmail] = useState<string | null>(
-    import.meta.env.DEV || authBypassEnabled ? 'standby-demo' : null,
-  );
+  const [authEmail, setAuthEmail] = useState<string | null>(import.meta.env.DEV ? 'local-dev' : null);
   const [loginEmail, setLoginEmail] = useState('');
   const [authMessage, setAuthMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!supabase || authBypassEnabled) return;
+    if (!supabase) return;
     let active = true;
     void supabase.auth.getSession().then(({ data }) => {
       if (active) setAuthEmail(data.session?.user.email ?? null);
@@ -262,17 +253,9 @@ export function InputScreen() {
     try {
       const selected = await inspectSourceFile(kind, file, locale);
       setMasterCue(selected);
-      setMasterCueInputKind(kind);
-      setSourceErrors((current) => ({
-        ...current,
-        MASTER_CUE_FILE: undefined,
-        MASTER_CUE_JSON: undefined,
-      }));
+      setSourceErrors((current) => ({ ...current, MASTER_CUE: undefined }));
     } catch (error) {
-      if (masterCueInputKind === kind) {
-        setMasterCue(null);
-        setMasterCueInputKind(null);
-      }
+      setMasterCue(null);
       setSourceErrors((current) => ({
         ...current,
         [kind]: error instanceof Error ? error.message : locale === 'ko' ? '파일을 확인할 수 없습니다.' : 'Could not inspect the file.',
@@ -281,30 +264,12 @@ export function InputScreen() {
   };
 
   const ready = Boolean(masterCue);
-  const isTestJsonMode = useMemo(
-    () => masterCueInputKind === 'MASTER_CUE_JSON',
-    [masterCueInputKind],
-  );
-  const authenticated = authBypassEnabled || Boolean(authEmail) || isTestJsonMode;
+  const authenticated = Boolean(authEmail);
 
-  const apiClient = (options: { testJsonMode: boolean }) => {
-    const { testJsonMode } = options;
-    const baseUrl =
-      import.meta.env.VITE_STANDBY_API_BASE_URL as string | undefined
-      ?? import.meta.env.VITE_STANDBY_API_URL as string | undefined
-      ?? import.meta.env.VITE_API_BASE_URL as string | undefined;
-    return baseUrl && (import.meta.env.DEV || authBypassEnabled || authConfigured || testJsonMode)
-      ? new StandbyApi({
-          baseUrl,
-          getAccessToken: () => getStandbyAccessToken({
-            allowUnauthenticatedTestJson: testJsonMode,
-          }),
-          getRequestHeaders: testJsonMode
-            ? async () => ({
-                'x-standby-anon-test': '1',
-              })
-            : undefined,
-        })
+  const apiClient = () => {
+    const baseUrl = import.meta.env.VITE_STANDBY_API_BASE_URL as string | undefined;
+    return baseUrl && (import.meta.env.DEV || authConfigured)
+      ? new StandbyApi({ baseUrl, getAccessToken: getStandbyAccessToken })
       : null;
   };
 
@@ -317,7 +282,7 @@ export function InputScreen() {
       return;
     }
 
-    const api = apiClient({ testJsonMode: isTestJsonMode });
+    const api = apiClient();
     if (!api) {
       setPhase('FAILED');
       setMessage(
@@ -330,16 +295,9 @@ export function InputScreen() {
       setPhase('UPLOADING');
       setMessage(t('input.status.upload'));
       const createdCase = await api.createCase(`STANDBY ${new Date().toLocaleString('ko-KR')}`);
-      const uploads: Promise<unknown>[] = [];
-      if (isTestJsonMode) {
-        const masterCuePayload = JSON.parse(await masterCue.file.text());
-        uploads.push(api.uploadSource(createdCase.case_id, 'MASTER_CUE', masterCuePayload, {
-          origin: masterCue.origin,
-          mediaType: 'application/json',
-        }));
-      } else {
-        uploads.push(api.uploadSourceFile(createdCase.case_id, 'MASTER_CUE', masterCue.file, masterCue.origin));
-      }
+      const uploads = [
+        api.uploadSourceFile(createdCase.case_id, 'MASTER_CUE', masterCue.file, masterCue.origin),
+      ];
       if (stageErrors.length === 0) {
         uploads.push(api.uploadStageSpec(createdCase.case_id, stageSpec, SOURCE_ORIGIN));
       }
@@ -347,10 +305,7 @@ export function InputScreen() {
 
       setPhase('EXTRACTING');
       setMessage(t('input.status.extract'));
-      const operation = await api.startExtraction(
-        createdCase.case_id,
-        isTestJsonMode ? 'CONTROLLED_FIXTURE' : 'UPSTAGE_AGENT',
-      );
+      const operation = await api.startExtraction(createdCase.case_id, 'UPSTAGE_AGENT');
       await api.waitForOperation(operation.operation_id);
       const queue = await api.getReviewQueue(createdCase.case_id);
 
@@ -369,7 +324,7 @@ export function InputScreen() {
   };
 
   const completeReview = async (reviews: FactReviewCommand[]) => {
-    const api = apiClient({ testJsonMode: isTestJsonMode });
+    const api = apiClient();
     if (!api || !caseId) {
       setPhase('FAILED');
       setMessage(t('input.error.noCase'));
@@ -402,7 +357,7 @@ export function InputScreen() {
           <h1 className="text-2xl font-medium">{t('input.title')}</h1>
         </header>
 
-        {!import.meta.env.DEV && !authBypassEnabled && !isTestJsonMode && (
+        {!import.meta.env.DEV && (
           <AuthPanel
             configured={authConfigured}
             email={authEmail}
@@ -424,21 +379,13 @@ export function InputScreen() {
           />
         )}
 
-        <section className="mt-6 grid items-start gap-4 lg:grid-cols-[2fr_1fr]">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <SourceCard
-              kind="MASTER_CUE_FILE"
-              source={masterCueInputKind === 'MASTER_CUE_FILE' ? masterCue : null}
-              error={sourceErrors.MASTER_CUE_FILE}
-              onFile={(file) => void selectSource('MASTER_CUE_FILE', file)}
-            />
-            <SourceCard
-              kind="MASTER_CUE_JSON"
-              source={masterCueInputKind === 'MASTER_CUE_JSON' ? masterCue : null}
-              error={sourceErrors.MASTER_CUE_JSON}
-              onFile={(file) => void selectSource('MASTER_CUE_JSON', file)}
-            />
-          </div>
+        <section className="mt-6 grid items-start gap-4 lg:grid-cols-2">
+          <SourceCard
+            kind="MASTER_CUE"
+            source={masterCue}
+            error={sourceErrors.MASTER_CUE}
+            onFile={(file) => void selectSource('MASTER_CUE', file)}
+          />
           <StageSpecCard
             crossover={crossover}
             minimumChangeSeconds={minimumChangeSeconds}
@@ -549,16 +496,13 @@ function SourceCard({
   const [dragging, setDragging] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const config = SOURCE_CONFIG[kind];
-  const Icon = kind === 'MASTER_CUE_FILE' ? FileSpreadsheet : FileText;
-  const helper = kind === 'MASTER_CUE_FILE'
-    ? t('input.cue.fileHelper')
-    : t('input.cue.jsonHelper');
+  const helper = t('input.cue.fileHelper');
 
   return (
     <article className="border border-border bg-surface">
       <div className="flex items-start justify-between border-b border-border p-4">
         <div className="flex gap-3">
-          <div className="border border-border p-2"><Icon className="h-4 w-4" /></div>
+          <div className="border border-border p-2"><FileSpreadsheet className="h-4 w-4" /></div>
           <div>
             <p className="mono text-xs font-semibold tracking-[0.1em]">{config.label}</p>
             <p className="mt-1 text-xs leading-5 text-muted-foreground">{helper}</p>
