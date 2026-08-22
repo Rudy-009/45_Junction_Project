@@ -315,6 +315,55 @@ function ServerRevisionPanel({
     }
   };
 
+  const downloadBlob = (blob: Blob, filename: string) => {
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = filename;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const exportDocx = async () => {
+    if (!current) return;
+    const api = createStandbyBrowserApi();
+    if (!api) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const exported = await api.downloadStandardCueDocx(workspace.case_id, current.revision_id);
+      downloadBlob(exported.blob, 'standby-standard-cue.docx');
+    } catch (exportError) {
+      setError(exportError instanceof Error ? exportError.message : 'Word export failed.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const printPdf = async () => {
+    if (!current) return;
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      setError(locale === 'ko' ? '팝업을 허용한 뒤 다시 시도하세요.' : 'Allow popups and try again.');
+      return;
+    }
+    const api = createStandbyBrowserApi();
+    if (!api) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const html = await api.getStandardCuePrintHtml(workspace.case_id, current.revision_id);
+      printWindow.document.open();
+      printWindow.document.write(html);
+      printWindow.document.close();
+    } catch (exportError) {
+      printWindow.close();
+      setError(exportError instanceof Error ? exportError.message : 'PDF print failed.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const refreshMasterCue = async (file: File) => {
     setBusy(true);
     setError(null);
@@ -381,6 +430,12 @@ function ServerRevisionPanel({
               {locale === 'ko' ? 'XLSX 내보내기' : 'Export XLSX'}
             </button>
           )}
+          <button type="button" disabled={busy || !current} className="border border-border px-2 py-1 text-[10px]" onClick={() => void exportDocx()}>
+            {locale === 'ko' ? 'Word 실행본' : 'Word handoff'}
+          </button>
+          <button type="button" disabled={busy || !current} className="border border-border px-2 py-1 text-[10px]" onClick={() => void printPdf()}>
+            {locale === 'ko' ? 'PDF 실행본' : 'PDF handoff'}
+          </button>
         <details className="text-[10px] text-muted-foreground">
           <summary className="cursor-pointer">{locale === 'ko' ? `히스토리 ${revisions.length}` : `History ${revisions.length}`}</summary>
           <div className="mt-2 min-w-64 space-y-1 border border-border bg-background p-2">

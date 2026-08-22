@@ -613,6 +613,26 @@ export async function buildApp(
     },
   );
 
+  app.get<{ Params: { caseId: string; revisionId: string } }>(
+    "/v1/cases/:caseId/cue-revisions/:revisionId/export.docx",
+    async (request, reply) => {
+      store.assertCaseOwner(request.params.caseId, request.standbyActorId);
+      const exported = await store.exportStandardCueDocx(request.params.caseId, request.params.revisionId);
+      reply.header("content-type", "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+      reply.header("content-disposition", `attachment; filename="${exported.filename}"`);
+      return reply.send(Buffer.from(exported.bytes));
+    },
+  );
+
+  app.get<{ Params: { caseId: string; revisionId: string } }>(
+    "/v1/cases/:caseId/cue-revisions/:revisionId/print",
+    async (request, reply) => {
+      store.assertCaseOwner(request.params.caseId, request.standbyActorId);
+      reply.header("content-type", "text/html; charset=utf-8");
+      return reply.send(store.exportStandardCuePrint(request.params.caseId, request.params.revisionId));
+    },
+  );
+
   app.post<{ Params: { caseId: string } }>(
     "/v1/cases/:caseId/cue-revisions",
     async (request, reply) => {

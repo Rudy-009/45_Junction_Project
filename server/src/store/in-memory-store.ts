@@ -41,6 +41,7 @@ import { compileEventGraph, workspaceEvents } from "../domain/compiler.js";
 import { verifyProduction } from "../domain/verifier.js";
 import { canonicalJson, hashJson, sha256 } from "../lib/hash.js";
 import { cueRowsFromXlsx, exportXlsxRevision } from "../domain/xlsx-revision.js";
+import { standardCueDocx, standardCuePrintHtml } from "../domain/standard-cue-export.js";
 import type { ExtractionProvider } from "../providers/extraction-provider.js";
 import type { ProductionAgentProvider } from "../providers/production-agent-provider.js";
 import type { ScriptProjectionProvider } from "../providers/script-projection-provider.js";
@@ -933,6 +934,21 @@ export class InMemoryStore {
     if (!base) throw new DomainError(409, "SOURCE_SLOT_MISSING", "Base XLSX revision is missing.");
     const filename = (source.original_filename ?? "master-cue.xlsx").replace(/\.xlsx$/i, "") + "-standby.xlsx";
     return { bytes: await exportXlsxRevision(source.bytes, base.rows, revision.rows), filename };
+  }
+
+  async exportStandardCueDocx(caseId: string, revisionId: string): Promise<{ bytes: Uint8Array; filename: string }> {
+    const record = this.getCase(caseId);
+    const revision = this.getCueRevision(caseId, revisionId);
+    return {
+      bytes: await standardCueDocx(record.title, revision.revision_id, revision.rows),
+      filename: "standby-standard-cue.docx",
+    };
+  }
+
+  exportStandardCuePrint(caseId: string, revisionId: string): string {
+    const record = this.getCase(caseId);
+    const revision = this.getCueRevision(caseId, revisionId);
+    return standardCuePrintHtml(record.title, revision.revision_id, revision.rows);
   }
 
   private productionAgentInput(

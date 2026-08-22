@@ -139,6 +139,25 @@ test("XLSX revision export changes only the patched cell and preserves workbook 
   assert.equal(structuralSheet?.getCell("A4").text, "");
   assert.equal(structuralSheet?.getCell("A5").text, "");
   assert.equal(structuralBook.getWorksheet("Notes")?.getCell("A1").text, "untouched");
+
+  const word = await app.inject({
+    method: "GET",
+    url: `/v1/cases/${caseId}/cue-revisions/${structuralRevision.revision_id}/export.docx`,
+    headers: headers(),
+  });
+  assert.equal(word.statusCode, 200, word.body);
+  assert.equal(word.rawPayload.subarray(0, 2).toString(), "PK");
+  assert.match(String(word.headers["content-disposition"]), /standby-standard-cue\.docx/);
+
+  const print = await app.inject({
+    method: "GET",
+    url: `/v1/cases/${caseId}/cue-revisions/${structuralRevision.revision_id}/print`,
+    headers: headers(),
+  });
+  assert.equal(print.statusCode, 200, print.body);
+  assert.match(print.body, /STANDBY · STANDARD CUE/);
+  assert.match(print.body, /________________/);
+  assert.match(print.body, /window|print\(\)/);
 });
 
 test("refresh reuses an identical source and leaves changed-source facts UNREVIEWED", async () => {

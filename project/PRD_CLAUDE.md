@@ -450,6 +450,13 @@ XLSX in  →  Parse · Extract  →  검증 · 편집  →  XLSX out
 | **왕복 안정성** | export한 파일을 다시 import하면 같은 fact가 나와야 한다 |
 | **판정 미포함** | verdict는 문서에 쓰지 않는다. 큐시트는 실행 문서지 검증 리포트가 아니다 |
 
+### 10-2-1. 표준 실행본
+
+원본 왕복본과 별도로 같은 revision에서 **하나의 표준 cue 양식**을 만든다. EVENT·TRIGGER·DEPARTMENT·
+ACTION·CAST·LOCATION·NOTES 순서를 Word와 PDF에서 동일하게 유지하고, 값이 없는 칸은 삭제하지 않고
+밑줄 빈칸으로 남긴다. Word는 `.docx`, PDF는 같은 인쇄 HTML을 브라우저의 PDF 저장으로 출력한다.
+두 실행본에도 verdict는 포함하지 않는다.
+
 마지막 항목이 중요하다. 큐시트에 `VIOLATION`을 찍어 배포하면 현장이 혼란스러워진다.
 판정은 STANDBY 안에 남고, 나가는 것은 **합의된 실행 값**뿐이다.
 

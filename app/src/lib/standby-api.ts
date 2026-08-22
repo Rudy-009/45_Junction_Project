@@ -272,6 +272,32 @@ export class StandbyApi {
     };
   }
 
+  async downloadStandardCueDocx(caseId: string, revisionId: string) {
+    return this.downloadFile(`/v1/cases/${caseId}/cue-revisions/${revisionId}/export.docx`);
+  }
+
+  async getStandardCuePrintHtml(caseId: string, revisionId: string) {
+    const sessionId = await this.options.getSessionId();
+    const response = await this.fetchImpl(
+      `${this.baseUrl}/v1/cases/${caseId}/cue-revisions/${revisionId}/print`,
+      { headers: { "x-standby-session": sessionId } },
+    );
+    if (!response.ok) throw new StandbyApiError(response.status, "PRINT_EXPORT_FAILED", "Print export failed.", null);
+    return response.text();
+  }
+
+  private async downloadFile(path: string) {
+    const sessionId = await this.options.getSessionId();
+    const response = await this.fetchImpl(`${this.baseUrl}${path}`, {
+      headers: { "x-standby-session": sessionId },
+    });
+    if (!response.ok) {
+      const json = (await response.json()) as ApiErrorBody;
+      throw new StandbyApiError(response.status, json.error?.code ?? "API_ERROR", json.error?.message ?? "Export failed.", json.error?.request_id ?? null);
+    }
+    return { blob: await response.blob(), disposition: response.headers.get("content-disposition") };
+  }
+
   private async request<T>(
     path: string,
     init: RequestInit & { idempotent?: boolean } = {},
