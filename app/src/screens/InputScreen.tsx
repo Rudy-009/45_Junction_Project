@@ -17,7 +17,7 @@ import {
 import { FactReviewPanel, type FactReviewCommand } from '@/components/domain';
 import { useStandbyWorkspaceStore } from '@/store';
 import type { FactCandidate } from '@/types/standby';
-import { authConfigured, getStandbyAccessToken, supabase } from '@/lib/auth';
+import { authConfigured, completeAuthCallback, getStandbyAccessToken, supabase } from '@/lib/auth';
 import { useI18n, type Locale } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { useNavigate } from '@tanstack/react-router';
@@ -144,6 +144,7 @@ async function inspectSourceFile(kind: SourceInputKind, file: File, locale: Loca
 
 export function InputScreen() {
   const { locale, t } = useI18n();
+  const authFallbackMessage = t('input.error.review');
   const navigate = useNavigate();
   const setWorkspace = useStandbyWorkspaceStore((state) => state.setWorkspace);
   const clearWorkspace = useStandbyWorkspaceStore((state) => state.clear);
@@ -168,17 +169,23 @@ export function InputScreen() {
   useEffect(() => {
     if (!supabase) return;
     let active = true;
-    void supabase.auth.getSession().then(({ data }) => {
-      if (active) setAuthEmail(data.session?.user.email ?? null);
-    });
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
       setAuthEmail(session?.user.email ?? null);
     });
+    void completeAuthCallback()
+      .then((session) => {
+        if (active) setAuthEmail(session?.user.email ?? null);
+      })
+      .catch((error: unknown) => {
+        if (active) {
+          setAuthMessage(error instanceof Error ? error.message : authFallbackMessage);
+        }
+      });
     return () => {
       active = false;
       data.subscription.unsubscribe();
     };
-  }, []);
+  }, [authFallbackMessage]);
 
   const stageSpec = useMemo(() => ({
     contract_version: 'standby.stage-spec.v1',
