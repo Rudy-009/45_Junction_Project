@@ -1,4 +1,4 @@
-import type { Direction } from './cue-sheet';
+import type { CueSheet, Direction } from './cue-sheet';
 
 export type Verdict = 'VIOLATION' | 'REVIEW' | 'CONSISTENT' | 'INSUFFICIENT_EVIDENCE' | 'EDITED';
 
@@ -13,6 +13,7 @@ export interface Revision {
   savedAt: string;
   author: string;
   changes: { rowId: string; column: string; from: string; to: string }[];
+  snapshot: CueSheet;
 }
 
 export type Zone = '상수윙' | '무대' | '하수윙' | '상수환복소' | '하수환복소';
