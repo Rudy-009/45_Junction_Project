@@ -260,7 +260,8 @@ Script Sidebar에서 DOCX(우선) 또는 PDF(보조)를 연결한다. 서버는 
 reviewed event label은 대본 fallback이 아니다.
 timeline 선택은 같은 event 발췌를 스크롤·강조하고, 발췌 선택은 같은 event로 이동한다. 이 패널은 읽기
 전용이고 localStorage에 원문을 남기지 않으며 Agent가 원문을 보충하거나 fact·snapshot·verdict authority를
-만드는 경로가 아니다. raw fact의 exact `event_id`만 자동 연결하고, 나머지는 사람이 현재 event에 연결한다.
+만드는 경로가 아니다. raw fact의 exact `event_id` 또는 원문 `section_marker`와 큐시트 장면명의 유일한
+일치만 자동 연결하고, 근거가 없거나 둘 이상과 일치하는 구간은 사람이 현재 event에 연결한다.
 
 ### 중요한 미확정 경계
 

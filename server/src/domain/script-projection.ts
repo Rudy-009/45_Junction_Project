@@ -97,6 +97,12 @@ export function projectScriptSegments(facts: FactCandidate[]): ScriptProjectionS
       `SCRIPT fact ${factIndex}`,
       MAX_EVENT_ID_LENGTH,
     );
+    const sectionMarker = firstExactString(
+      raw,
+      ["section_marker_raw", "section_marker"],
+      `SCRIPT fact ${factIndex}`,
+      MAX_EVENT_ID_LENGTH,
+    );
     const rawFactSha256 = hashJson(raw);
 
     const append = (
@@ -114,6 +120,7 @@ export function projectScriptSegments(facts: FactCandidate[]): ScriptProjectionS
         text,
         speaker: segmentSpeaker,
         event_id: eventId,
+        section_marker: sectionMarker,
         locator: fact.locator,
         source_quote: fact.quote,
         provenance: {
