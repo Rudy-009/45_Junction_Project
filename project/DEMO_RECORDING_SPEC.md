@@ -1,19 +1,21 @@
 # STANDBY — 데모 비디오 촬영 명세
 
-> 보존 기록: 이 문서는 이미 끝난 촬영의 재현 명세다. R0 이후 production에는 아래 SHA fast path와
-> JSON Editor 직행이 존재하지 않는다. 새 데모는 XLSX/PDF/JSON 공통 서버 review 경로를 사용한다.
+> 보존 기록: 이 문서는 이미 끝난 촬영의 재현 명세다. R0 이후 **운영 production**에는 아래 SHA fast path와
+> JSON Editor 직행이 존재하지 않는다. 영상 재현용 fast path는 운영판과 분리한 Vercel 고정 스냅샷에서만
+> 제공하며 실제 Upstage 분석이나 공연 안전 판정으로 설명하지 않는다.
 
 | 항목 | 값 |
 |---|---|
 | 목표 길이 | 75초, 최대 90초 |
-| 운영 URL | `https://standby-junctionx.vercel.app` |
+| 데모 URL | `https://standby-demo-junctionx.vercel.app` |
+| 고정 스냅샷 | `b9208a4` — Git 자동배포 없음 |
 | 입력 파일 | 팀이 승인한 reference XLSX (`SHA-256 f8a8d43d…c0419`) |
 | 촬영 해상도 | 1600×1000 이상, 브라우저 확대 100% |
 | 핵심 서사 | 문서를 넣는다 → 충돌 지점을 본다 → Event로 이동한다 → 큐를 고친다 |
 
 ## 촬영 전 체크
 
-1. 새 시크릿 창 또는 localStorage를 비운 브라우저에서 운영 URL을 연다.
+1. 새 시크릿 창 또는 localStorage를 비운 브라우저에서 데모 URL을 연다.
 2. 언어를 `ENG`로 한 번 전환한 뒤 `KOR`로 돌아와 국제대회 대응을 짧게 확인한다.
 3. reference XLSX를 Finder의 Downloads 첫 화면에 둔다.
 4. Stage Spec의 빈 초기 배치 행은 건드리지 않는다. fast path는 reference hash만 사용한다.
@@ -54,5 +56,5 @@
 ## 실패 시 즉시 전환
 
 1. XLSX fast path가 열리지 않으면 `example-cue-with-light.json`을 넣어 Editor 직행을 사용한다.
-2. 운영 배포가 갱신되지 않았으면 Vercel 최신 Production deployment를 Promote한 뒤 hard refresh한다.
+2. 데모 배포가 열리지 않으면 Vercel `standby-demo-junctionx`의 고정 Production deployment를 확인한다.
 3. Agent 지연은 기다리지 않는다. 입력부터 다시 찍지 말고 workspace 구간을 별도 테이크로 촬영해 연결한다.
