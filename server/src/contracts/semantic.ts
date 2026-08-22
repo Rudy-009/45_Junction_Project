@@ -2,6 +2,22 @@ import { DomainError } from "../domain/errors.js";
 
 type ObjectValue = Record<string, unknown>;
 
+const NORMALIZED_FACT_TYPES = new Set([
+  "SCRIPT_TIMING_ANCHOR",
+  "QUICK_CHANGE_AVAILABLE_WINDOW",
+  "ROUTE_TO_CHANGE",
+  "MINIMUM_CHANGE_TIME",
+  "ROUTE_TO_ENTRY",
+  "BLOCKING_SEQUENCE_COMPLETE",
+  "ROUTE_CAPACITY",
+  "ROUTE_OCCUPANCY",
+  "PROP_INITIAL_STATE",
+  "PROP_SEQUENCE_COMPLETE",
+  "PROP_REQUIRED_AT",
+  "PROP_MOVE",
+  "EVENT_STATE",
+]);
+
 function asObject(value: unknown, label: string): ObjectValue {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
     throw new DomainError(422, "CONTRACT_VIOLATION", `${label} must be an object.`);
@@ -29,6 +45,20 @@ export function assertStageSpecSemantics(value: unknown): void {
       route.min_ms > route.max_ms
     ) {
       throw new DomainError(422, "TIME_RANGE_INVALID", "Route min_ms must not exceed max_ms.");
+    }
+  }
+
+  if (stage.route_capacities !== undefined) {
+    const capacities = asArray(stage.route_capacities, "route_capacities");
+    const routeIds = capacities.map((capacityValue, index) => {
+      const capacity = asObject(capacityValue, `route_capacities[${index}]`);
+      if (typeof capacity.capacity !== "number" || !Number.isInteger(capacity.capacity) || capacity.capacity < 1) {
+        throw new DomainError(422, "ROUTE_CAPACITY_INVALID", "Route capacity must be a positive integer.");
+      }
+      return String(capacity.route_id ?? "");
+    });
+    if (new Set(routeIds).size !== routeIds.length) {
+      throw new DomainError(422, "DUPLICATE_ROUTE_CAPACITY", "Route capacity IDs must be unique.");
     }
   }
 
@@ -75,5 +105,20 @@ export function assertVerificationSemantics(value: unknown): void {
         "Every finding must contain exactly SCRIPT, MASTER_CUE and STAGE_SPEC evidence.",
       );
     }
+  }
+}
+
+export function assertNormalizedFactSemantics(value: unknown): void {
+  if (value === null) return;
+  const envelope = asObject(value, "corrected_value");
+  if (envelope.normalized_fact_type === undefined) return;
+  if (
+    typeof envelope.normalized_fact_type !== "string" ||
+    !NORMALIZED_FACT_TYPES.has(envelope.normalized_fact_type)
+  ) {
+    throw new DomainError(422, "NORMALIZED_FACT_TYPE_INVALID", "Unknown normalized fact type.");
+  }
+  if (envelope.value === null || typeof envelope.value !== "object" || Array.isArray(envelope.value)) {
+    throw new DomainError(422, "NORMALIZED_FACT_VALUE_INVALID", "Normalized fact value must be an object.");
   }
 }

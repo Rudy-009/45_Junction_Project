@@ -1,6 +1,6 @@
 import { extractControlledFixture } from "../domain/extraction.js";
 import { DomainError } from "../domain/errors.js";
-import { assertStageSpecSemantics } from "../contracts/semantic.js";
+import { assertNormalizedFactSemantics, assertStageSpecSemantics } from "../contracts/semantic.js";
 import type {
   CaseRecord,
   CellPatch,
@@ -18,7 +18,8 @@ import type {
   SourceVersion,
   WorkspaceSnapshot,
 } from "../domain/types.js";
-import { verifyQuickChange, workspaceEvents } from "../domain/verifier.js";
+import { compileEventGraph, workspaceEvents } from "../domain/compiler.js";
+import { verifyProduction } from "../domain/verifier.js";
 import { canonicalJson, hashJson, sha256 } from "../lib/hash.js";
 import type { ExtractionProvider } from "../providers/extraction-provider.js";
 
@@ -266,6 +267,7 @@ export class InMemoryStore {
     const record = this.getCase(input.caseId);
     const created: ReviewRecord[] = [];
     for (const review of input.reviews) {
+      if (review.decision === "REVIEWED") assertNormalizedFactSemantics(review.corrected_value);
       const fact = record.facts.get(review.fact_id);
       if (!fact) {
         throw new DomainError(404, "RESOURCE_NOT_FOUND", `Fact ${review.fact_id} not found.`);
@@ -396,6 +398,7 @@ export class InMemoryStore {
       throw new DomainError(409, "SOURCE_SLOT_MISSING", "MASTER_CUE is missing.");
     }
 
+    const compiled = compileEventGraph(snapshot);
     return {
       case_id: record.case_id,
       title: record.title,
@@ -406,7 +409,8 @@ export class InMemoryStore {
       review_snapshot_id: snapshot.snapshot_id,
       cue_revision_id: revision.revision_id,
       original_master_cue_sha256: masterCue.sha256,
-      events: workspaceEvents(verification),
+      event_graph: compiled.graph,
+      events: workspaceEvents(compiled.graph, compiled.stageSnapshots, verification.findings),
       findings: verification.findings,
       verification,
     };
@@ -415,7 +419,7 @@ export class InMemoryStore {
   private verifyCurrent(record: CaseRecord): void {
     const snapshot = this.currentSnapshot(record);
     const revision = this.currentRevision(record);
-    record.verification = verifyQuickChange({
+    record.verification = verifyProduction({
       caseId: record.case_id,
       sources: record.sources,
       snapshot,

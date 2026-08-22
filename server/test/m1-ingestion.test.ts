@@ -228,6 +228,14 @@ test("real-file API flow reaches human review snapshot before M2 compilation", a
     });
     assert.equal(snapshot.statusCode, 201, snapshot.body);
     assert.equal((snapshot.json() as { reviewed_fact_ids: string[] }).reviewed_fact_ids.length, 3);
+
+    const workspace = await liveApp.inject({
+      method: "GET",
+      url: `/v1/cases/${caseId}/workspace`,
+      headers: auth(),
+    });
+    assert.equal(workspace.statusCode, 409, workspace.body);
+    assert.equal((workspace.json() as { error: { code: string } }).error.code, "SOURCE_SLOT_MISSING");
   } finally {
     await liveApp.close();
   }
@@ -304,7 +312,9 @@ test("Upstage adapter uploads one file per role, polls jobs, and returns only UN
   });
   const result = await provider.extract(sources);
   assert.equal(createBodies.length, 2);
-  assert.equal(result.facts.length, 5);
+  assert.equal(result.facts.length, 7);
+  assert.ok(result.facts.some((fact) => fact.fact_type === "ROUTE_CAPACITY"));
+  assert.ok(result.facts.some((fact) => fact.fact_type === "PROP_INITIAL_STATE"));
   assert.ok(result.facts.every((fact) => fact.review_status === "UNREVIEWED"));
   assert.deepEqual(result.sourceRuns.map((run) => run.provider), ["UPSTAGE", "UPSTAGE", "STANDBY_FORM"]);
   assert.ok(result.sourceRuns.every((run) => /^[a-f0-9]{64}$/.test(run.raw_response_sha256)));

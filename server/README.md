@@ -1,6 +1,6 @@
 # STANDBY backend MVP
 
-사람이 승인한 문서 fact만 결정론적 verifier에 전달하는 첫 번째 수직 슬라이스다.
+사람이 승인한 문서 fact만 compiler와 결정론적 verifier에 전달하는 수직 슬라이스다.
 현재 구현은 제어된 hero fixture 경로와 **실제 PDF/XLSX → Upstage Agent → UNREVIEWED fact** 경로를 함께 제공한다. 상태와 원문 파일은 아직 프로세스 메모리에만 있다.
 
 ## 실행
@@ -41,12 +41,13 @@ npm run build
 5. `GET /v1/extraction-runs/:runId` — 역할별 provider provenance 확인
 6. `GET /v1/cases/:caseId/review-queue` — 사람이 검토할 후보 조회
 7. `POST /v1/cases/:caseId/fact-reviews:batch` — fact 승인 또는 거절
-8. `POST /v1/cases/:caseId/review-snapshots` — 승인 시점의 fact를 불변 스냅샷으로 동결
-9. `GET /v1/cases/:caseId/workspace` — 결정론적 verdict, 근거 3종, 8-event 무대 스냅샷 조회
+8. `POST /v1/cases/:caseId/review-snapshots` — 승인 시점의 fact를 불변 스냅샷으로 동결하고 compile·verify
+9. `GET /v1/cases/:caseId/workspace` — reviewed event graph, 결정론적 verdict, 근거 3종, 무대 스냅샷 조회
 10. `POST /v1/cases/:caseId/cue-revisions` — 원본 hash를 유지한 revision layer 생성
 
-Hero fixture에서는 승인 전 E3가 `INSUFFICIENT_EVIDENCE`, 승인 후 58–62초 대
-66–68초가 `VIOLATION`, R3 환복시간을 70초로 고치면 finding 0건과 `CONSISTENT`가 된다.
+Hero fixture에서는 승인 전 세 규칙이 모두 `INSUFFICIENT_EVIDENCE`다. 승인 후 8-event graph와
+VR-01 quick-change `VIOLATION`, VR-02 route capacity `VIOLATION`, VR-03 prop continuity `REVIEW`가
+생긴다. R3 환복시간을 70초로 고치면 VR-01만 사라지고 독립된 두 finding은 유지된다.
 
 2026-08-22 저장 Agent/Config #1에 합성 Script PDF와 Master Cue PDF/XLSX를 실제 전송한 live smoke도
 통과했다. 두 형식 모두 Files API, job polling, strict decoder를 거쳐 Script 12개, Master Cue 5개,
@@ -59,6 +60,8 @@ Stage Spec 3개 fact를 만들었고 전부 `UNREVIEWED`였다. 이는 연결과
 - Upstage 출력에 exact locator나 quote가 없으면 전체 역할 job을 실패시킨다.
 - Upstage가 만든 fact는 항상 `UNREVIEWED`이며 사람 승인 전 verifier authority가 없다.
 - verifier는 현재 review queue가 아니라 사람이 동결한 `review_snapshot`만 읽는다.
+- compiler는 `REVIEWED` fact만 읽으며 Upstage raw label을 추측해 정규화하지 않는다.
+- raw fact를 정규화할 때는 review의 `corrected_value`에 명시적 `normalized_fact_type` envelope를 쓴다.
 - MASTER_CUE 원본 SHA-256은 revision으로 바뀌지 않는다.
 - 응답에는 업로드한 원문 content나 내부 cue rows를 그대로 내보내지 않는다.
 - JSON body는 1 MiB로 제한하고 CORS allowlist, Helmet, rate limit을 적용한다.
