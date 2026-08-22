@@ -32,7 +32,7 @@ export function StageSimulator({
 
   return (
     <div className="relative h-full w-full overflow-auto bg-background p-4">
-      <div className="mono absolute top-2 right-2 border border-border bg-surface px-2 py-[2px] text-[10px] text-muted-foreground">
+      <div className="absolute top-2 right-2 border border-border bg-surface px-2 py-[2px] text-[10px] text-muted-foreground">
         SCHEMATIC
       </div>
 
@@ -51,7 +51,7 @@ export function StageSimulator({
 
         {/* 무대 */}
         <div className="relative flex flex-1 flex-col border-y border-border">
-          <span className="mono absolute top-1 left-2 text-[10px] text-muted-foreground">
+          <span className="absolute top-1 left-2 text-[10px] text-muted-foreground">
             무대 / STAGE
           </span>
 
@@ -107,7 +107,7 @@ export function StageSimulator({
 
           {/* 백스테이지 통로 */}
           <div className="relative h-10 shrink-0 border-t border-border bg-background">
-            <span className="mono absolute top-1 left-2 text-[10px] text-muted-foreground">
+            <span className="absolute top-1 left-2 text-[10px] text-muted-foreground">
               백스테이지 · crossover={crossover}
             </span>
             <div className="absolute top-1/2 right-3 left-3 h-0 border-t"
@@ -117,7 +117,7 @@ export function StageSimulator({
               }}
             />
             {crossover === 'false' && (
-              <span className="mono absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-background px-2 text-[10px] text-violation">
+              <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-background px-2 text-[10px] text-violation">
                 ✕ 통로 없음
               </span>
             )}
@@ -140,7 +140,7 @@ export function StageSimulator({
 
 function Legend() {
   return (
-    <div className="mono absolute top-2 left-2 flex items-center gap-3 border border-border bg-surface px-2 py-[2px] text-[10px] text-muted-foreground">
+    <div className="absolute top-2 left-2 flex items-center gap-3 border border-border bg-surface px-2 py-[2px] text-[10px] text-muted-foreground">
       <span className="flex items-center gap-1">
         <span className="inline-block h-2.5 w-2.5 rounded-full border border-person bg-person/25" />
         사람
@@ -257,7 +257,7 @@ function WingBox({
     <div className="flex w-[130px] shrink-0 flex-col border border-border bg-muted">
       <div className="border-b border-border px-2 py-1">
         <div className="text-sm font-medium">{label}</div>
-        <div className="mono text-[10px] text-muted-foreground">{sub}</div>
+        <div className="text-[10px] text-muted-foreground">{sub}</div>
       </div>
       <div className="flex flex-1 flex-col items-center justify-center gap-3 p-2">
         {entities.map((e) => (
@@ -269,7 +269,7 @@ function WingBox({
       </div>
       {extra && extra.length > 0 && (
         <div className="border-t border-border bg-surface p-2">
-          <div className="mono mb-1 text-[10px] text-muted-foreground">
+          <div className="mb-1 text-[10px] text-muted-foreground">
             {side === 'left' ? '상수환복소' : '하수환복소'}
           </div>
           <div className="flex flex-col items-center gap-2">
@@ -329,7 +329,7 @@ function WingEntity({
 function TransitionToken({ transition }: { transition: NonNullable<StageEntity['transition']> }) {
   return (
     <span className={cn(
-      'mono text-[8px] font-semibold tracking-[0.1em]',
+      'text-[8px] font-semibold tracking-[0.1em]',
       transition === 'ENTER' ? 'text-enter' : 'text-exit',
     )}>
       {transition}

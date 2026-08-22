@@ -427,7 +427,7 @@ export function WorkspaceScreen() {
               <PanelHeader
                 title={t('workspace.stagePanel')}
                 right={
-                  <span className="mono text-[10px] text-muted-foreground">
+                  <span className="text-[10px] text-muted-foreground">
                     {selectedCue?.scene_number}{selectedEvt ? ` · ${selectedEvt.event_id}` : ''}
                   </span>
                 }
@@ -525,7 +525,7 @@ function Timeline({
         <span className="text-[10px] tracking-[0.14em] text-muted-foreground uppercase">
           {t('workspace.timelinePanel')}
         </span>
-        <span className="mono text-[10px] text-muted-foreground">{events.length} EVENTS</span>
+        <span className="text-[10px] text-muted-foreground">{events.length} EVENTS</span>
       </div>
 
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-x-auto overflow-y-hidden">
@@ -557,20 +557,20 @@ function Timeline({
                 <span className="timeline-playhead" aria-hidden="true" />
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <span className="mono text-[9px] text-muted-foreground">{String(index + 1).padStart(2, '0')} · {cue.scene_number}</span>
-                    <p className="mono mt-1 truncate text-[10px] font-semibold">{event.event_id}</p>
+                    <span className="text-[9px] text-muted-foreground">{String(index + 1).padStart(2, '0')} · {cue.scene_number}</span>
+                    <p className="mt-1 truncate text-[10px] font-semibold">{event.event_id}</p>
                   </div>
-                  <span className="mono border border-border px-1 py-0.5 text-[8px] text-muted-foreground">{event.trigger.type}</span>
+                  <span className="border border-border px-1 py-0.5 text-[8px] text-muted-foreground">{event.trigger.type}</span>
                 </div>
                 <p className="mt-2 line-clamp-2 text-[10px] leading-4 text-muted-foreground">
                   {event.trigger.description || '—'}
                 </p>
                 <div className="mt-2 flex items-end justify-between gap-2">
-                  <span className="mono text-[9px] text-muted-foreground">{event.actions.length} ACTIONS</span>
+                  <span className="text-[9px] text-muted-foreground">{event.actions.length} ACTIONS</span>
                   <div className="flex flex-col items-end gap-1">
-                    {errorCount > 0 && <span className="mono text-[8px] text-violation">ERROR {errorCount}</span>}
-                    {warningCount > 0 && <span className="mono text-[8px] text-review">ACTION REQUIRED {warningCount}</span>}
-                    {errorCount === 0 && warningCount === 0 && <span className="mono text-[8px] text-consistent">OK</span>}
+                    {errorCount > 0 && <span className="text-[8px] text-violation">ERROR {errorCount}</span>}
+                    {warningCount > 0 && <span className="text-[8px] text-review">ACTION REQUIRED {warningCount}</span>}
+                    {errorCount === 0 && warningCount === 0 && <span className="text-[8px] text-consistent">OK</span>}
                   </div>
                 </div>
               </button>
