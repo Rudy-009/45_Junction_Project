@@ -9,7 +9,6 @@ import type { CellPatch, ExtractionAdapter, Origin, SourceRole } from "./domain/
 import { sha256 } from "./lib/hash.js";
 import type { ExtractionProvider } from "./providers/extraction-provider.js";
 import { InMemoryStore } from "./store/in-memory-store.js";
-import type { TokenAuthenticator } from "./security/supabase-auth.js";
 
 declare module "fastify" {
   interface FastifyRequest {
@@ -19,7 +18,7 @@ declare module "fastify" {
 
 export type ServerConfig = {
   apiToken?: string;
-  authenticateToken?: TokenAuthenticator;
+  allowAnonymous?: boolean;
   allowedOrigins: string[];
   logger?: boolean;
   extractionProvider?: ExtractionProvider;
@@ -99,17 +98,20 @@ export async function buildApp(
     if (!request.url.startsWith("/v1/")) return;
     const authorization = request.headers.authorization;
     const token = authorization?.startsWith("Bearer ") ? authorization.slice(7).trim() : "";
-    if (!token) {
-      throw new DomainError(401, "UNAUTHENTICATED", "A valid bearer token is required.");
-    }
-    if (config.authenticateToken) {
-      request.standbyActorId = (await config.authenticateToken(token)).actorId;
+    if (token && config.apiToken && token === config.apiToken) {
+      request.standbyActorId = "dev-user";
       return;
     }
-    if (!config.apiToken || token !== config.apiToken) {
-      throw new DomainError(401, "UNAUTHENTICATED", "A valid bearer token is required.");
+    const anonymousSession = request.headers["x-standby-session"];
+    if (
+      config.allowAnonymous &&
+      typeof anonymousSession === "string" &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(anonymousSession)
+    ) {
+      request.standbyActorId = `anonymous_${sha256(anonymousSession).slice(0, 24)}`;
+      return;
     }
-    request.standbyActorId = "dev-user";
+    throw new DomainError(401, "UNAUTHENTICATED", "A valid demo session is required.");
   });
 
   app.setErrorHandler((error, request, reply) => {
@@ -244,6 +246,7 @@ export async function buildApp(
 
   app.post<{ Params: { caseId: string } }>(
     "/v1/cases/:caseId/extraction-runs",
+    { config: { rateLimit: { max: 20, timeWindow: "1 hour" } } },
     async (request, reply) => {
       store.assertCaseOwner(request.params.caseId, request.standbyActorId);
       const body = bodyRecord(request);

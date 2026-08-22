@@ -73,7 +73,7 @@ async function createHeroCase() {
   return { caseId, sources };
 }
 
-test("health is public but domain endpoints require authentication", async () => {
+test("health is public but domain endpoints require a valid actor session", async () => {
   const health = await app.inject({ method: "GET", url: "/healthz" });
   assert.equal(health.statusCode, 200);
 

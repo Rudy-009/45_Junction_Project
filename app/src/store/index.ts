@@ -18,6 +18,7 @@ interface CueSheetStore {
   
   // Actions
   loadCueSheet: (data: CueSheet) => void;
+  clearCueSheet: () => void;
   updateCue: (cueId: string, updater: (cue: Cue) => Cue) => void;
   updateEvent: (cueId: string, eventId: string, updater: (event: CueEvent) => CueEvent) => void;
   addCue: (cue: Cue, afterCueId?: string) => void;
@@ -50,9 +51,25 @@ export const useCueSheetStore = create<CueSheetStore>((set, get) => ({
 
   // Load cue sheet and auto-validate
   loadCueSheet: (data) => {
-    set({ cueSheet: data });
+    const firstCue = data.cues[0] ?? null;
+    set({
+      cueSheet: data,
+      selectedCueId: firstCue?.cue_id ?? null,
+      selectedEventId: firstCue?.events[0]?.event_id ?? null,
+      popupEventId: null,
+      revisions: [],
+    });
     get().runValidation();
   },
+
+  clearCueSheet: () => set({
+    cueSheet: null,
+    validationResult: null,
+    selectedCueId: null,
+    selectedEventId: null,
+    popupEventId: null,
+    revisions: [],
+  }),
 
   // Update a specific cue
   updateCue: (cueId, updater) => {
