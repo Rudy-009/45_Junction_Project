@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { FileText, Link2, PanelLeftClose, PanelLeftOpen, Upload } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useI18n, type MessageKey } from '@/lib/i18n';
@@ -39,7 +39,26 @@ export function ScriptSidebar({
   const [open, setOpen] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const linkedEntries = entries.filter((entry) => entry.lines.length > 0);
+  const linkedBySegmentId = useMemo(() => {
+    const index = new Map<string, { eventId: string; sceneLabel?: string }>();
+    for (const entry of entries) {
+      for (const line of entry.lines) {
+        index.set(line.segment_id, {
+          eventId: entry.eventId,
+          ...(entry.sceneLabel ? { sceneLabel: entry.sceneLabel } : {}),
+        });
+      }
+    }
+    return index;
+  }, [entries]);
+  const orderedSegments = useMemo(
+    () => script ? [...script.segments].sort((left, right) => left.sequence_index - right.sequence_index) : [],
+    [script],
+  );
+  const unlinkedSegmentIds = useMemo(
+    () => new Set(unlinkedSegments.map((segment) => segment.segment_id)),
+    [unlinkedSegments],
+  );
 
   useEffect(() => {
     if (!open || !selectedEventId) return;
@@ -143,64 +162,76 @@ export function ScriptSidebar({
               {error && <p className="mt-2 text-xs leading-5 text-violation" role="alert">{error}</p>}
             </div>
 
-            {linkedEntries.length === 0 && (
+            {linkedBySegmentId.size === 0 && (
               <p className="border-b border-border px-3 py-3 text-xs leading-5 text-muted-foreground">
                 {t('workspace.scriptNoLinkedEvents')}
               </p>
             )}
 
-            {linkedEntries.map((entry) => {
-              const selected = entry.eventId === selectedEventId;
-              return (
-                <button
-                  key={entry.eventId}
-                  type="button"
-                  data-script-event={entry.eventId}
-                  className={cn(
-                    'block w-full border-b border-border px-3 py-3 text-left transition-colors duration-150 motion-reduce:transition-none',
-                    selected ? 'bg-foreground/10 text-foreground' : 'bg-surface hover:bg-muted',
-                  )}
-                  onClick={() => onSelectEvent(entry.eventId)}
-                  aria-current={selected ? 'step' : undefined}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="mono text-[10px] font-semibold">{entry.eventId}</span>
-                    {entry.sceneLabel && (
-                      <span className="truncate text-[10px] text-muted-foreground">{entry.sceneLabel}</span>
-                    )}
-                  </div>
-                  <p className="mt-1 text-[9px] font-semibold tracking-[0.08em] text-muted-foreground">SCRIPT</p>
-                  <div className="mt-2 space-y-2">
-                    {entry.lines.map((line) => <ScriptLine key={line.segment_id} line={line} />)}
-                  </div>
-                </button>
-              );
-            })}
+            {orderedSegments.map((segment, index) => {
+              const linked = linkedBySegmentId.get(segment.segment_id);
+              const previous = index > 0
+                ? linkedBySegmentId.get(orderedSegments[index - 1]!.segment_id)
+                : undefined;
+              const startsGroup = index === 0 || linked?.eventId !== previous?.eventId;
+              const selected = linked?.eventId === selectedEventId;
+              const unlinked = unlinkedSegmentIds.has(segment.segment_id);
 
-            {unlinkedSegments.length > 0 && (
-              <section aria-label={t('workspace.scriptPending')}>
-                <div className="border-b border-border bg-muted px-3 py-2">
-                  <span className="text-[10px] font-semibold">{t('workspace.scriptPending')}</span>
-                  <span className="ml-2 text-[10px] text-muted-foreground">{unlinkedSegments.length}</span>
-                </div>
-                {unlinkedSegments.map((segment) => (
-                  <article key={segment.segment_id} className="border-b border-border px-3 py-3">
-                    <ScriptLine line={segment} />
+              return (
+                <div key={segment.segment_id}>
+                  {startsGroup && (
+                    <div className="border-b border-border bg-muted px-3 py-2">
+                      {linked ? (
+                        <button
+                          type="button"
+                          className="flex w-full items-center justify-between gap-2 text-left"
+                          onClick={() => onSelectEvent(linked.eventId)}
+                        >
+                          <span className="text-[10px] font-semibold">{linked.eventId}</span>
+                          {linked.sceneLabel && (
+                            <span className="truncate text-[10px] text-muted-foreground">{linked.sceneLabel}</span>
+                          )}
+                        </button>
+                      ) : (
+                        <span className="text-[10px] font-semibold">{t('workspace.scriptPending')}</span>
+                      )}
+                    </div>
+                  )}
+
+                  {linked ? (
                     <button
                       type="button"
-                      disabled={!selectedEventId}
-                      className="mt-2 flex items-center gap-1.5 border border-border px-2 py-1 text-[10px] hover:border-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
-                      onClick={() => selectedEventId && onLinkSegment(segment.segment_id, selectedEventId)}
+                      data-script-event={linked.eventId}
+                      className={cn(
+                        'block w-full border-b border-border px-3 py-3 text-left transition-colors duration-150 motion-reduce:transition-none',
+                        selected ? 'bg-foreground/10 text-foreground' : 'bg-surface hover:bg-muted',
+                      )}
+                      onClick={() => onSelectEvent(linked.eventId)}
+                      aria-current={selected ? 'step' : undefined}
                     >
-                      <Link2 size={11} aria-hidden="true" />
-                      {selectedEventId
-                        ? t('workspace.scriptLinkCurrent', { event: selectedEventId })
-                        : t('workspace.scriptSelectEvent')}
+                      <ScriptLine line={segment} />
                     </button>
-                  </article>
-                ))}
-              </section>
-            )}
+                  ) : (
+                    <article className="border-b border-border px-3 py-3">
+                      <ScriptLine line={segment} />
+                      {unlinked && (
+                        <button
+                          type="button"
+                          disabled={!selectedEventId}
+                          className="mt-2 flex items-center gap-1.5 border border-border px-2 py-1 text-[10px] hover:border-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
+                          onClick={() => selectedEventId && onLinkSegment(segment.segment_id, selectedEventId)}
+                        >
+                          <Link2 size={11} aria-hidden="true" />
+                          {selectedEventId
+                            ? t('workspace.scriptLinkCurrent', { event: selectedEventId })
+                            : t('workspace.scriptSelectEvent')}
+                        </button>
+                      )}
+                    </article>
+                  )}
+                </div>
+              );
+            })}
           </>
         ) : null}
       </div>

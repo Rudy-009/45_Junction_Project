@@ -314,7 +314,8 @@ loading scene을 사용한다. 이 loop는 실제 진행률이 아니며 상태�
   유일하게 일치하는 실제 `DIALOGUE`·`STAGE_DIRECTION`만 자동으로 event별 발췌에 묶는다.
   근거가 없거나 둘 이상과 일치하는 구간은 사람이 선택한 현재 event에 연결한다
 - MASTER_CUE trigger·note, finding evidence, reviewed event label을 대본 fallback으로 표시하지 않는다
-- timeline event 선택은 해당 발췌를 스크롤·강조하고, 발췌 선택은 동일 event로 이동한다
+- 대본은 event별로 재배열하지 않고 원문 `sequence_index` 순서를 모두 유지한다. timeline event 선택은
+  연결된 첫 구간으로 스크롤하고 해당 구간들을 강조하며, 대본 구간 선택은 동일 event로 이동한다
 - 발췌는 수정할 수 없고 localStorage에 남지 않으며 fact·review·snapshot·verdict를 만들거나 바꾸지 않는다
 
 
