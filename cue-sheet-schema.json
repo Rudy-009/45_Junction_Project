@@ -74,8 +74,8 @@
           "scene_number": { "type": "string", "description": "씬 번호 (예: S#001, N#201)" },
           "scene_type": {
             "type": "string",
-            "enum": ["scene", "number"],
-            "description": "씬 유형: scene(일반 씬) / number(넘버/곡)"
+            "enum": ["scene", "number", "dark"],
+            "description": "씬 유형: scene(일반 씬) / number(넘버/곡) / dark(암전 구간)"
           },
           "estimated_duration_sec": {
             "type": "number",

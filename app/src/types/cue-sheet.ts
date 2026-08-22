@@ -1,4 +1,4 @@
-export type SceneType = 'scene' | 'number';
+export type SceneType = 'scene' | 'number' | 'dark';
 export type Direction = 'stage_left' | 'stage_right';
 export type TriggerType = 'dialogue' | 'scene_change' | 'lighting_cue' | 'sound_cue';
 export type ActionType = 'character_enter' | 'character_exit' | 'backstage_crossover' | 'prop_in' | 'prop_out' | 'costume_change';
