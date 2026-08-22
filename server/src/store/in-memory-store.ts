@@ -6,6 +6,8 @@ import type {
   CellPatch,
   CueRevision,
   CueRow,
+  ExtractionAdapter,
+  ExtractionRunRecord,
   FactCandidate,
   InternalReviewSnapshot,
   Operation,
@@ -17,7 +19,8 @@ import type {
   WorkspaceSnapshot,
 } from "../domain/types.js";
 import { verifyQuickChange, workspaceEvents } from "../domain/verifier.js";
-import { canonicalJson, hashJson } from "../lib/hash.js";
+import { canonicalJson, hashJson, sha256 } from "../lib/hash.js";
+import type { ExtractionProvider } from "../providers/extraction-provider.js";
 
 const ROLES: SourceRole[] = ["SCRIPT", "MASTER_CUE", "STAGE_SPEC"];
 
@@ -55,8 +58,11 @@ function cueRows(content: unknown): CueRow[] {
 export class InMemoryStore {
   private readonly cases = new Map<string, CaseRecord>();
   private readonly operations = new Map<string, Operation>();
+  private readonly extractionRuns = new Map<string, ExtractionRunRecord>();
   private readonly idempotency = new Map<string, IdempotencyRecord>();
   private sequence = 0;
+
+  constructor(private readonly upstageProvider: ExtractionProvider | null = null) {}
 
   private id(prefix: string): string {
     this.sequence += 1;
@@ -141,6 +147,7 @@ export class InMemoryStore {
       original_filename: input.originalFilename,
       created_at: this.now(),
       content: structuredClone(input.content),
+      bytes: null,
     };
     record.sources.set(input.role, source);
 
@@ -165,7 +172,44 @@ export class InMemoryStore {
     return this.publicSource(source);
   }
 
-  runExtraction(caseId: string): { operation: Operation; facts: FactCandidate[] } {
+  uploadFileSource(input: {
+    caseId: string;
+    role: "SCRIPT" | "MASTER_CUE";
+    origin: Origin;
+    bytes: Uint8Array;
+    mediaType: string;
+    originalFilename: string;
+  }): SourceVersion {
+    const record = this.getCase(input.caseId);
+    const sourceHash = sha256(input.bytes);
+    const existing = record.sources.get(input.role);
+    if (existing) {
+      if (existing.sha256 === sourceHash) return this.publicSource(existing);
+      throw new DomainError(
+        409,
+        "SOURCE_SLOT_LOCKED",
+        `${input.role} already has an immutable source in this case.`,
+      );
+    }
+    const source = {
+      contract_version: "standby.source.v1" as const,
+      source_id: this.id("source"),
+      case_id: record.case_id,
+      role: input.role,
+      sha256: sourceHash,
+      origin: input.origin,
+      authority: "REVIEWED" as const,
+      media_type: input.mediaType,
+      original_filename: input.originalFilename,
+      created_at: this.now(),
+      content: null,
+      bytes: Uint8Array.from(input.bytes),
+    };
+    record.sources.set(input.role, source);
+    return this.publicSource(source);
+  }
+
+  startExtraction(caseId: string, adapter: ExtractionAdapter): Operation {
     const record = this.getCase(caseId);
     const missingRoles = ROLES.filter((role) => !record.sources.has(role));
     if (missingRoles.length > 0) {
@@ -174,28 +218,21 @@ export class InMemoryStore {
       });
     }
 
-    if (record.facts.size === 0) {
-      try {
-        for (const fact of extractControlledFixture(record.sources)) {
-          record.facts.set(fact.fact_id, fact);
-        }
-      } catch (error) {
-        throw new DomainError(422, "EXTRACTION_FIXTURE_INVALID", "Fixture extraction failed.", {
-          reason: error instanceof Error ? error.message : "unknown",
-        });
-      }
-    }
-
-    const runId = `extract_${this.sourceSnapshotDigest(record).slice(0, 16)}`;
+    const runId = this.id("extract");
+    const createdAt = this.now();
     const operation: Operation = {
       operation_id: this.id("operation"),
       kind: "EXTRACT_SOURCE",
-      status: "SUCCEEDED",
-      result_source: "CONTROLLED_FIXTURE",
+      status: "QUEUED",
+      result_source: null,
       resource_ref: { type: "extraction_run", id: runId },
+      error: null,
+      created_at: createdAt,
+      updated_at: createdAt,
     };
     this.operations.set(operation.operation_id, operation);
-    return { operation, facts: [...record.facts.values()] };
+    queueMicrotask(() => void this.executeExtraction(record, operation, runId, adapter));
+    return structuredClone(operation);
   }
 
   getOperation(operationId: string): Operation {
@@ -203,7 +240,13 @@ export class InMemoryStore {
     if (!operation) {
       throw new DomainError(404, "RESOURCE_NOT_FOUND", "Operation not found.");
     }
-    return operation;
+    return structuredClone(operation);
+  }
+
+  getExtractionRun(runId: string): ExtractionRunRecord {
+    const run = this.extractionRuns.get(runId);
+    if (!run) throw new DomainError(404, "RESOURCE_NOT_FOUND", "Extraction run not found.");
+    return structuredClone(run);
   }
 
   getReviewQueue(caseId: string): { items: FactCandidate[]; next_cursor: null } {
@@ -271,7 +314,7 @@ export class InMemoryStore {
     };
     record.snapshots.push(internalSnapshot);
     record.current_snapshot_id = snapshot.snapshot_id;
-    this.verifyCurrent(record);
+    if (record.current_revision_id) this.verifyCurrent(record);
     return snapshot;
   }
 
@@ -378,6 +421,80 @@ export class InMemoryStore {
       snapshot,
       revision,
     });
+  }
+
+  private async executeExtraction(
+    record: CaseRecord,
+    operation: Operation,
+    runId: string,
+    adapter: ExtractionAdapter,
+  ): Promise<void> {
+    operation.status = "RUNNING";
+    operation.updated_at = this.now();
+    try {
+      let facts: FactCandidate[];
+      let sourceRuns: ExtractionRunRecord["source_runs"];
+      let resultSource: ExtractionRunRecord["result_source"];
+      if (adapter === "CONTROLLED_FIXTURE") {
+        if ([...record.sources.values()].some((source) => source.bytes !== null)) {
+          throw new DomainError(
+            409,
+            "ADAPTER_SOURCE_MISMATCH",
+            "Controlled fixture extraction cannot process uploaded files.",
+          );
+        }
+        facts = extractControlledFixture(record.sources);
+        sourceRuns = [...record.sources.values()].map((source) => ({
+          source_id: source.source_id,
+          role: source.role,
+          provider: "CONTROLLED_FIXTURE" as const,
+          provider_job_id: null,
+          agent_id: null,
+          config_id: null,
+          adapter_version: "controlled-fixture.v1",
+          schema_version: "standby.extraction.v1" as const,
+          raw_response_sha256: hashJson(source.content),
+        }));
+        resultSource = "CONTROLLED_FIXTURE";
+      } else {
+        if (!this.upstageProvider) {
+          throw new DomainError(503, "UPSTAGE_NOT_CONFIGURED", "Upstage adapter is not configured.");
+        }
+        const result = await this.upstageProvider.extract(record.sources);
+        facts = result.facts;
+        sourceRuns = result.sourceRuns;
+        resultSource = sourceRuns.some((run) => run.provider !== "UPSTAGE") ? "MIXED" : "UPSTAGE";
+      }
+      record.facts.clear();
+      record.current_snapshot_id = null;
+      record.verification = null;
+      for (const fact of facts) {
+        if (fact.review_status !== "UNREVIEWED") {
+          throw new DomainError(502, "EXTRACTION_AUTHORITY_INVALID", "New facts must be UNREVIEWED.");
+        }
+        record.facts.set(fact.fact_id, fact);
+      }
+      const extractionRun: ExtractionRunRecord = {
+        extraction_run_id: runId,
+        case_id: record.case_id,
+        adapter,
+        result_source: resultSource,
+        source_runs: sourceRuns,
+        candidate_count: facts.length,
+        created_at: this.now(),
+      };
+      this.extractionRuns.set(runId, extractionRun);
+      operation.status = "SUCCEEDED";
+      operation.result_source = resultSource;
+      operation.updated_at = this.now();
+    } catch (error) {
+      operation.status = "FAILED";
+      operation.error = {
+        code: error instanceof DomainError ? error.code : "EXTRACTION_FAILED",
+        message: error instanceof DomainError ? error.message : "Extraction failed.",
+      };
+      operation.updated_at = this.now();
+    }
   }
 
   private currentSnapshot(record: CaseRecord): InternalReviewSnapshot {

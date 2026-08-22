@@ -83,7 +83,7 @@ function extractMasterCue(source: InternalSourceVersion): FactCandidate[] {
   ];
 }
 
-function extractStageSpec(source: InternalSourceVersion): FactCandidate[] {
+export function extractStageSpec(source: InternalSourceVersion): FactCandidate[] {
   const content = objectValue(source.content, "STAGE_SPEC content");
   const routes = content.route_times;
   if (!Array.isArray(routes) || routes.length < 2) {

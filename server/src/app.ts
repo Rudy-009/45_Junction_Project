@@ -1,9 +1,13 @@
 import cors from "@fastify/cors";
 import helmet from "@fastify/helmet";
+import multipart from "@fastify/multipart";
 import rateLimit from "@fastify/rate-limit";
 import Fastify, { type FastifyRequest } from "fastify";
 import { DomainError } from "./domain/errors.js";
-import type { CellPatch, Origin, SourceRole } from "./domain/types.js";
+import { assertSourceFile, MAX_SOURCE_FILE_BYTES, sanitizeFilename } from "./domain/source-file.js";
+import type { CellPatch, ExtractionAdapter, Origin, SourceRole } from "./domain/types.js";
+import { sha256 } from "./lib/hash.js";
+import type { ExtractionProvider } from "./providers/extraction-provider.js";
 import { InMemoryStore } from "./store/in-memory-store.js";
 
 declare module "fastify" {
@@ -16,6 +20,7 @@ export type ServerConfig = {
   apiToken: string;
   allowedOrigins: string[];
   logger?: boolean;
+  extractionProvider?: ExtractionProvider;
 };
 
 const SOURCE_ROLES = new Set<SourceRole>(["SCRIPT", "MASTER_CUE", "STAGE_SPEC"]);
@@ -54,7 +59,10 @@ function revisionProjection<T extends { rows: unknown }>(revision: T): Omit<T, "
   return projection;
 }
 
-export async function buildApp(config: ServerConfig, store = new InMemoryStore()) {
+export async function buildApp(
+  config: ServerConfig,
+  store = new InMemoryStore(config.extractionProvider ?? null),
+) {
   const app = Fastify({
     logger: config.logger ?? false,
     bodyLimit: 1_048_576,
@@ -79,6 +87,9 @@ export async function buildApp(config: ServerConfig, store = new InMemoryStore()
     max: 120,
     timeWindow: "1 minute",
   });
+  await app.register(multipart, {
+    limits: { files: 1, fields: 4, fileSize: MAX_SOURCE_FILE_BYTES },
+  });
 
   app.decorateRequest("standbyActorId", "");
   app.addHook("onRequest", async (request) => {
@@ -92,6 +103,23 @@ export async function buildApp(config: ServerConfig, store = new InMemoryStore()
   });
 
   app.setErrorHandler((error, request, reply) => {
+    if (
+      error !== null &&
+      typeof error === "object" &&
+      "code" in error &&
+      error.code === "FST_REQ_FILE_TOO_LARGE"
+    ) {
+      void reply.status(413).send({
+        error: {
+          code: "SOURCE_FILE_SIZE_INVALID",
+          message: "Source file must be 50 MB or smaller.",
+          request_id: request.id,
+          retryable: false,
+          details: {},
+        },
+      });
+      return;
+    }
     if (error instanceof DomainError) {
       void reply.status(error.statusCode).send({
         error: {
@@ -133,17 +161,57 @@ export async function buildApp(config: ServerConfig, store = new InMemoryStore()
   app.post<{ Params: { caseId: string; role: string } }>(
     "/v1/cases/:caseId/sources/:role",
     async (request, reply) => {
-      const body = bodyRecord(request);
       if (!SOURCE_ROLES.has(request.params.role as SourceRole)) {
         throw new DomainError(422, "ENUM_VALUE_INVALID", "Unknown source role.");
       }
+      const role = request.params.role as SourceRole;
+      if (request.isMultipart()) {
+        if (role === "STAGE_SPEC") {
+          throw new DomainError(415, "SOURCE_MEDIA_TYPE_INVALID", "STAGE_SPEC must be JSON.");
+        }
+        const part = await request.file();
+        if (!part) throw new DomainError(400, "INVALID_ARGUMENT", "file is required.");
+        const originField = part.fields.origin;
+        const origin =
+          originField && "value" in originField && typeof originField.value === "string"
+            ? originField.value
+            : null;
+        if (!ORIGINS.has(origin as Origin)) {
+          throw new DomainError(422, "ENUM_VALUE_INVALID", "Unknown source origin.");
+        }
+        const filename = sanitizeFilename(part.filename);
+        const bytes = await part.toBuffer();
+        assertSourceFile(role, filename, part.mimetype, bytes);
+        const fingerprint = {
+          origin,
+          filename,
+          media_type: part.mimetype,
+          sha256: sha256(bytes),
+        };
+        const response = store.withIdempotency(
+          `POST:/v1/cases/${request.params.caseId}/sources/${role}`,
+          idempotencyKey(request),
+          fingerprint,
+          () =>
+            store.uploadFileSource({
+              caseId: request.params.caseId,
+              role,
+              origin: origin as Origin,
+              bytes,
+              mediaType: part.mimetype,
+              originalFilename: filename,
+            }),
+        );
+        return reply.status(201).send(response);
+      }
+
+      const body = bodyRecord(request);
       if (!ORIGINS.has(body.origin as Origin)) {
         throw new DomainError(422, "ENUM_VALUE_INVALID", "Unknown source origin.");
       }
       if (!("content" in body)) {
         throw new DomainError(400, "INVALID_ARGUMENT", "content is required.");
       }
-      const role = request.params.role as SourceRole;
       const response = store.withIdempotency(
         `POST:/v1/cases/${request.params.caseId}/sources/${role}`,
         idempotencyKey(request),
@@ -167,20 +235,29 @@ export async function buildApp(config: ServerConfig, store = new InMemoryStore()
     "/v1/cases/:caseId/extraction-runs",
     async (request, reply) => {
       const body = bodyRecord(request);
+      const adapter = body.adapter;
+      if (adapter !== "CONTROLLED_FIXTURE" && adapter !== "UPSTAGE_AGENT") {
+        throw new DomainError(422, "ENUM_VALUE_INVALID", "Unknown extraction adapter.");
+      }
       const response = store.withIdempotency(
         `POST:/v1/cases/${request.params.caseId}/extraction-runs`,
         idempotencyKey(request),
         body,
-        () => store.runExtraction(request.params.caseId),
+        () => store.startExtraction(request.params.caseId, adapter as ExtractionAdapter),
       );
-      reply.header("Operation-Location", `/v1/operations/${response.operation.operation_id}`);
-      return reply.status(202).send(response.operation);
+      reply.header("Operation-Location", `/v1/operations/${response.operation_id}`);
+      return reply.status(202).send(response);
     },
   );
 
   app.get<{ Params: { operationId: string } }>(
     "/v1/operations/:operationId",
     async (request) => store.getOperation(request.params.operationId),
+  );
+
+  app.get<{ Params: { runId: string } }>(
+    "/v1/extraction-runs/:runId",
+    async (request) => store.getExtractionRun(request.params.runId),
   );
 
   app.get<{ Params: { caseId: string } }>(
