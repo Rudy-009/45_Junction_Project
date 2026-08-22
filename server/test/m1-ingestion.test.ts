@@ -234,8 +234,16 @@ test("real-file API flow reaches human review snapshot before M2 compilation", a
       url: `/v1/cases/${caseId}/workspace`,
       headers: auth(),
     });
-    assert.equal(workspace.statusCode, 409, workspace.body);
-    assert.equal((workspace.json() as { error: { code: string } }).error.code, "SOURCE_SLOT_MISSING");
+    assert.equal(workspace.statusCode, 200, workspace.body);
+    const projection = workspace.json() as {
+      cue_revision_id: string | null;
+      event_graph: { events: unknown[] };
+      findings: Array<{ verdict: string }>;
+    };
+    assert.equal(projection.cue_revision_id, null);
+    assert.equal(projection.event_graph.events.length, 0);
+    assert.equal(projection.findings.length, 3);
+    assert.ok(projection.findings.every((finding) => finding.verdict === "INSUFFICIENT_EVIDENCE"));
   } finally {
     await liveApp.close();
   }

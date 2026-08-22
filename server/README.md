@@ -1,7 +1,7 @@
 # STANDBY backend MVP
 
 사람이 승인한 문서 fact만 compiler와 결정론적 verifier에 전달하는 수직 슬라이스다.
-현재 구현은 제어된 hero fixture 경로와 **실제 PDF/XLSX → Upstage Agent → UNREVIEWED fact** 경로를 함께 제공한다. 상태와 원문 파일은 아직 프로세스 메모리에만 있다.
+현재 구현은 제어된 hero fixture 경로와 **실제 PDF/XLSX → Upstage Agent → UNREVIEWED fact** 경로를 함께 제공한다. M3에서는 사람의 정규화 검토, 불변 snapshot, verifier, workspace projection과 Supabase 사용자 JWT 경계까지 연결했다. 상태와 원문 파일은 아직 프로세스 메모리에만 있다.
 
 ## 실행
 
@@ -14,9 +14,11 @@ cp .env.example .env
 npm run dev
 ```
 
-서버 기본 주소는 `http://localhost:8787`이다. `/healthz` 외의 `/v1/*` 요청에는
+서버 기본 주소는 `http://localhost:8787`이다. 개발 환경의 `/v1/*` 요청에는
 `Authorization: Bearer <STANDBY_API_TOKEN>`이 필요하고, 상태를 바꾸는 요청에는
-고유한 `Idempotency-Key` 헤더도 필요하다.
+고유한 `Idempotency-Key` 헤더도 필요하다. 운영(`NODE_ENV=production`)은 정적 token을 받지 않고
+`SUPABASE_URL`의 JWKS로 사용자 access token의 서명·issuer·audience·role·subject를 확인한다.
+case와 extraction operation은 생성한 사용자만 읽거나 변경할 수 있다.
 
 실제 추출에는 `.env`에 `UPSTAGE_API_KEY`, `UPSTAGE_AGENT_ID_SCRIPT`,
 `UPSTAGE_AGENT_ID_MASTER_CUE`, `UPSTAGE_CONFIG_ID_SCRIPT`,
@@ -31,6 +33,25 @@ npm run typecheck
 npm test
 npm run build
 ```
+
+## 컨테이너와 운영 변수
+
+저장소 루트에서 다음과 같이 API image를 재현한다.
+
+```bash
+docker build -f server/Dockerfile -t standby-server .
+docker run --rm -p 8787:8787 \
+  -e NODE_ENV=production \
+  -e SUPABASE_URL=https://PROJECT.supabase.co \
+  -e STANDBY_ALLOWED_ORIGINS=https://standby-junctionx.vercel.app \
+  -e UPSTAGE_API_KEY=... \
+  standby-server
+```
+
+`railway.json`은 같은 Dockerfile과 `/healthz`를 사용한다. Railway에는 `SUPABASE_URL`,
+`STANDBY_ALLOWED_ORIGINS`, `UPSTAGE_API_KEY`, 역할별 Upstage Agent/Config ID를 secret으로 둔다.
+Vercel에는 공개값 `VITE_STANDBY_API_BASE_URL`, `VITE_SUPABASE_URL`,
+`VITE_SUPABASE_PUBLISHABLE_KEY`만 둔다. `UPSTAGE_API_KEY`와 정적 API token은 Vercel에 넣지 않는다.
 
 ## 구현된 흐름
 
@@ -67,13 +88,15 @@ Stage Spec 3개 fact를 만들었고 전부 `UNREVIEWED`였다. 이는 연결과
 - JSON body는 1 MiB로 제한하고 CORS allowlist, Helmet, rate limit을 적용한다.
 - multipart 파일은 50 MiB로 제한하고 역할별 허용 형식과 signature를 검사한다.
 - 저장소에는 secret을 넣지 않는다. `.env`는 Git에서 제외한다.
-- 현재 bearer token은 로컬 개발용 단일 사용자 인증이다. 운영 전 사용자별 인증과 case 권한 검사가 필요하다.
+- 운영은 Supabase JWT를 JWKS로 검증하고 `sub`를 actor ID로 사용한다.
+- 모든 case·operation·extraction run 접근에 owner 검사를 적용하며, 다른 사용자의 resource는 404로 숨긴다.
+- 정적 bearer token은 로컬 개발과 자동 테스트에서만 허용한다.
 
 ## 아직 없는 것
 
 - 업로드 object storage와 악성 파일/zip bomb 검사
 - 실제 한국어 대본·17열 Master Cue reference에 대한 추출 fidelity·locator 검증
-- PostgreSQL/Supabase 영속화와 row-level authorization
+- PostgreSQL/Supabase 영속화와 DB 수준 RLS (HTTP 계층의 사용자별 owner 검사는 구현됨)
 - XLSX 원형 보존 export
 - 감사 로그, 보존 기간, 삭제 작업, 운영 관측성
 

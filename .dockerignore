@@ -1,0 +1,17 @@
+.git
+.github
+.vercel
+**/node_modules
+**/dist
+**/coverage
+**/.env
+**/.env.*
+!**/.env.example
+application
+portfolio
+briefing
+project/data
+app
+Lo-Fi
+*.md
+!server/README.md

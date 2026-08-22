@@ -224,3 +224,30 @@ test("M2 fails closed on ambiguous quick-change facts and invalid stage zones", 
     "INSUFFICIENT_EVIDENCE",
   );
 });
+
+test("M3 consumes only the normalized envelope approved over raw Upstage-shaped facts", () => {
+  const { sources, facts } = fixture();
+  const reviewedFacts = structuredClone(facts).map((fact) => ({
+    ...fact,
+    fact_type: fact.source_role === "SCRIPT" ? "ScriptFact"
+      : fact.source_role === "MASTER_CUE" ? "CueFact"
+      : "StageFact",
+    raw_value: { extracted_label: fact.fact_type, source_text: fact.quote },
+    reviewed_value: {
+      normalized_fact_type: fact.fact_type,
+      value: structuredClone(fact.raw_value),
+    },
+  }));
+  const frozen = snapshot(reviewedFacts);
+  const verification = verifyProduction({
+    caseId: "case_m2",
+    sources,
+    snapshot: frozen,
+    revision: null,
+  });
+  assert.deepEqual(
+    verification.findings.map((finding) => [finding.rule_id, finding.verdict]),
+    [["VR-01", "VIOLATION"], ["VR-02", "VIOLATION"], ["VR-03", "REVIEW"]],
+  );
+  assert.equal(compileEventGraph(frozen).graph.events.length, 8);
+});

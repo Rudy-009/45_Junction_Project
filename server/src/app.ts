@@ -9,6 +9,7 @@ import type { CellPatch, ExtractionAdapter, Origin, SourceRole } from "./domain/
 import { sha256 } from "./lib/hash.js";
 import type { ExtractionProvider } from "./providers/extraction-provider.js";
 import { InMemoryStore } from "./store/in-memory-store.js";
+import type { TokenAuthenticator } from "./security/supabase-auth.js";
 
 declare module "fastify" {
   interface FastifyRequest {
@@ -17,7 +18,8 @@ declare module "fastify" {
 }
 
 export type ServerConfig = {
-  apiToken: string;
+  apiToken?: string;
+  authenticateToken?: TokenAuthenticator;
   allowedOrigins: string[];
   logger?: boolean;
   extractionProvider?: ExtractionProvider;
@@ -96,7 +98,15 @@ export async function buildApp(
     if (request.url === "/healthz") return;
     if (!request.url.startsWith("/v1/")) return;
     const authorization = request.headers.authorization;
-    if (authorization !== `Bearer ${config.apiToken}`) {
+    const token = authorization?.startsWith("Bearer ") ? authorization.slice(7).trim() : "";
+    if (!token) {
+      throw new DomainError(401, "UNAUTHENTICATED", "A valid bearer token is required.");
+    }
+    if (config.authenticateToken) {
+      request.standbyActorId = (await config.authenticateToken(token)).actorId;
+      return;
+    }
+    if (!config.apiToken || token !== config.apiToken) {
       throw new DomainError(401, "UNAUTHENTICATED", "A valid bearer token is required.");
     }
     request.standbyActorId = "dev-user";
@@ -150,10 +160,10 @@ export async function buildApp(
     const body = bodyRecord(request);
     const title = requiredString(body.title, "title");
     const response = store.withIdempotency(
-      "POST:/v1/cases",
+      `${request.standbyActorId}:POST:/v1/cases`,
       idempotencyKey(request),
       body,
-      () => store.createCase(title),
+      () => store.createCase(title, request.standbyActorId),
     );
     return reply.status(201).send(response);
   });
@@ -165,6 +175,7 @@ export async function buildApp(
         throw new DomainError(422, "ENUM_VALUE_INVALID", "Unknown source role.");
       }
       const role = request.params.role as SourceRole;
+      store.assertCaseOwner(request.params.caseId, request.standbyActorId);
       if (request.isMultipart()) {
         if (role === "STAGE_SPEC") {
           throw new DomainError(415, "SOURCE_MEDIA_TYPE_INVALID", "STAGE_SPEC must be JSON.");
@@ -234,6 +245,7 @@ export async function buildApp(
   app.post<{ Params: { caseId: string } }>(
     "/v1/cases/:caseId/extraction-runs",
     async (request, reply) => {
+      store.assertCaseOwner(request.params.caseId, request.standbyActorId);
       const body = bodyRecord(request);
       const adapter = body.adapter;
       if (adapter !== "CONTROLLED_FIXTURE" && adapter !== "UPSTAGE_AGENT") {
@@ -252,22 +264,32 @@ export async function buildApp(
 
   app.get<{ Params: { operationId: string } }>(
     "/v1/operations/:operationId",
-    async (request) => store.getOperation(request.params.operationId),
+    async (request) => {
+      store.assertOperationOwner(request.params.operationId, request.standbyActorId);
+      return store.getOperation(request.params.operationId);
+    },
   );
 
   app.get<{ Params: { runId: string } }>(
     "/v1/extraction-runs/:runId",
-    async (request) => store.getExtractionRun(request.params.runId),
+    async (request) => {
+      store.assertExtractionRunOwner(request.params.runId, request.standbyActorId);
+      return store.getExtractionRun(request.params.runId);
+    },
   );
 
   app.get<{ Params: { caseId: string } }>(
     "/v1/cases/:caseId/review-queue",
-    async (request) => store.getReviewQueue(request.params.caseId),
+    async (request) => {
+      store.assertCaseOwner(request.params.caseId, request.standbyActorId);
+      return store.getReviewQueue(request.params.caseId);
+    },
   );
 
   app.post<{ Params: { caseId: string } }>(
     "/v1/cases/:caseId/fact-reviews:batch",
     async (request, reply) => {
+      store.assertCaseOwner(request.params.caseId, request.standbyActorId);
       const body = bodyRecord(request);
       if (!Array.isArray(body.reviews) || body.reviews.length === 0) {
         throw new DomainError(400, "INVALID_ARGUMENT", "reviews must be a non-empty array.");
@@ -305,6 +327,7 @@ export async function buildApp(
   app.post<{ Params: { caseId: string } }>(
     "/v1/cases/:caseId/review-snapshots",
     async (request, reply) => {
+      store.assertCaseOwner(request.params.caseId, request.standbyActorId);
       const body = bodyRecord(request);
       const response = store.withIdempotency(
         `POST:/v1/cases/${request.params.caseId}/review-snapshots`,
@@ -318,12 +341,16 @@ export async function buildApp(
 
   app.get<{ Params: { caseId: string } }>(
     "/v1/cases/:caseId/workspace",
-    async (request) => store.getWorkspace(request.params.caseId),
+    async (request) => {
+      store.assertCaseOwner(request.params.caseId, request.standbyActorId);
+      return store.getWorkspace(request.params.caseId);
+    },
   );
 
   app.post<{ Params: { caseId: string } }>(
     "/v1/cases/:caseId/cue-revisions",
     async (request, reply) => {
+      store.assertCaseOwner(request.params.caseId, request.standbyActorId);
       const body = bodyRecord(request);
       if (!Array.isArray(body.patches)) {
         throw new DomainError(400, "INVALID_ARGUMENT", "patches must be an array.");
