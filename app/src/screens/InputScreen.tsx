@@ -278,7 +278,7 @@ export function InputScreen() {
     }
   };
 
-  const ready = Boolean(masterCue && stageErrors.length === 0);
+  const ready = Boolean(masterCue);
   const authenticated = Boolean(authEmail);
 
   const apiClient = () => {
@@ -289,7 +289,7 @@ export function InputScreen() {
   };
 
   const startExtraction = async () => {
-    if (!masterCue || stageErrors.length > 0) return;
+    if (!masterCue) return;
 
     if (!authenticated) {
       setPhase('FAILED');
@@ -310,10 +310,13 @@ export function InputScreen() {
       setPhase('UPLOADING');
       setMessage(t('input.status.upload'));
       const createdCase = await api.createCase(`STANDBY ${new Date().toLocaleString('ko-KR')}`);
-      await Promise.all([
+      const uploads = [
         api.uploadSourceFile(createdCase.case_id, 'MASTER_CUE', masterCue.file, masterCue.origin),
-        api.uploadStageSpec(createdCase.case_id, stageSpec, SOURCE_ORIGIN),
-      ]);
+      ];
+      if (stageErrors.length === 0) {
+        uploads.push(api.uploadStageSpec(createdCase.case_id, stageSpec, SOURCE_ORIGIN));
+      }
+      await Promise.all(uploads);
 
       setPhase('EXTRACTING');
       setMessage(t('input.status.extract'));
@@ -423,11 +426,11 @@ export function InputScreen() {
         <footer className="mt-5 flex justify-end border border-border bg-surface p-4">
           <button
             type="button"
-            disabled={!ready || !authenticated || phase === 'UPLOADING' || phase === 'EXTRACTING' || phase === 'REVIEW' || phase === 'VERIFYING'}
+            disabled={!ready || phase === 'UPLOADING' || phase === 'EXTRACTING' || phase === 'REVIEW' || phase === 'VERIFYING'}
             onClick={() => void startExtraction()}
             className={cn(
               'flex min-w-52 items-center justify-center gap-2 border px-5 py-3 text-sm font-medium',
-              ready && authenticated && phase !== 'UPLOADING' && phase !== 'EXTRACTING' && phase !== 'REVIEW' && phase !== 'VERIFYING'
+              ready && phase !== 'UPLOADING' && phase !== 'EXTRACTING' && phase !== 'REVIEW' && phase !== 'VERIFYING'
                 ? 'border-foreground bg-foreground text-background hover:bg-muted-foreground'
                 : 'cursor-not-allowed border-border bg-muted text-muted-foreground',
             )}
