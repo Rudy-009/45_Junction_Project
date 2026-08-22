@@ -783,6 +783,18 @@ export class InMemoryStore {
     };
   }
 
+  listCueRevisions(caseId: string): CueRevision[] {
+    const record = this.getCase(caseId);
+    return record.revisions.map((revision) => structuredClone(revision));
+  }
+
+  getCueRevision(caseId: string, revisionId: string): CueRevision {
+    const record = this.getCase(caseId);
+    const revision = record.revisions.find((candidate) => candidate.revision_id === revisionId);
+    if (!revision) throw new DomainError(404, "RESOURCE_NOT_FOUND", "Cue revision not found.");
+    return structuredClone(revision);
+  }
+
   private productionAgentInput(
     record: CaseRecord,
     role: ProductionAgentRole,

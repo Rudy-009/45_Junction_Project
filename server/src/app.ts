@@ -552,6 +552,22 @@ export async function buildApp(
     },
   );
 
+  app.get<{ Params: { caseId: string } }>(
+    "/v1/cases/:caseId/cue-revisions",
+    async (request) => {
+      store.assertCaseOwner(request.params.caseId, request.standbyActorId);
+      return { items: store.listCueRevisions(request.params.caseId).map(revisionProjection) };
+    },
+  );
+
+  app.get<{ Params: { caseId: string; revisionId: string } }>(
+    "/v1/cases/:caseId/cue-revisions/:revisionId",
+    async (request) => {
+      store.assertCaseOwner(request.params.caseId, request.standbyActorId);
+      return store.getCueRevision(request.params.caseId, request.params.revisionId);
+    },
+  );
+
   app.post<{ Params: { caseId: string } }>(
     "/v1/cases/:caseId/cue-revisions",
     async (request, reply) => {

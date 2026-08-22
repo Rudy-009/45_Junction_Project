@@ -156,6 +156,7 @@ export function WorkspaceScreen() {
   const revisions = useCueSheetStore((s) => s.revisions);
   const loadRevision = useCueSheetStore((s) => s.loadRevision);
   const clearVerifiedWorkspace = useStandbyWorkspaceStore((state) => state.clear);
+  const setVerifiedWorkspace = useStandbyWorkspaceStore((state) => state.setWorkspace);
   const setReviewFlowContext = useReviewFlowStore((state) => state.setReviewContext);
   const [stageMotion, setStageMotion] = useState<StageMotion>();
   const [storyboardState, setStoryboardState] = useState<StoryboardAgentState>({ status: 'IDLE' });
@@ -357,6 +358,7 @@ export function WorkspaceScreen() {
         onScriptFile={(file) => void connectScript(file)}
         storyboardState={storyboardState}
         onStoryboardRequest={(eventId) => void requestStoryboard(eventId)}
+        onWorkspaceUpdated={(workspace) => setVerifiedWorkspace(workspace.case_id, workspace)}
       />
     );
   }

@@ -78,6 +78,26 @@ export type WorkspaceSnapshot = {
   };
 };
 
+export type CueCellPatch = {
+  row_id: string;
+  column: string;
+  from: string | number | boolean | null;
+  to: string | number | boolean | null;
+};
+
+export type CueRevision = {
+  contract_version: 'standby.revision.v1';
+  revision_id: string;
+  case_id: string;
+  parent_revision_id: string | null;
+  base_source_sha256: string;
+  revision_hash: string;
+  patches: CueCellPatch[];
+  created_by: string;
+  created_at: string;
+  rows?: Array<Record<string, string> & { id: string }>;
+};
+
 export type StoryboardBeat = {
   entity_id: string;
   action: 'ENTER' | 'EXIT' | 'MOVE' | 'HOLD';

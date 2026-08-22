@@ -1,4 +1,4 @@
-import type { FactCandidate, FactNormalizerArtifact, WorkspaceSnapshot } from '@/types/standby';
+import type { CueCellPatch, CueRevision, FactCandidate, FactNormalizerArtifact, WorkspaceSnapshot } from '@/types/standby';
 import type { ScriptProjection } from '@/types/script';
 
 export type SourceRole = "SCRIPT" | "MASTER_CUE" | "STAGE_SPEC";
@@ -219,6 +219,25 @@ export class StandbyApi {
 
   getWorkspace(caseId: string) {
     return this.request<WorkspaceSnapshot>(`/v1/cases/${caseId}/workspace`);
+  }
+
+  listCueRevisions(caseId: string) {
+    return this.request<{ items: CueRevision[] }>(`/v1/cases/${caseId}/cue-revisions`);
+  }
+
+  getCueRevision(caseId: string, revisionId: string) {
+    return this.request<CueRevision>(`/v1/cases/${caseId}/cue-revisions/${revisionId}`);
+  }
+
+  createCueRevision(
+    caseId: string,
+    input: { base_revision_id: string; base_source_sha256: string; patches: CueCellPatch[] },
+  ) {
+    return this.request<CueRevision>(`/v1/cases/${caseId}/cue-revisions`, {
+      method: "POST",
+      body: JSON.stringify(input),
+      idempotent: true,
+    });
   }
 
   private async request<T>(

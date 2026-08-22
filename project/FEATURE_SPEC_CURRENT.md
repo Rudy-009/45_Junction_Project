@@ -2,7 +2,7 @@
 
 | 항목 | 내용 |
 |---|---|
-| 문서 상태 | 공개 런타임 코드 대조 + R0 demo boundary 격리 반영 |
+| 문서 상태 | 공개 런타임 코드 대조 + R0~R2 반영 |
 | 기준 브랜치 | `feat/goal-r0r6` |
 | 목적 | 현재 배포 동작과 후속 운영화를 구분한다 |
 | 제품 목표 | [PRD_CLAUDE.md](PRD_CLAUDE.md) |
@@ -52,6 +52,8 @@ UUID 세션으로 case 소유권을 분리한다. 이 값은 사용자 신원을
 | Compiler | **구현** | 승인된 normalized envelope만 event graph·stage snapshot으로 변환 |
 | Verifier | **구현** | VR-01 환복, VR-02 경로 수용량, VR-03 소품 연속성을 결정론적으로 계산 |
 | 실제 workspace 배선 | **구현** | 같은 case ID의 event·finding·calculation·evidence·2D snapshot을 표시 |
+| 큐시트 revision 편집 | **서버 배선 구현** | finding의 source row/cell을 편집해 새 append-only revision으로 저장하고 같은 case의 workspace를 서버에서 재검증한다. 저장 전 draft는 verdict를 바꾸지 않는다 |
+| revision 히스토리·복원 | **서버 배선 구현** | revision 목록·상세를 서버에서 읽고, 과거 상태 복원은 기존 이력을 덮지 않고 reverse patch를 가진 새 revision을 생성한다 |
 | 세 verdict | **구현** | `VIOLATION`, `REVIEW`, `INSUFFICIENT_EVIDENCE`; finding 0건은 CONSISTENT |
 | Evidence Trace | **구현** | 모든 finding에 SCRIPT·MASTER_CUE·STAGE_SPEC 역할별 origin·review·locator·quote 표시 |
 | 공개 데모 세션 | **구현** | 로그인 없이 브라우저 UUID를 전송하고 서버가 해시한 actor ID로 사용 |
@@ -160,7 +162,7 @@ typecheck·production build와 두 패키지의 `npm audit` 0건을 확인했다
 
 - 일반 XLSX/PDF/JSON이 동일한 서버 review 경로로 진입한다.
 - verified timeline, 등장·퇴장 상태, finding popup과 근거 위치 이동이 보인다.
-- 큐시트 셀 편집 → 미반영 변경 → 저장이 한 테이크 안에서 끝난다.
+- 큐시트 셀 편집 → 미반영 변경 → 서버 revision 저장 → 재검증이 한 테이크 안에서 끝난다.
 - 일반 XLSX/PDF와 서버 verified flow는 제거하지 않는다.
 - 자동 테스트의 fixture를 실제 Upstage 분석 결과나 실제 공연 안전 판정이라고 말하지 않는다.
 
