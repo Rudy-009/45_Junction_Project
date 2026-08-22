@@ -155,7 +155,7 @@ export class UpstageAgentProvider implements ExtractionProvider {
       throw new DomainError(409, "SOURCE_FORMAT_INVALID", "SCRIPT must be uploaded as a file.");
     }
     const stageSpec = sources.get("STAGE_SPEC");
-    if (!stageSpec || stageSpec.bytes !== null) {
+    if (stageSpec && stageSpec.bytes !== null) {
       throw new DomainError(409, "SOURCE_FORMAT_INVALID", "STAGE_SPEC must be structured JSON.");
     }
 
@@ -163,23 +163,28 @@ export class UpstageAgentProvider implements ExtractionProvider {
       script ? this.extractFile("SCRIPT", script) : Promise.resolve(null),
       this.extractFile("MASTER_CUE", masterCue),
     ]);
-    const stageFacts = extractStageSpec(stageSpec);
-    const stageRaw = { source_sha256: stageSpec.sha256, facts: stageFacts };
-    const stageRun: ProviderRunSummary = {
-      source_id: stageSpec.source_id,
-      role: "STAGE_SPEC",
-      provider: "STANDBY_FORM",
-      provider_job_id: null,
-      agent_id: null,
-      config_id: null,
-      adapter_version: "standby-form.v1",
-      schema_version: "standby.extraction.v1",
-      raw_response_sha256: hashJson(stageRaw),
-    };
+    const stageFacts = stageSpec ? extractStageSpec(stageSpec) : [];
+    const stageRun: ProviderRunSummary | null = stageSpec
+      ? {
+          source_id: stageSpec.source_id,
+          role: "STAGE_SPEC",
+          provider: "STANDBY_FORM",
+          provider_job_id: null,
+          agent_id: null,
+          config_id: null,
+          adapter_version: "standby-form.v1",
+          schema_version: "standby.extraction.v1",
+          raw_response_sha256: hashJson({ source_sha256: stageSpec.sha256, facts: stageFacts }),
+        }
+      : null;
 
     return {
       facts: [...(scriptResult?.facts ?? []), ...cueResult.facts, ...stageFacts],
-      sourceRuns: [...(scriptResult ? [scriptResult.run] : []), cueResult.run, stageRun],
+      sourceRuns: [
+        ...(scriptResult ? [scriptResult.run] : []),
+        cueResult.run,
+        ...(stageRun ? [stageRun] : []),
+      ],
     };
   }
 

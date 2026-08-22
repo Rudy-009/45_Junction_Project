@@ -91,10 +91,10 @@ test("SCRIPT multipart upload hashes bytes and never echoes file contents", asyn
   assert.equal((replay.json() as { source_id: string }).source_id, source.source_id);
 });
 
-test("real-file API flow reaches human review snapshot without SCRIPT", async () => {
+test("real-file API flow reaches human review snapshot with only MASTER_CUE", async () => {
   const provider: ExtractionProvider = {
     async extract(sources) {
-      const roles = ["MASTER_CUE", "STAGE_SPEC"] as const;
+      const roles = ["MASTER_CUE"] as const;
       const facts = roles.map((role) => {
         const current = sources.get(role);
         assert.ok(current);
@@ -105,7 +105,7 @@ test("real-file API flow reaches human review snapshot without SCRIPT", async ()
           reviewed_value: null,
           source_role: role,
           source_id: current.source_id,
-          locator: role === "MASTER_CUE" ? "Cue!A1" : "stage.route",
+          locator: "Cue!A1",
           quote: `${role} evidence`,
           origin: current.origin,
           confidence: "NOT_PROVIDED" as const,
@@ -120,9 +120,9 @@ test("real-file API flow reaches human review snapshot without SCRIPT", async ()
           return {
             source_id: current.source_id,
             role,
-            provider: role === "STAGE_SPEC" ? "STANDBY_FORM" as const : "UPSTAGE" as const,
-            provider_job_id: role === "STAGE_SPEC" ? null : `job-${role}`,
-            agent_id: role === "STAGE_SPEC" ? null : `agt-${role}`,
+            provider: "UPSTAGE" as const,
+            provider_job_id: `job-${role}`,
+            agent_id: `agt-${role}`,
             config_id: null,
             adapter_version: "test.v1",
             schema_version: "standby.extraction.v1" as const,
@@ -172,14 +172,6 @@ test("real-file API flow reaches human review snapshot without SCRIPT", async ()
       });
       assert.equal(response.statusCode, 201, response.body);
     }
-    const stageSpec = await liveApp.inject({
-      method: "POST",
-      url: `/v1/cases/${caseId}/sources/STAGE_SPEC`,
-      headers: auth("upload-stage"),
-      payload: { origin: "USER_PROVIDED", content: HERO_SOURCE_CONTENT.STAGE_SPEC },
-    });
-    assert.equal(stageSpec.statusCode, 201, stageSpec.body);
-
     const start = await liveApp.inject({
       method: "POST",
       url: `/v1/cases/${caseId}/extraction-runs`,
@@ -202,7 +194,7 @@ test("real-file API flow reaches human review snapshot without SCRIPT", async ()
       headers: auth(),
     });
     const facts = (queue.json() as { items: Array<{ fact_id: string; review_status: string }> }).items;
-    assert.equal(facts.length, 2);
+    assert.equal(facts.length, 1);
     assert.ok(facts.every((fact) => fact.review_status === "UNREVIEWED"));
 
     const reviews = await liveApp.inject({
@@ -221,7 +213,7 @@ test("real-file API flow reaches human review snapshot without SCRIPT", async ()
       payload: {},
     });
     assert.equal(snapshot.statusCode, 201, snapshot.body);
-    assert.equal((snapshot.json() as { reviewed_fact_ids: string[] }).reviewed_fact_ids.length, 2);
+    assert.equal((snapshot.json() as { reviewed_fact_ids: string[] }).reviewed_fact_ids.length, 1);
 
     const workspace = await liveApp.inject({
       method: "GET",
@@ -263,7 +255,7 @@ function source(
   };
 }
 
-test("Upstage adapter extracts a master cue without a separate script", async () => {
+test("Upstage adapter extracts a master cue without script or stage spec", async () => {
   const createBodies: Array<Record<string, unknown>> = [];
   const mockFetch: typeof fetch = async (input, init) => {
     assert.equal(new Headers(init?.headers).get("authorization"), "Bearer secret-test-key");
@@ -290,7 +282,6 @@ test("Upstage adapter extracts a master cue without a separate script", async ()
 
   const sources = new Map<SourceRole, InternalSourceVersion>([
     ["MASTER_CUE", source("MASTER_CUE", { bytes: Uint8Array.from([0x50, 0x4b, 1, 2]), content: null, mediaType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" })],
-    ["STAGE_SPEC", source("STAGE_SPEC", { bytes: null, content: HERO_SOURCE_CONTENT.STAGE_SPEC, mediaType: "application/json" })],
   ]);
   const provider = new UpstageAgentProvider({
     apiKey: "secret-test-key",
@@ -302,11 +293,10 @@ test("Upstage adapter extracts a master cue without a separate script", async ()
   });
   const result = await provider.extract(sources);
   assert.equal(createBodies.length, 1);
-  assert.equal(result.facts.length, 6);
-  assert.ok(result.facts.some((fact) => fact.fact_type === "ROUTE_CAPACITY"));
-  assert.ok(result.facts.some((fact) => fact.fact_type === "PROP_INITIAL_STATE"));
+  assert.equal(result.facts.length, 1);
+  assert.ok(result.facts.some((fact) => fact.fact_type === "QUICK_CHANGE_AVAILABLE_WINDOW"));
   assert.ok(result.facts.every((fact) => fact.review_status === "UNREVIEWED"));
-  assert.deepEqual(result.sourceRuns.map((run) => run.provider), ["UPSTAGE", "STANDBY_FORM"]);
+  assert.deepEqual(result.sourceRuns.map((run) => run.provider), ["UPSTAGE"]);
   assert.ok(result.sourceRuns.every((run) => /^[a-f0-9]{64}$/.test(run.raw_response_sha256)));
 });
 
