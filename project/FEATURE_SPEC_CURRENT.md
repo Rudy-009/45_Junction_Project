@@ -3,7 +3,7 @@
 | 항목 | 내용 |
 |---|---|
 | 문서 상태 | 코드 대조 완료 · 2026-08-22 |
-| 기준 스냅샷 | 로컬 보관 브랜치의 `app/`, `server/`, `contracts/` 코드 대조 결과 |
+| 기준 스냅샷 | `origin/main`의 `app/`, `server/`, `contracts/` 코드 대조 결과 |
 | 목적 | **지금 실제로 동작하는 기능과 아직 동작하지 않는 기능을 구분**한다 |
 | 제품 목표 | [PRD_CLAUDE.md](PRD_CLAUDE.md) |
 | UI 목표 계약 | [`../Lo-Fi/standby/DESIGN.md`](../Lo-Fi/standby/DESIGN.md) |
@@ -20,17 +20,6 @@
 두 시스템은 아직 연결되지 않았고, 실제 파일 업로드와 Upstage 호출도 구현되지 않았다.
 
 따라서 현재 웹 화면에서 보이는 finding과 근거는 실제 업로드 문서를 분석한 결과가 아니다.
-
-### 원격 통합 상태 주의
-
-현재 원격의 한 브랜치가 아래 기능 전체를 동시에 포함하지는 않는다.
-
-- 프런트와 backend 수직 슬라이스: `origin/codex/backend-verifier-mvp`
-- 이벤트별 무대 snapshot 추가분: `origin/feat/stage-snapshots`
-- 이 현행 명세와 제품 문서: `origin/docs/canonical-product-contracts`
-
-따라서 세 변경을 의존 순서에 맞게 통합하기 전에는 특정 원격 브랜치 하나만 보고 전체 MVP가
-완성됐다고 판단하면 안 된다.
 
 ---
 
@@ -203,7 +192,6 @@ E3 카드 클릭
 
 | 우선 | 간극 | 완료 조건 |
 |---|---|---|
-| P0 | 원격 변경 통합 | backend·stage snapshot·docs 변경이 리뷰를 거쳐 하나의 최신 기준 브랜치에 모임 |
 | P0 | 실제 입력 수집 | 업로드한 SCRIPT·MASTER_CUE와 작성한 STAGE_SPEC이 immutable source+hash로 서버에 등록됨 |
 | P0 | Upstage adapter | Parse/Classify/Extract 결과를 strict fact 계약으로 수신하며 실패·재시도·provenance를 기록함 |
 | P0 | 프런트–백엔드 연결 | 입력→review queue→snapshot→workspace가 fixture import 없이 한 case ID로 이어짐 |
