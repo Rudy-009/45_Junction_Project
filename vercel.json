@@ -1,0 +1,6 @@
+{
+  "buildCommand": "cd app && npm ci && npm run build",
+  "outputDirectory": "app/dist",
+  "installCommand": "echo skip",
+  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
+}
