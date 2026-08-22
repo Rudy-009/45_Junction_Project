@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://standby.local/contracts/verification.v1.schema.json",
+  "title": "STANDBY Verification v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "verification_run_id",
+    "input_fingerprint",
+    "ruleset_version",
+    "result_hash",
+    "findings"
+  ],
+  "properties": {
+    "contract_version": { "const": "standby.verification.v1" },
+    "verification_run_id": { "type": "string", "minLength": 1 },
+    "input_fingerprint": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "ruleset_version": { "type": "string", "minLength": 1 },
+    "result_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "findings": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/finding" }
+    }
+  },
+  "$defs": {
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "source_id", "quote", "locator", "origin", "review_status"],
+      "properties": {
+        "role": { "enum": ["SCRIPT", "MASTER_CUE", "STAGE_SPEC"] },
+        "source_id": { "type": "string", "minLength": 1 },
+        "quote": { "type": ["string", "null"] },
+        "locator": { "type": ["string", "null"] },
+        "origin": {
+          "enum": ["REAL_REFERENCE", "USER_PROVIDED", "CONTROLLED_FIXTURE", "MUTATED_FIXTURE"]
+        },
+        "review_status": { "enum": ["UNREVIEWED", "REVIEWED", "MISSING"] }
+      }
+    },
+    "finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "finding_id",
+        "event_id",
+        "rule_id",
+        "verdict",
+        "calculation",
+        "missing_facts",
+        "evidence",
+        "target_locator"
+      ],
+      "properties": {
+        "finding_id": { "type": "string", "minLength": 1 },
+        "event_id": { "type": "string", "minLength": 1 },
+        "rule_id": { "type": "string", "minLength": 1 },
+        "verdict": { "enum": ["VIOLATION", "REVIEW", "INSUFFICIENT_EVIDENCE"] },
+        "calculation": { "type": "object" },
+        "missing_facts": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "evidence": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": { "$ref": "#/$defs/evidence" }
+        },
+        "target_locator": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["row_id", "column"],
+          "properties": {
+            "row_id": { "type": "string", "minLength": 1 },
+            "column": { "type": "string", "minLength": 1 }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://standby.local/contracts/extraction.v1.schema.json",
+  "title": "STANDBY Extraction v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract_version", "run_id", "source", "provider_run", "candidates"],
+  "properties": {
+    "contract_version": { "const": "standby.extraction.v1" },
+    "run_id": { "type": "string", "minLength": 1 },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_id", "role", "sha256"],
+      "properties": {
+        "source_id": { "type": "string", "minLength": 1 },
+        "role": { "enum": ["SCRIPT", "MASTER_CUE", "STAGE_SPEC"] },
+        "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      }
+    },
+    "provider_run": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider", "adapter_version", "schema_version", "raw_response_sha256"],
+      "properties": {
+        "provider": { "enum": ["UPSTAGE", "CONTROLLED_FIXTURE"] },
+        "provider_job_id": { "type": ["string", "null"] },
+        "agent_id": { "type": ["string", "null"] },
+        "config_id": { "type": ["string", "null"] },
+        "adapter_version": { "type": "string", "minLength": 1 },
+        "schema_version": { "type": "string", "minLength": 1 },
+        "raw_response_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      }
+    },
+    "candidates": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/factCandidate" }
+    }
+  },
+  "$defs": {
+    "locator": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "page", "quote"],
+          "properties": {
+            "type": { "const": "PAGE_QUOTE" },
+            "page": { "type": "integer", "minimum": 1 },
+            "quote": { "type": "string", "minLength": 1 }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "sheet", "cell", "quote"],
+          "properties": {
+            "type": { "const": "SHEET_CELL" },
+            "sheet": { "type": "string", "minLength": 1 },
+            "cell": { "type": "string", "pattern": "^[A-Z]+[1-9][0-9]*$" },
+            "quote": { "type": "string", "minLength": 1 }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "field", "quote"],
+          "properties": {
+            "type": { "const": "FORM_FIELD" },
+            "field": { "type": "string", "minLength": 1 },
+            "quote": { "type": "string", "minLength": 1 }
+          }
+        }
+      ]
+    },
+    "factCandidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "fact_id",
+        "fact_type",
+        "raw_value",
+        "source_role",
+        "locator",
+        "review_status"
+      ],
+      "properties": {
+        "fact_id": { "type": "string", "minLength": 1 },
+        "fact_type": { "type": "string", "minLength": 1 },
+        "raw_value": true,
+        "source_role": { "enum": ["SCRIPT", "MASTER_CUE", "STAGE_SPEC"] },
+        "locator": { "$ref": "#/$defs/locator" },
+        "confidence": { "enum": ["HIGH", "LOW", "NOT_PROVIDED"] },
+        "review_status": { "const": "UNREVIEWED" }
+      }
+    }
+  }
+}
