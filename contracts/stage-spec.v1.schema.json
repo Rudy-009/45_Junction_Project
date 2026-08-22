@@ -26,6 +26,10 @@
       "type": "array",
       "items": { "$ref": "#/$defs/routeTime" }
     },
+    "route_capacities": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/routeCapacity" }
+    },
     "minimum_change_ms": { "type": ["integer", "null"], "minimum": 0 },
     "initial_state": {
       "type": "array",
@@ -43,7 +47,7 @@
   },
   "$defs": {
     "zone": {
-      "enum": ["STAGE_RIGHT_WING", "STAGE", "STAGE_LEFT_WING", "STAGE_LEFT_CHANGE"]
+      "enum": ["STAGE_RIGHT_WING", "STAGE", "STAGE_LEFT_WING", "STAGE_LEFT_CHANGE", "STAGE_RIGHT_CHANGE"]
     },
     "routeTime": {
       "type": "object",
@@ -54,6 +58,15 @@
         "to": { "$ref": "#/$defs/zone" },
         "min_ms": { "type": "integer", "minimum": 0 },
         "max_ms": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "routeCapacity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["route_id", "capacity"],
+      "properties": {
+        "route_id": { "type": "string", "minLength": 1 },
+        "capacity": { "type": "integer", "minimum": 1 }
       }
     },
     "entityState": {

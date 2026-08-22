@@ -1,6 +1,6 @@
 import { extractControlledFixture } from "../domain/extraction.js";
 import { DomainError } from "../domain/errors.js";
-import { assertStageSpecSemantics } from "../contracts/semantic.js";
+import { assertNormalizedFactSemantics, assertStageSpecSemantics } from "../contracts/semantic.js";
 import type {
   CaseRecord,
   CellPatch,
@@ -18,7 +18,8 @@ import type {
   SourceVersion,
   WorkspaceSnapshot,
 } from "../domain/types.js";
-import { verifyQuickChange, workspaceEvents } from "../domain/verifier.js";
+import { compileEventGraph, workspaceEvents } from "../domain/compiler.js";
+import { verifyProduction } from "../domain/verifier.js";
 import { canonicalJson, hashJson, sha256 } from "../lib/hash.js";
 import type { ExtractionProvider } from "../providers/extraction-provider.js";
 
@@ -58,6 +59,7 @@ function cueRows(content: unknown): CueRow[] {
 export class InMemoryStore {
   private readonly cases = new Map<string, CaseRecord>();
   private readonly operations = new Map<string, Operation>();
+  private readonly operationCaseIds = new Map<string, string>();
   private readonly extractionRuns = new Map<string, ExtractionRunRecord>();
   private readonly idempotency = new Map<string, IdempotencyRecord>();
   private sequence = 0;
@@ -93,11 +95,12 @@ export class InMemoryStore {
     return response;
   }
 
-  createCase(title: string): { case_id: string; title: string; created_at: string } {
+  createCase(title: string, ownerId: string): { case_id: string; title: string; created_at: string } {
     const caseId = this.id("case");
     const createdAt = this.now();
     this.cases.set(caseId, {
       case_id: caseId,
+      owner_id: ownerId,
       title,
       sources: new Map(),
       facts: new Map(),
@@ -231,6 +234,7 @@ export class InMemoryStore {
       updated_at: createdAt,
     };
     this.operations.set(operation.operation_id, operation);
+    this.operationCaseIds.set(operation.operation_id, record.case_id);
     queueMicrotask(() => void this.executeExtraction(record, operation, runId, adapter));
     return structuredClone(operation);
   }
@@ -247,6 +251,25 @@ export class InMemoryStore {
     const run = this.extractionRuns.get(runId);
     if (!run) throw new DomainError(404, "RESOURCE_NOT_FOUND", "Extraction run not found.");
     return structuredClone(run);
+  }
+
+  assertCaseOwner(caseId: string, actorId: string): void {
+    const record = this.getCase(caseId);
+    if (record.owner_id !== actorId) {
+      throw new DomainError(404, "RESOURCE_NOT_FOUND", "Case not found.");
+    }
+  }
+
+  assertOperationOwner(operationId: string, actorId: string): void {
+    const caseId = this.operationCaseIds.get(operationId);
+    if (!caseId) throw new DomainError(404, "RESOURCE_NOT_FOUND", "Operation not found.");
+    this.assertCaseOwner(caseId, actorId);
+  }
+
+  assertExtractionRunOwner(runId: string, actorId: string): void {
+    const run = this.extractionRuns.get(runId);
+    if (!run) throw new DomainError(404, "RESOURCE_NOT_FOUND", "Extraction run not found.");
+    this.assertCaseOwner(run.case_id, actorId);
   }
 
   getReviewQueue(caseId: string): { items: FactCandidate[]; next_cursor: null } {
@@ -266,6 +289,7 @@ export class InMemoryStore {
     const record = this.getCase(input.caseId);
     const created: ReviewRecord[] = [];
     for (const review of input.reviews) {
+      if (review.decision === "REVIEWED") assertNormalizedFactSemantics(review.corrected_value);
       const fact = record.facts.get(review.fact_id);
       if (!fact) {
         throw new DomainError(404, "RESOURCE_NOT_FOUND", `Fact ${review.fact_id} not found.`);
@@ -314,7 +338,7 @@ export class InMemoryStore {
     };
     record.snapshots.push(internalSnapshot);
     record.current_snapshot_id = snapshot.snapshot_id;
-    if (record.current_revision_id) this.verifyCurrent(record);
+    this.verifyCurrent(record);
     return snapshot;
   }
 
@@ -386,7 +410,7 @@ export class InMemoryStore {
   getWorkspace(caseId: string): WorkspaceSnapshot {
     const record = this.getCase(caseId);
     const snapshot = this.currentSnapshot(record);
-    const revision = this.currentRevision(record);
+    const revision = this.findCurrentRevision(record);
     const verification = record.verification;
     if (!verification) {
       throw new DomainError(409, "VERIFICATION_NOT_RUN", "Freeze a review snapshot first.");
@@ -396,6 +420,7 @@ export class InMemoryStore {
       throw new DomainError(409, "SOURCE_SLOT_MISSING", "MASTER_CUE is missing.");
     }
 
+    const compiled = compileEventGraph(snapshot);
     return {
       case_id: record.case_id,
       title: record.title,
@@ -404,9 +429,10 @@ export class InMemoryStore {
         .filter((source) => source !== undefined)
         .map((source) => this.publicSource(source)),
       review_snapshot_id: snapshot.snapshot_id,
-      cue_revision_id: revision.revision_id,
+      cue_revision_id: revision?.revision_id ?? null,
       original_master_cue_sha256: masterCue.sha256,
-      events: workspaceEvents(verification),
+      event_graph: compiled.graph,
+      events: workspaceEvents(compiled.graph, compiled.stageSnapshots, verification.findings),
       findings: verification.findings,
       verification,
     };
@@ -414,8 +440,8 @@ export class InMemoryStore {
 
   private verifyCurrent(record: CaseRecord): void {
     const snapshot = this.currentSnapshot(record);
-    const revision = this.currentRevision(record);
-    record.verification = verifyQuickChange({
+    const revision = this.findCurrentRevision(record);
+    record.verification = verifyProduction({
       caseId: record.case_id,
       sources: record.sources,
       snapshot,
@@ -506,11 +532,15 @@ export class InMemoryStore {
   }
 
   private currentRevision(record: CaseRecord): CueRevision {
-    const revision = record.revisions.find((candidate) => candidate.revision_id === record.current_revision_id);
+    const revision = this.findCurrentRevision(record);
     if (!revision) {
       throw new DomainError(409, "SOURCE_SLOT_MISSING", "MASTER_CUE revision is missing.");
     }
     return revision;
+  }
+
+  private findCurrentRevision(record: CaseRecord): CueRevision | null {
+    return record.revisions.find((candidate) => candidate.revision_id === record.current_revision_id) ?? null;
   }
 
   private sourceSnapshotDigest(record: CaseRecord): string {

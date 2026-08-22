@@ -1,12 +1,13 @@
 import { useMemo, useRef, useEffect } from 'react';
-import { useCueSheetStore } from '@/store';
+import { useCueSheetStore, useStandbyWorkspaceStore } from '@/store';
 import { PanelHeader } from '@/components/ui';
-import { StageSimulator } from '@/components/domain';
+import { StageSimulator, VerifiedWorkspace } from '@/components/domain';
 import type { StageEntity } from '@/types';
 import type { CueSheet, CueEvent, Action, Direction } from '@/types/cue-sheet';
 import type { Contradiction } from '@/types/validation';
 import { cn } from '@/lib/utils';
 import { useNavigate } from '@tanstack/react-router';
+import { useI18n } from '@/lib/i18n';
 
 // ─── Helpers ───────────────────────────────────────────────
 
@@ -70,7 +71,9 @@ function cellBorderColor(contradictions: Contradiction[]): string {
 // ─── Main Component ────────────────────────────────────────
 
 export function WorkspaceScreen() {
+  const { t } = useI18n();
   const navigate = useNavigate();
+  const verifiedWorkspace = useStandbyWorkspaceStore((state) => state.workspace);
   const cueSheet = useCueSheetStore((s) => s.cueSheet);
   const validationResult = useCueSheetStore((s) => s.validationResult);
   const selectedCueId = useCueSheetStore((s) => s.selectedCueId);
@@ -78,16 +81,18 @@ export function WorkspaceScreen() {
   const selectCue = useCueSheetStore((s) => s.selectCue);
   const selectEvent = useCueSheetStore((s) => s.selectEvent);
 
+  if (verifiedWorkspace) return <VerifiedWorkspace workspace={verifiedWorkspace} />;
+
   if (!cueSheet) {
     return (
       <div className="flex h-[calc(100vh-56px)] items-center justify-center">
         <div className="text-center">
-          <p className="text-lg text-muted-foreground">큐시트가 로드되지 않았습니다.</p>
+          <p className="text-lg text-muted-foreground">{t('workspace.noSheet')}</p>
           <button
             onClick={() => navigate({ to: '/' })}
             className="mt-4 border border-foreground bg-foreground px-4 py-2 text-sm text-background hover:bg-muted-foreground"
           >
-            입력 화면으로
+            {t('workspace.back')}
           </button>
         </div>
       </div>
@@ -132,7 +137,7 @@ export function WorkspaceScreen() {
         {/* Stage simulator */}
         <div className="flex h-[260px] shrink-0 flex-col border-b border-border">
           <PanelHeader
-            title="STAGE"
+            title={t('workspace.stagePanel')}
             right={
               <span className="mono text-[10px] text-muted-foreground">
                 {selectedCue?.scene_number}{selectedEvt ? ` · ${selectedEvt.event_id}` : ''}
@@ -213,6 +218,7 @@ function Timeline({
   onSelectCue: (id: string) => void;
   onSelectEvent: (cueId: string, eventId: string) => void;
 }) {
+  const { t } = useI18n();
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll to selected event
@@ -226,11 +232,8 @@ function Timeline({
     <div className="flex h-[180px] shrink-0 flex-col border-t border-border bg-surface">
       {/* Timeline header */}
       <div className="flex h-7 shrink-0 items-center justify-between border-b border-border px-3">
-        <span className="mono text-[10px] tracking-[0.14em] text-muted-foreground uppercase">
-          EVENT TIMELINE
-        </span>
-        <span className="mono text-[10px] text-muted-foreground">
-          ← 가로 스크롤 →
+        <span className="text-[10px] tracking-[0.14em] text-muted-foreground uppercase">
+          {t('workspace.timelinePanel')}
         </span>
       </div>
 

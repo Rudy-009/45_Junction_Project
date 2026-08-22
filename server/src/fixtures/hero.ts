@@ -107,63 +107,15 @@ export const HERO_ROWS: CueRow[] = [
   },
 ];
 
-export const HERO_SOURCE_CONTENT: Record<SourceRole, unknown> = {
-  SCRIPT: {
-    segment: "S#16 → S#17",
-    timing_anchor: {
-      exit_event: "E1",
-      next_entry_event: "E7",
-      quote: "혜원, 하수로 퇴장. (긴 암전)",
-      locator: "S#16 p.42 L.18",
-    },
-  },
-  MASTER_CUE: {
-    sheet: "MASTER",
-    rows: HERO_ROWS,
-    quick_change: {
-      available_min_ms: 58000,
-      available_max_ms: 62000,
-      target: { row_id: "R3", column: "환복시간" },
-      quote: "LX Q56 암전 58s ~ 62s 유지",
-      locator: "MASTER!D3",
-    },
-  },
-  STAGE_SPEC: {
-    contract_version: "standby.stage-spec.v1",
-    wings: ["STAGE_RIGHT_WING", "STAGE_LEFT_WING"],
-    crossover: "AVAILABLE",
-    route_times: [
-      {
-        from: "STAGE_LEFT_WING",
-        to: "STAGE_LEFT_CHANGE",
-        min_ms: 3000,
-        max_ms: 4000,
-      },
-      {
-        from: "STAGE_LEFT_CHANGE",
-        to: "STAGE",
-        min_ms: 3000,
-        max_ms: 4000,
-      },
-    ],
-    minimum_change_ms: 60000,
-    initial_state: [
-      { entity_id: "hyewon", kind: "PERSON", zone: "STAGE" },
-      { entity_id: "eunbi", kind: "PERSON", zone: "STAGE_LEFT_WING" },
-      { entity_id: "bag", kind: "PROP", zone: "STAGE_RIGHT_WING" },
-    ],
-    source_evidence: {
-      quote: "최소 환복시간 60s + 이동 6~8s",
-      locator: "stage_spec.quick_change",
-    },
-  },
-};
-
 const at = (
-  hyewon: StageEntityState,
-  eunbi: StageEntityState,
-  bag: StageEntityState,
-): Record<string, StageEntityState> => ({ hyewon, eunbi, bag });
+  hyewon: Omit<StageEntityState, "kind">,
+  eunbi: Omit<StageEntityState, "kind">,
+  bag: Omit<StageEntityState, "kind">,
+): Record<string, StageEntityState> => ({
+  hyewon: { kind: "PERSON", ...hyewon },
+  eunbi: { kind: "PERSON", ...eunbi },
+  bag: { kind: "PROP", ...bag },
+});
 
 export const HERO_STAGE_SNAPSHOTS: Record<string, Record<string, StageEntityState>> = {
   E1: at(
@@ -218,3 +170,110 @@ export const HERO_EVENT_LABELS = [
   "재입장",
   "소품 복귀",
 ];
+
+export const HERO_SOURCE_CONTENT: Record<SourceRole, unknown> = {
+  SCRIPT: {
+    segment: "S#16 → S#17",
+    timing_anchor: {
+      exit_event: "E1",
+      next_entry_event: "E7",
+      quote: "혜원, 하수로 퇴장. (긴 암전)",
+      locator: "S#16 p.42 L.18",
+    },
+    blocking_sequence: {
+      route_id: "HASU_CROSSOVER",
+      event_id: "E6",
+      complete: true,
+      quote: "암전 중 혜원과 런크루가 하수 통로를 사용한다.",
+      locator: "S#16 p.43 L.2",
+    },
+    prop_requirement: {
+      event_id: "E8",
+      prop_id: "bag",
+      zone: "STAGE",
+      quote: "마루가방을 무대에서 사용한다.",
+      locator: "S#17 p.44 L.7",
+    },
+  },
+  MASTER_CUE: {
+    sheet: "MASTER",
+    rows: HERO_ROWS,
+    quick_change: {
+      available_min_ms: 58000,
+      available_max_ms: 62000,
+      target: { row_id: "R3", column: "환복시간" },
+      quote: "LX Q56 암전 58s ~ 62s 유지",
+      locator: "MASTER!D3",
+    },
+    blocking_occupancies: [
+      {
+        route_id: "HASU_CROSSOVER",
+        event_id: "E6",
+        entity_id: "hyewon",
+        start_ms: 52000,
+        end_ms: 58000,
+        quote: "혜원 하수 통로 이동 52-58s",
+        locator: "MASTER!F6",
+      },
+      {
+        route_id: "HASU_CROSSOVER",
+        event_id: "E6",
+        entity_id: "runcrew-1",
+        start_ms: 54000,
+        end_ms: 60000,
+        quote: "런크루 하수 통로 이동 54-60s",
+        locator: "MASTER!G6",
+      },
+    ],
+    prop_sequence: {
+      prop_id: "bag",
+      through_event_id: "E8",
+      complete: true,
+      quote: "E8까지 마루가방 이동 담당 및 인계 기록 없음",
+      locator: "MASTER!H5:H8",
+    },
+    event_states: HERO_EVENT_LABELS.map((label, index) => {
+      const eventId = `E${index + 1}`;
+      return {
+        event_id: eventId,
+        sequence_index: index,
+        label,
+        time_range_ms: { min_ms: index * 8000, max_ms: index * 8000 },
+        actions: [],
+        stage_snapshot: HERO_STAGE_SNAPSHOTS[eventId] ?? {},
+        quote: `${eventId} ${label}`,
+        locator: `MASTER!A${index + 1}`,
+      };
+    }),
+  },
+  STAGE_SPEC: {
+    contract_version: "standby.stage-spec.v1",
+    wings: ["STAGE_RIGHT_WING", "STAGE_LEFT_WING"],
+    crossover: "AVAILABLE",
+    route_times: [
+      {
+        from: "STAGE_LEFT_WING",
+        to: "STAGE_LEFT_CHANGE",
+        min_ms: 3000,
+        max_ms: 4000,
+      },
+      {
+        from: "STAGE_LEFT_CHANGE",
+        to: "STAGE",
+        min_ms: 3000,
+        max_ms: 4000,
+      },
+    ],
+    route_capacities: [{ route_id: "HASU_CROSSOVER", capacity: 1 }],
+    minimum_change_ms: 60000,
+    initial_state: [
+      { entity_id: "hyewon", kind: "PERSON", zone: "STAGE" },
+      { entity_id: "eunbi", kind: "PERSON", zone: "STAGE_LEFT_WING" },
+      { entity_id: "bag", kind: "PROP", zone: "STAGE_RIGHT_WING" },
+    ],
+    source_evidence: {
+      quote: "최소 환복시간 60s + 이동 6~8s",
+      locator: "stage_spec.quick_change",
+    },
+  },
+};

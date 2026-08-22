@@ -1,32 +1,50 @@
-import { Link } from "@tanstack/react-router";
+import { useEffect } from 'react';
+import { Link } from '@tanstack/react-router';
+import { useI18n } from '@/lib/i18n';
+import { useLanguageStore } from '@/store/languageStore';
 
 export function AppHeader() {
+  const { locale, t } = useI18n();
+  const setLocale = useLanguageStore((state) => state.setLocale);
+  useEffect(() => {
+    document.documentElement.lang = locale;
+  }, [locale]);
+
   return (
     <header className="flex h-14 items-center justify-between border-b border-border bg-surface px-4">
-      <div className="flex items-baseline gap-3">
-        <span className="mono text-base tracking-[0.28em]">STANDBY</span>
-        <span className="mono text-[10px] text-muted-foreground">
-          PRE-FLIGHT VERIFICATION v0.9
-        </span>
-      </div>
+      <span className="mono text-base tracking-[0.28em]">STANDBY</span>
 
-      <nav className="flex h-8 items-stretch border border-border">
+      <div className="flex items-center gap-2">
+        <label className="flex h-8 items-center border border-border bg-background">
+          <span className="sr-only">{t('nav.language')}</span>
+          <select
+            aria-label={t('nav.language')}
+            value={locale}
+            onChange={(event) => setLocale(event.target.value as 'ko' | 'en')}
+            className="h-full bg-transparent px-2 text-xs"
+          >
+            <option value="ko">KOR</option>
+            <option value="en">ENG</option>
+          </select>
+        </label>
+        <nav className="flex h-8 items-stretch border border-border">
         <Link
           to="/"
           className="flex items-center px-4 text-xs text-foreground hover:bg-muted"
           activeOptions={{ exact: true }}
-          activeProps={{ className: "bg-foreground text-background hover:bg-foreground" }}
+          activeProps={{ className: "!bg-foreground !text-background hover:!bg-foreground" }}
         >
-          입력
+          {t('nav.input')}
         </Link>
         <Link
           to="/workspace"
           className="flex items-center border-l border-border px-4 text-xs text-foreground hover:bg-muted"
-          activeProps={{ className: "bg-foreground text-background hover:bg-foreground" }}
+          activeProps={{ className: "!bg-foreground !text-background hover:!bg-foreground" }}
         >
-          워크스페이스
+          {t('nav.workspace')}
         </Link>
-      </nav>
+        </nav>
+      </div>
     </header>
   );
 }

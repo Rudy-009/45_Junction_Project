@@ -98,25 +98,20 @@ export type Evidence = {
 
 export type Finding = {
   finding_id: string;
-  event_id: "E3";
-  rule_id: "VR-01";
+  event_id: string;
+  rule_id: "VR-01" | "VR-02" | "VR-03";
   verdict: FindingVerdict;
-  calculation: {
-    available_min_ms: number | null;
-    available_max_ms: number | null;
-    required_min_ms: number | null;
-    required_max_ms: number | null;
-  };
+  calculation: Record<string, unknown>;
   missing_facts: string[];
   evidence: [Evidence, Evidence, Evidence];
-  target_locator: { row_id: "R3"; column: "환복시간" };
+  target_locator: { row_id: string; column: string };
 };
 
 export type VerificationResult = {
   contract_version: "standby.verification.v1";
   verification_run_id: string;
   input_fingerprint: string;
-  ruleset_version: "standby.rules.v1";
+  ruleset_version: "standby.rules.v2";
   result_hash: string;
   findings: Finding[];
 };
@@ -125,9 +120,11 @@ export type StageZone =
   | "STAGE_RIGHT_WING"
   | "STAGE"
   | "STAGE_LEFT_WING"
-  | "STAGE_LEFT_CHANGE";
+  | "STAGE_LEFT_CHANGE"
+  | "STAGE_RIGHT_CHANGE";
 
 export type StageEntityState = {
+  kind: "PERSON" | "PROP";
   zone: StageZone;
   transition?: "ENTER" | "EXIT";
 };
@@ -141,14 +138,64 @@ export type WorkspaceEvent = {
   stage_snapshot: Record<string, StageEntityState>;
 };
 
+export type EventGraphSourceRef = {
+  source_id: string;
+  role: SourceRole;
+  fact_id: string;
+};
+
+export type EventGraphAction =
+  | {
+      type: "ENTER" | "EXIT";
+      entity_id: string;
+      zone: StageZone;
+      sequence_index: number;
+      offset_ms: number;
+    }
+  | {
+      type: "MOVE";
+      entity_id: string;
+      from: StageZone;
+      to: StageZone;
+      sequence_index: number;
+      offset_ms: number;
+      duration_ms: { min_ms: number; max_ms: number };
+    }
+  | {
+      type: "COSTUME_CHANGE";
+      actor_id: string;
+      zone: StageZone;
+      sequence_index: number;
+      offset_ms: number;
+      duration_ms: { min_ms: number; max_ms: number };
+    };
+
+export type EventGraphEvent = {
+  event_id: string;
+  sequence_index: number;
+  label: string;
+  time_range_ms: { min_ms: number; max_ms: number };
+  actions: EventGraphAction[];
+  source_refs: EventGraphSourceRef[];
+};
+
+export type EventGraph = {
+  contract_version: "standby.event-graph.v1";
+  graph_id: string;
+  source_snapshot_digest: string;
+  compiler_version: "standby.compiler.v1";
+  events: EventGraphEvent[];
+};
+
 export type WorkspaceSnapshot = {
   case_id: string;
   title: string;
   source_snapshot_digest: string;
   sources: SourceVersion[];
   review_snapshot_id: string;
-  cue_revision_id: string;
+  cue_revision_id: string | null;
   original_master_cue_sha256: string;
+  event_graph: EventGraph;
   events: WorkspaceEvent[];
   findings: Finding[];
   verification: VerificationResult;
@@ -191,6 +238,7 @@ export type ExtractionRunRecord = {
 
 export type CaseRecord = {
   case_id: string;
+  owner_id: string;
   title: string;
   sources: Map<SourceRole, InternalSourceVersion>;
   facts: Map<string, FactCandidate>;

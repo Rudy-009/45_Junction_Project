@@ -44,8 +44,11 @@ Lovable 프로젝트는 `@lovable.dev/vite-tanstack-config`(Nitro + Cloudflare �
 ```
 app/                    ← 실제 코드. 대부분의 작업이 여기서 일어난다
   src/screens/          InputScreen · WorkspaceScreen
-  src/components/standby/  AppHeader Bits StageSimulator CueSheetPanel FindingPopup TimelinePanel
-  src/lib/standby-data.ts  시드 데이터 · verdict 토큰 (단일 진실 공급원)
+  src/components/domain/ StageSimulator
+  src/components/layout/ AppHeader
+  src/components/ui/    Badge · Btn · PanelHeader
+  src/store/            legacy cue-sheet-schema Zustand 상태
+  src/validator/        legacy JSON 로컬 검증기
   src/styles.css        디자인 토큰 (다크 전용)
 
 project/PRD_CLAUDE.md   ← 현재 제품 정의. 스펙 충돌 시 이 문서가 우선
@@ -54,8 +57,8 @@ project/UPSTAGE_PLAYBOOK.md  Upstage Studio 적용법 · smoke test
 project/SCRIPT_INTEGRATION.md 대본↔큐시트 연결 검증 결과
 project/DOMAIN.md       공연 현업 워크플로우 근거
 Lo-Fi/standby/DESIGN.md ← UI 계약. 화면 구성은 이 문서를 따른다
-server/                 ← 독립 Fastify backend fixture. 아직 app과 연결되지 않음
-contracts/              ← strict JSON Schema 계약과 fixture
+server/                 ← Fastify backend · Upstage ingestion · reviewed fact compiler · verifier
+contracts/              ← strict JSON Schema와 normalized review 계약
 ```
 
 **스펙이나 기능을 고치기 전에 반드시 `project/PRD_CLAUDE.md`,
@@ -66,8 +69,8 @@ contracts/              ← strict JSON Schema 계약과 fixture
 ## 3. 스택과 명령
 
 프런트는 Vite + React 19 + TypeScript + Tailwind v4 + TanStack Router (code-based routes)다.
-`app/`은 하드코딩 fixture와 인메모리 상태로 동작한다. 별도 `server/` 수직 슬라이스가 있지만
-프런트와 연결되지 않았고 실제 Upstage 호출도 아직 없다.
+`app/` 입력 화면은 개발 환경에서 server API를 호출하지만 review→workspace는 아직 legacy 상태와 분리돼 있다.
+`server/`는 실제 Upstage 합성 live smoke와 reviewed fact compiler·VR-01/02/03 통제 fixture를 통과했다.
 
 ```bash
 cd app
@@ -120,18 +123,17 @@ Ctrl+F 검색 · JSON raw 뷰 · 실제 건축 도면 · 라이트모드 토글 
 
 | # | 작업 | 파일 | 비고 |
 |---|---|---|---|
-| **P0** | **재생 동기화** | `WorkspaceScreen` | 재생 시 타임라인·큐시트 스크롤·무대가 함께 진행 |
-| P1 | 이벤트 **더블클릭 = 해당 셀로 이동** | `TimelinePanel` | 단일 클릭은 팝업 유지. `이 위치로 이동` 버튼도 유지 |
-| P1 | 큐시트가 **위 패널일 때 팝업 유지** | `WorkspaceScreen` | 아래가 무대면 닫을 이유가 없다. 패널 전환 강제 금지 |
-| P1 | 엔티티 **라벨 인라인 편집** | `StageSimulator` | 클릭 → input, Enter 커밋, Esc 취소 |
-| **P1** | **XLSX export** | `CueSheetPanel` | **받은 엑셀을 그대로 돌려준다.** 아래 참조 |
-| P2 | 히스토리 **복원** 명시 | `CueSheetPanel` | 현재 로드는 되나 "복원" 의미가 UI에 드러나지 않음 |
-| P2 | XLSX import | `InputScreen` | dropzone은 이미 있다. 파싱은 Upstage 경로 |
-| P2 | 재검증(refresh) 버튼 | `WorkspaceScreen` | 원본 hash 비교 후 바뀐 문서만 재추출 |
-| P2 | 파급효과 표시 | `WorkspaceScreen` | 셀 편집 시 영향받는 이벤트 카드에 표시 |
+| **P0** | **외부 운영 provision** | Railway + Supabase + Vercel | 코드·image는 완료. 프로젝트 생성, secret/public env, live smoke 필요 |
+| **P0** | **실제 reference fidelity** | QA gold fact | 한국어 대본·17열 Master Cue의 locator·critical token을 원문 대조 |
+| P1 | XLSX export | 새 adapter/서비스 | 원본 sheet·열·서식을 보존한 새 파일 |
+| P2 | refresh gate | source/store/workspace | 동일 hash 재호출 금지, 새 fact는 UNREVIEWED |
+| P2 | revision·영속성 | store/DB | 원본 hash 위 append-only patch와 복원 |
+| P2 | 재생 동기화·파급효과 | `WorkspaceScreen` | 실제 event graph가 연결된 뒤 구현 |
 
-이벤트별 무대 스냅샷은 구현 완료됐다. 현재 남은 P0는 재생 동기화이며,
-완료 여부를 바꿀 때는 `project/FEATURE_SPEC_CURRENT.md`도 함께 갱신한다.
+M3 코드 경계는 완료됐다. Supabase JWT·case owner 검사·Railway image/config와
+review→snapshot→workspace E2E가 연결됐다. 외부 Railway/Supabase provision과 실제 원본 fidelity는 아직 남아 있다.
+정적 Vercel SPA에 Upstage key나 정적 API token을 넣어 이 순서를 우회하지 않는다.
+완료 여부를 바꿀 때는 `project/FEATURE_SPEC_CURRENT.md`도 같은 PR에서 갱신한다.
 
 ### 이벤트별 무대 스냅샷 — P0 사양
 
@@ -192,30 +194,26 @@ export 규칙 — 자세한 계약은 `project/PRD_CLAUDE.md` §10:
 같은 파일을 동시에 고치면 충돌한다. **작업 전 아래를 지킨다.**
 
 1. **파일 단위로 나눠 잡는다.** 한 에이전트가 한 파일을 소유한 채 작업하고, 끝나면 놓는다
-2. **`standby-data.ts`는 공유 자원이다.** 여기를 고칠 때는 짧게, 한 번에, 다른 작업과 겹치지 않게
+2. **공유 자원은 `domain/types.ts`, `domain/compiler.ts`, `domain/verifier.ts`, `WorkspaceScreen.tsx`다.** 소유자를 먼저 정한다
 3. **작업 시작 전 `git status`로 다른 에이전트의 미커밋 변경을 확인한다**
 4. **커밋은 작게.** 한 커밋 = 위 표의 한 항목
 5. **끝날 때마다 `npm run typecheck && npm run build`를 돌린다.** 깨진 채로 넘기지 않는다
 6. 스펙에 없는 기능을 임의로 추가하지 않는다. 필요하면 먼저 `project/PRD_CLAUDE.md`를 고친다
 
-### 역할 분담 제안
+### 역할 분담
 
-- **Claude Code** — 상태 모델·상호작용 로직 (재생 동기화, P1 팝업/전환 규칙)
-- **Codex** — 표현 계층 (라벨 편집, 히스토리 복원 UI, 타임라인 인터랙션)
-
-겹치는 파일은 `WorkspaceScreen.tsx`뿐이다. **이 파일은 Claude Code가 소유**하고,
-Codex는 컴포넌트 내부만 건드리는 것으로 시작한다.
+고정 역할표를 두지 않는다. 작업 시작 시 PR 단위로 파일 소유권을 선언한다.
+백엔드 contract 변경과 프런트 projection 변경을 동시에 할 때는 API response fixture를 먼저 고정한다.
 
 ---
 
 ## 7. 데모에서 절대 죽으면 안 되는 흐름
 
 ```
-E3 카드 클릭 → 팝업 (VIOLATION · 58-62s vs 66-68s · 근거 3개)
-  → 이 위치로 이동 → 큐시트 R3 환복시간 셀
-  → 58s를 70s로 수정 → 저장
-  → E3가 VIOLATION → CONSISTENT 로 뒤집힘
+세 입력 → Upstage 추출 → UNREVIEWED fact 검토·승인 → snapshot freeze
+  → reviewed 8-event graph → VR-01/02/03 finding + 근거 3종
+  → 타임라인 사건 선택 → 같은 시점 큐·무대 상태 재현
 ```
 
-**이 한 흐름이 데모의 전부다.** 어떤 리팩터링도 이걸 깨면 안 된다.
-바꿨다면 반드시 브라우저에서 직접 이 흐름을 끝까지 실행해 확인한다.
+UI를 바꿨다면 브라우저에서 같은 case ID의 이 흐름을 끝까지 실행하고, 승인 전에는 세 규칙 모두
+`INSUFFICIENT_EVIDENCE`인지 확인한다. 운영 완료라고 소개하려면 Railway/Supabase live smoke 증거도 필요하다.

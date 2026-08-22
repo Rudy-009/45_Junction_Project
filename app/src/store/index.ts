@@ -3,6 +3,7 @@ import type { CueSheet, Cue, CueEvent } from '../types/cue-sheet';
 import type { ValidationResult, Contradiction } from '../types/validation';
 import type { Revision } from '../types/ui';
 import { validateCueSheet } from '../validator';
+export { useStandbyWorkspaceStore } from './standbyWorkspaceStore';
 
 interface CueSheetStore {
   // Data
