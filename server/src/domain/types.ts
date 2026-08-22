@@ -23,6 +23,7 @@ export type SourceVersion = {
 
 export type InternalSourceVersion = SourceVersion & {
   content: unknown;
+  bytes: Uint8Array | null;
 };
 
 export type FactCandidate = {
@@ -156,9 +157,36 @@ export type WorkspaceSnapshot = {
 export type Operation = {
   operation_id: string;
   kind: "EXTRACT_SOURCE";
-  status: "SUCCEEDED";
-  result_source: "CONTROLLED_FIXTURE";
+  status: "QUEUED" | "RUNNING" | "SUCCEEDED" | "FAILED";
+  result_source: "CONTROLLED_FIXTURE" | "UPSTAGE" | "MIXED" | null;
   resource_ref: { type: "extraction_run"; id: string };
+  error: { code: string; message: string } | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ExtractionAdapter = "CONTROLLED_FIXTURE" | "UPSTAGE_AGENT";
+
+export type ProviderRunSummary = {
+  source_id: string;
+  role: SourceRole;
+  provider: "UPSTAGE" | "CONTROLLED_FIXTURE" | "STANDBY_FORM";
+  provider_job_id: string | null;
+  agent_id: string | null;
+  config_id: null;
+  adapter_version: string;
+  schema_version: "standby.extraction.v1";
+  raw_response_sha256: string;
+};
+
+export type ExtractionRunRecord = {
+  extraction_run_id: string;
+  case_id: string;
+  adapter: ExtractionAdapter;
+  result_source: "CONTROLLED_FIXTURE" | "UPSTAGE" | "MIXED";
+  source_runs: ProviderRunSummary[];
+  candidate_count: number;
+  created_at: string;
 };
 
 export type CaseRecord = {

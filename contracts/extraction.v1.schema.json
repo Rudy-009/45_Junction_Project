@@ -23,7 +23,7 @@
       "additionalProperties": false,
       "required": ["provider", "adapter_version", "schema_version", "raw_response_sha256"],
       "properties": {
-        "provider": { "enum": ["UPSTAGE", "CONTROLLED_FIXTURE"] },
+        "provider": { "enum": ["UPSTAGE", "CONTROLLED_FIXTURE", "STANDBY_FORM"] },
         "provider_job_id": { "type": ["string", "null"] },
         "agent_id": { "type": ["string", "null"] },
         "config_id": { "type": ["string", "null"] },
