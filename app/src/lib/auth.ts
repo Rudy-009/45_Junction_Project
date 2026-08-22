@@ -5,8 +5,36 @@ const publishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string |
 
 export const authConfigured = Boolean(supabaseUrl && publishableKey);
 export const supabase = supabaseUrl && publishableKey
-  ? createClient(supabaseUrl, publishableKey)
+  ? createClient(supabaseUrl, publishableKey, {
+      auth: {
+        detectSessionInUrl: false,
+        flowType: 'implicit',
+      },
+    })
   : null;
+
+export async function completeAuthCallback() {
+  if (!supabase || typeof window === 'undefined') return null;
+
+  const callback = new URLSearchParams(window.location.hash.slice(1));
+  const accessToken = callback.get('access_token');
+  const refreshToken = callback.get('refresh_token');
+
+  if (!accessToken || !refreshToken) {
+    const { data, error } = await supabase.auth.getSession();
+    if (error) throw error;
+    return data.session;
+  }
+
+  const { data, error } = await supabase.auth.setSession({
+    access_token: accessToken,
+    refresh_token: refreshToken,
+  });
+  if (error) throw error;
+
+  window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`);
+  return data.session;
+}
 
 export async function getStandbyAccessToken(): Promise<string> {
   if (import.meta.env.DEV) {
