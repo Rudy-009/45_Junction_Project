@@ -156,7 +156,6 @@ export function VerifiedWorkspace({
                     <div>
                       <CircleHelp className="mx-auto text-insufficient" size={26} />
                       <p className="mt-3 text-sm">{t('workspace.noSnapshot')}</p>
-                      <p className="mt-1 text-xs text-muted-foreground">{t('workspace.noSnapshotHelp')}</p>
                     </div>
                   </div>
                 )}

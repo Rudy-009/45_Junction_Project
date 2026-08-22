@@ -324,6 +324,7 @@ export type ScriptProjectionSegment = {
   text: string;
   speaker: string | null;
   event_id: string | null;
+  section_marker: string | null;
   locator: string;
   source_quote: string;
   provenance: {

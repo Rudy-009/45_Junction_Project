@@ -287,11 +287,12 @@ export function FactReviewPanel({
   return (
     <section className="mt-6 border border-border bg-surface">
       <div className="flex flex-wrap items-start justify-between gap-4 border-b border-border p-4">
-        <div>
-          <h2 className="text-base font-medium">{t('review.title')}</h2>
-          <p className="mt-1 text-xs text-muted-foreground">{t('review.help')}</p>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="border border-border bg-muted px-2 py-1 text-xs">
+            {mode === 'RECOMMENDED' ? t('review.recommended') : t('review.custom')}
+          </span>
           {normalizer && (
-            <details className="mt-2 text-[10px] text-muted-foreground">
+            <details className="text-[10px] text-muted-foreground">
               <summary className="mono cursor-pointer text-edited">
                 UPSTAGE STUDIO · {normalizer.authority}
               </summary>
@@ -300,9 +301,6 @@ export function FactReviewPanel({
               </div>
             </details>
           )}
-          <p className="mt-3 text-xs text-muted-foreground">
-            {t('review.mode')} : {mode === 'RECOMMENDED' ? t('review.recommended') : t('review.custom')}
-          </p>
         </div>
         <div className="flex items-center gap-3">
           {mode === 'CUSTOM' && (

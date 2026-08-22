@@ -32,9 +32,9 @@ UUID 세션으로 case 소유권을 분리한다. 이 값은 사용자 신원을
 |---|---|---|
 | 두 화면 라우팅 | **구현** | `/` 입력, `/workspace` 워크스페이스만 존재 |
 | KOR/ENG i18n | **구현** | 헤더 선택 메뉴로 M3 입력·review·workspace·2D 무대 카피를 전환하고 선택을 localStorage에 보존 |
-| UI 카피 정리 | **구현** | 설명형 슬로건·면책을 제거하고 provenance와 hash는 요청 시 펼침 |
+| UI 카피 정리 | **구현** | 설명형 슬로건·면책·중복 제목을 제거하고, 선택 화면은 선택지만 남김. 오류·제약·상태와 provenance/hash는 유지하되 provenance는 요청 시 펼침 |
 | 입력 | **구현** | MASTER_CUE XLSX/PDF/JSON 한 칸과 STAGE_SPEC 폼을 받음 |
-| Script Sidebar | **로컬 코드 구현·배포 전** | DOCX 우선·PDF 보조 → 서버 Upstage Script Extractor → `standby.script-projection.v1` 실제 대사·지문. exact event ID만 자동 연결하고 나머지는 사람이 현재 event에 연결. MASTER_CUE fallback 없음 |
+| Script Sidebar | **로컬 코드 구현·배포 전** | DOCX 우선·PDF 보조 → 서버 Upstage Script Extractor → `standby.script-projection.v1` 실제 대사·지문을 원문 순서로 모두 표시. exact event ID 또는 원문 section marker와 큐시트 장면명의 유일한 일치만 자동 연결하고 나머지는 사람이 현재 event에 연결. MASTER_CUE fallback 없음 |
 | 로컬 파일 방어 | **구현** | 확장자·signature·50 MiB·SHA-256 검사. 미리 정한 파일명 없음 |
 | JSON Editor 직행 | **구현** | STANDBY CueSheet JSON은 로컬 구조 검사를 통과하면 `/workspace` Editor로 이동. reviewed case가 없어 Storyboard Agent는 호출하지 않지만, 대본 DOCX/PDF는 case-independent Script projection endpoint로 구조화 가능. 공개 CueSheet JSON에는 duration 추정 필드 없음 |
 | 서버 JSON 전달 | **구현** | API로 받은 원본 JSON bytes/hash는 보존하고 Upstage 전송 때만 JSON Pointer 행의 임시 XLSX로 변환 |

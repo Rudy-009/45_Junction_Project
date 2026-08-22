@@ -226,12 +226,13 @@ test("DOCX projection runs through the configured Upstage Script Agent and retur
     assert.equal(projection.provenance.agent_id, "agt_script");
     assert.equal(projection.provenance.config_id, "1");
     assert.deepEqual(
-      projection.segments.map(({ sequence_index, kind, text, speaker, event_id, locator }) => ({
+      projection.segments.map(({ sequence_index, kind, text, speaker, event_id, section_marker, locator }) => ({
         sequence_index,
         kind,
         text,
         speaker,
         event_id,
+        section_marker,
         locator,
       })),
       [
@@ -241,6 +242,7 @@ test("DOCX projection runs through the configured Upstage Script Agent and retur
           text: "여기가 맞아?",
           speaker: "민",
           event_id: "evt_002",
+          section_marker: "S#1",
           locator: "p.2:l.4",
         },
         {
@@ -249,6 +251,7 @@ test("DOCX projection runs through the configured Upstage Script Agent and retur
           text: "민이 무대 중앙으로 들어온다.",
           speaker: null,
           event_id: "evt_003",
+          section_marker: "S#1",
           locator: "p.2:l.5",
         },
       ],
@@ -415,6 +418,7 @@ test("projection never creates an event link from section labels or source text"
   const [segment] = projectScriptSegments([fact]);
   assert.ok(segment);
   assert.equal(segment.event_id, null);
+  assert.equal(segment.section_marker, "E7");
 });
 
 test("projection fails closed when the live Script Agent schema has no displayable excerpt", () => {

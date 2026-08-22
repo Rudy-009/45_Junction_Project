@@ -142,7 +142,7 @@ function applyCueEdit(cueSheet: CueSheet, edit: CueCellEdit): CueSheet {
 // ─── Main Component ────────────────────────────────────────
 
 export function WorkspaceScreen() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const navigate = useNavigate();
   const verifiedWorkspace = useStandbyWorkspaceStore((state) => state.workspace);
   const verifiedCaseId = useStandbyWorkspaceStore((state) => state.caseId);
@@ -153,6 +153,8 @@ export function WorkspaceScreen() {
   const selectCue = useCueSheetStore((s) => s.selectCue);
   const selectEvent = useCueSheetStore((s) => s.selectEvent);
   const commitCueSheet = useCueSheetStore((s) => s.commitCueSheet);
+  const revisions = useCueSheetStore((s) => s.revisions);
+  const loadRevision = useCueSheetStore((s) => s.loadRevision);
   const [stageMotion, setStageMotion] = useState<StageMotion>();
   const [storyboardState, setStoryboardState] = useState<StoryboardAgentState>({ status: 'IDLE' });
   const [script, setScript] = useState<ScriptProjection | null>(null);
@@ -163,6 +165,7 @@ export function WorkspaceScreen() {
   const [cueChanges, setCueChanges] = useState<Record<string, CueEditorChange>>({});
   const [popupEventId, setPopupEventId] = useState<string | null>(null);
   const [focusTarget, setFocusTarget] = useState<{ eventId: string; requestId: number } | null>(null);
+  const [stageFirst, setStageFirst] = useState(true);
   const storyboardRequestVersion = useRef(0);
   const editorCueSheet = draftCueSheet ?? cueSheet;
 
@@ -379,6 +382,67 @@ export function WorkspaceScreen() {
     ? currentCueSheet.cues.find((cue) => cue.cue_id === popupTarget.cueId) ?? null
     : null;
 
+  const stagePanel = (
+    <>
+      <PanelHeader
+        title={t('workspace.stagePanel')}
+        right={(
+          <span className="text-[10px] text-muted-foreground">
+            {selectedCue?.scene_number}{selectedEvt ? ` · ${selectedEvt.event_id}` : ''}
+          </span>
+        )}
+      />
+      <div className="min-h-0 flex-1">
+        <StageSimulator crossover={crossoverValue} entities={entities} motion={stageMotion} />
+      </div>
+    </>
+  );
+
+  const cueSheetPanel = (
+    <CueSheetEditorPanel
+      cueSheet={currentCueSheet}
+      contradictions={validationResult?.contradictions ?? []}
+      selectedEventId={selectedEventId}
+      focusTarget={focusTarget}
+      editedKeys={new Set(Object.keys(cueChanges))}
+      changes={Object.values(cueChanges)}
+      revisions={revisions}
+      onSelectEvent={handleSelectEvent}
+      onEdit={editCueCell}
+      onDiscardAll={discardCueChanges}
+      onSave={saveCueChanges}
+      onLoadRevision={loadRevision}
+    />
+  );
+
+  const popupOverlay = popupTarget && popupCue ? (
+    <>
+      <button
+        type="button"
+        aria-label="Close event popup"
+        className="absolute inset-0 z-30 bg-black/50"
+        onClick={() => setPopupEventId(null)}
+      />
+      <CueEventPopup
+        cue={popupCue}
+        event={popupTarget.event}
+        cueSheet={currentCueSheet}
+        contradictions={validationResult?.contradictions.filter(
+          (item) => item.event_id === popupTarget.event.event_id,
+        ) ?? []}
+        onClose={() => setPopupEventId(null)}
+        onGoto={() => {
+          handleSelectEvent(popupTarget.cueId, popupTarget.event.event_id);
+          setFocusTarget({
+            eventId: popupTarget.event.event_id,
+            requestId: Date.now(),
+          });
+          setPopupEventId(null);
+        }}
+      />
+    </>
+  ) : null;
+
   return (
     <div className="flex h-[calc(100vh-56px)] flex-col">
       {/* Top bar */}
@@ -386,8 +450,16 @@ export function WorkspaceScreen() {
         <span className="mono text-[11px] text-muted-foreground">
           {currentCueSheet.metadata.title}
         </span>
-        {validationResult && (
-          <div className="flex items-center gap-3 text-[11px]">
+        <div className="flex items-center gap-3 text-[11px]">
+          <button
+            type="button"
+            onClick={() => setStageFirst((current) => !current)}
+            className="border border-border px-2 py-0.5 hover:bg-muted"
+          >
+            {locale === 'ko' ? '패널 전환' : 'Swap panels'}
+          </button>
+          {validationResult && (
+            <>
             {validationResult.errors > 0 && (
               <span className="mono border border-violation bg-violation-bg px-2 py-0.5 text-violation">
                 ERROR {validationResult.errors}
@@ -401,8 +473,9 @@ export function WorkspaceScreen() {
             {validationResult.total_contradictions === 0 && (
               <span className="mono border border-consistent/50 px-2 py-0.5 text-consistent">OK</span>
             )}
-          </div>
-        )}
+            </>
+          )}
+        </div>
       </div>
 
       <div className="flex min-h-0 flex-1">
@@ -424,59 +497,12 @@ export function WorkspaceScreen() {
         <div className="flex min-w-0 flex-1 flex-col">
           <div className="flex min-h-0 flex-1 flex-col">
             <div className="flex min-h-0 flex-1 basis-0 flex-col border-b border-border">
-              <PanelHeader
-                title={t('workspace.stagePanel')}
-                right={
-                  <span className="mono text-[10px] text-muted-foreground">
-                    {selectedCue?.scene_number}{selectedEvt ? ` · ${selectedEvt.event_id}` : ''}
-                  </span>
-                }
-              />
-              <div className="min-h-0 flex-1">
-                <StageSimulator crossover={crossoverValue} entities={entities} motion={stageMotion} />
-              </div>
+              {stageFirst ? stagePanel : cueSheetPanel}
             </div>
 
             <div className="relative flex min-h-0 flex-1 basis-0 flex-col border-b border-border">
-              <CueSheetEditorPanel
-                cueSheet={currentCueSheet}
-                contradictions={validationResult?.contradictions ?? []}
-                selectedEventId={selectedEventId}
-                focusTarget={focusTarget}
-                editedKeys={new Set(Object.keys(cueChanges))}
-                changes={Object.values(cueChanges)}
-                onSelectEvent={handleSelectEvent}
-                onEdit={editCueCell}
-                onDiscardAll={discardCueChanges}
-                onSave={saveCueChanges}
-              />
-              {popupTarget && popupCue && (
-                <>
-                  <button
-                    type="button"
-                    aria-label="Close event popup"
-                    className="absolute inset-0 z-30 bg-black/50"
-                    onClick={() => setPopupEventId(null)}
-                  />
-                  <CueEventPopup
-                    cue={popupCue}
-                    event={popupTarget.event}
-                    cueSheet={currentCueSheet}
-                    contradictions={validationResult?.contradictions.filter(
-                      (item) => item.event_id === popupTarget.event.event_id,
-                    ) ?? []}
-                    onClose={() => setPopupEventId(null)}
-                    onGoto={() => {
-                      handleSelectEvent(popupTarget.cueId, popupTarget.event.event_id);
-                      setFocusTarget({
-                        eventId: popupTarget.event.event_id,
-                        requestId: Date.now(),
-                      });
-                      setPopupEventId(null);
-                    }}
-                  />
-                </>
-              )}
+              {stageFirst ? cueSheetPanel : stagePanel}
+              {popupOverlay}
             </div>
           </div>
 
@@ -525,7 +551,7 @@ function Timeline({
         <span className="text-[10px] tracking-[0.14em] text-muted-foreground uppercase">
           {t('workspace.timelinePanel')}
         </span>
-        <span className="mono text-[10px] text-muted-foreground">{events.length} EVENTS</span>
+        <span className="text-[10px] text-muted-foreground">{events.length} EVENTS</span>
       </div>
 
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-x-auto overflow-y-hidden">
@@ -535,6 +561,7 @@ function Timeline({
             const errorCount = eventContradictions.filter((item) => item.severity === 'ERROR').length;
             const warningCount = eventContradictions.filter((item) => item.severity === 'WARNING').length;
             const selected = event.event_id === selectedEventId;
+            const sceneBoundary = index > 0 && events[index - 1]?.cue.cue_id !== cue.cue_id;
             return (
               <button
                 key={`${cue.cue_id}:${event.event_id}`}
@@ -543,6 +570,7 @@ function Timeline({
                 onClick={() => onSelectEvent(cue.cue_id, event.event_id)}
                 className={cn(
                   'timeline-event-cell relative flex w-48 shrink-0 flex-col justify-between overflow-hidden border p-2 text-left transition-[border-color,background-color,color] duration-150',
+                  sceneBoundary && 'ml-3 border-l-2 border-l-border-strong',
                   selected
                     ? 'is-selected border-foreground bg-foreground/10 outline outline-1 outline-foreground'
                     : errorCount > 0
@@ -555,20 +583,20 @@ function Timeline({
                 <span className="timeline-playhead" aria-hidden="true" />
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <span className="mono text-[9px] text-muted-foreground">{String(index + 1).padStart(2, '0')} · {cue.scene_number}</span>
-                    <p className="mono mt-1 truncate text-[10px] font-semibold">{event.event_id}</p>
+                    <span className="text-[9px] text-muted-foreground">{String(index + 1).padStart(2, '0')} · {cue.scene_number}</span>
+                    <p className="mt-1 truncate text-[10px] font-semibold">{event.event_id}</p>
                   </div>
-                  <span className="mono border border-border px-1 py-0.5 text-[8px] text-muted-foreground">{event.trigger.type}</span>
+                  <span className="border border-border px-1 py-0.5 text-[8px] text-muted-foreground">{event.trigger.type}</span>
                 </div>
                 <p className="mt-2 line-clamp-2 text-[10px] leading-4 text-muted-foreground">
                   {event.trigger.description || '—'}
                 </p>
                 <div className="mt-2 flex items-end justify-between gap-2">
-                  <span className="mono text-[9px] text-muted-foreground">{event.actions.length} ACTIONS</span>
+                  <span className="text-[9px] text-muted-foreground">{event.actions.length} ACTIONS</span>
                   <div className="flex flex-col items-end gap-1">
-                    {errorCount > 0 && <span className="mono text-[8px] text-violation">ERROR {errorCount}</span>}
-                    {warningCount > 0 && <span className="mono text-[8px] text-review">ACTION REQUIRED {warningCount}</span>}
-                    {errorCount === 0 && warningCount === 0 && <span className="mono text-[8px] text-consistent">OK</span>}
+                    {errorCount > 0 && <span className="text-[8px] text-violation">ERROR {errorCount}</span>}
+                    {warningCount > 0 && <span className="text-[8px] text-review">ACTION REQUIRED {warningCount}</span>}
+                    {errorCount === 0 && warningCount === 0 && <span className="text-[8px] text-consistent">OK</span>}
                   </div>
                 </div>
               </button>

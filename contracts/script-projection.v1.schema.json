@@ -64,6 +64,7 @@
           "text",
           "speaker",
           "event_id",
+          "section_marker",
           "locator",
           "source_quote",
           "provenance"
@@ -75,6 +76,7 @@
           "text": { "type": "string", "minLength": 1 },
           "speaker": { "type": ["string", "null"] },
           "event_id": { "type": ["string", "null"] },
+          "section_marker": { "type": ["string", "null"] },
           "locator": { "type": "string", "minLength": 1 },
           "source_quote": { "type": "string", "minLength": 1 },
           "provenance": {

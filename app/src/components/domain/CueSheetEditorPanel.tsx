@@ -9,6 +9,7 @@ import type {
   TriggerType,
 } from '@/types/cue-sheet';
 import type { Contradiction } from '@/types/validation';
+import type { Revision } from '@/types/ui';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
 
@@ -90,6 +91,26 @@ function statusFor(contradictions: Contradiction[]) {
   };
 }
 
+function aiCurationFor(contradictions: Contradiction[], locale: 'ko' | 'en'): string {
+  const suggestions = contradictions.map((item) => {
+    if (locale === 'en') {
+      if (item.rule === 'duplicate_enter') return 'Confirm whether the previous entrance should be removed.';
+      if (item.rule === 'no_backstage_crossover') return 'Align the entrance side or confirm an approved crossover route.';
+      if (item.rule === 'prop_location_contradiction') return 'Assign a crew handoff or align the prop entrance side.';
+      if (item.rule === 'prop_already_on_stage') return 'Remove the duplicate prop entry or confirm the previous removal.';
+      if (item.rule === 'prop_not_on_stage') return 'Add the missing prop preset or confirm its current location.';
+      return 'Confirm the matching entrance event before this exit.';
+    }
+    if (item.rule === 'duplicate_enter') return '이전 등장 큐를 유지할지 확인하세요.';
+    if (item.rule === 'no_backstage_crossover') return '등장 방향을 맞추거나 승인된 백스테이지 통로를 확인하세요.';
+    if (item.rule === 'prop_location_contradiction') return '소품 전달 담당자를 지정하거나 반입 방향을 맞추세요.';
+    if (item.rule === 'prop_already_on_stage') return '중복 반입을 제거하거나 이전 반출 여부를 확인하세요.';
+    if (item.rule === 'prop_not_on_stage') return '누락된 소품 프리셋을 추가하거나 현재 위치를 확인하세요.';
+    return '이 퇴장 전에 대응하는 등장 큐가 있는지 확인하세요.';
+  });
+  return [...new Set(suggestions)].join(' ');
+}
+
 function entityValue(action: Action | null): string {
   if (!action) return '';
   if (action.type === 'prop_in' || action.type === 'prop_out') return action.prop_id ?? '';
@@ -153,10 +174,12 @@ export function CueSheetEditorPanel({
   focusTarget,
   editedKeys,
   changes,
+  revisions,
   onSelectEvent,
   onEdit,
   onDiscardAll,
   onSave,
+  onLoadRevision,
 }: {
   cueSheet: CueSheet;
   contradictions: Contradiction[];
@@ -164,21 +187,28 @@ export function CueSheetEditorPanel({
   focusTarget: FocusTarget;
   editedKeys: Set<string>;
   changes: CueEditorChange[];
+  revisions: Revision[];
   onSelectEvent: (cueId: string, eventId: string) => void;
   onEdit: (edit: CueCellEdit) => void;
   onDiscardAll: () => void;
   onSave: () => void;
+  onLoadRevision: (revisionId: string) => void;
 }) {
   const { locale } = useI18n();
   const rows = useMemo(() => eventRows(cueSheet), [cueSheet]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [editing, setEditing] = useState<EditingCell | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [previewRevisionId, setPreviewRevisionId] = useState<string | null>(null);
 
   const copy = locale === 'ko' ? {
     title: 'CUE SHEET',
     pending: `미반영 변경 ${changes.length}건`,
     discard: '모든 변경 취소',
     save: '저장',
+    history: '히스토리',
+    historyEmpty: '저장된 revision이 없습니다.',
+    changes: '변경',
     status: '상태',
     event: 'EVENT',
     scene: '씬',
@@ -189,12 +219,16 @@ export function CueSheetEditorPanel({
     entity: '인물 / 소품',
     direction: '방향',
     notes: '비고',
+    aiCuration: 'AI 큐레이션 수정안',
     empty: '액션 없음',
   } : {
     title: 'CUE SHEET',
     pending: `${changes.length} UNSAVED`,
     discard: 'Discard all',
     save: 'Save',
+    history: 'History',
+    historyEmpty: 'No saved revisions.',
+    changes: 'changes',
     status: 'Status',
     event: 'EVENT',
     scene: 'Scene',
@@ -205,6 +239,7 @@ export function CueSheetEditorPanel({
     entity: 'Person / prop',
     direction: 'Direction',
     notes: 'Notes',
+    aiCuration: 'AI curated edit',
     empty: 'No action',
   };
 
@@ -317,7 +352,7 @@ export function CueSheetEditorPanel({
   };
 
   return (
-    <section className="flex h-full flex-col bg-surface" aria-label={copy.title}>
+    <section className="relative flex h-full flex-col bg-surface" aria-label={copy.title}>
       <header className="flex min-h-9 shrink-0 items-center justify-between gap-3 border-b border-border px-3 py-1">
         <span className="mono text-[10px] tracking-[0.12em] text-muted-foreground">{copy.title}</span>
         <div className="flex flex-wrap items-center justify-end gap-2">
@@ -335,8 +370,54 @@ export function CueSheetEditorPanel({
           <button type="button" disabled={changes.length === 0} onClick={onSave} className="border border-foreground bg-foreground px-3 py-1 text-[10px] text-background hover:bg-muted-foreground disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground">
             {copy.save}
           </button>
+          <button
+            type="button"
+            aria-expanded={historyOpen}
+            onClick={() => {
+              setHistoryOpen((open) => !open);
+              setPreviewRevisionId(null);
+            }}
+            className="border border-border px-2 py-1 text-[10px] hover:bg-muted"
+          >
+            {copy.history} {revisions.length}
+          </button>
         </div>
       </header>
+
+      {historyOpen && (
+        <div className="absolute top-9 right-3 z-40 grid w-[560px] max-w-[calc(100%-24px)] grid-cols-2 border border-border-strong bg-elevated">
+          <div className="max-h-56 overflow-y-auto border-r border-border p-2">
+            {revisions.map((revision) => (
+              <button
+                key={revision.id}
+                type="button"
+                onMouseEnter={() => setPreviewRevisionId(revision.id)}
+                onFocus={() => setPreviewRevisionId(revision.id)}
+                onClick={() => {
+                  onLoadRevision(revision.id);
+                  setHistoryOpen(false);
+                }}
+                className="mb-1 block w-full border border-border bg-background p-2 text-left text-[10px] hover:border-foreground"
+              >
+                <span className="font-semibold">{revision.savedAt}</span>
+                <span className="ml-2 text-muted-foreground">{revision.changes.length} {copy.changes}</span>
+                <span className="mt-1 block truncate text-muted-foreground">{revision.author}</span>
+              </button>
+            ))}
+            {revisions.length === 0 && (
+              <p className="p-2 text-[10px] text-muted-foreground">{copy.historyEmpty}</p>
+            )}
+          </div>
+          <div className="max-h-56 overflow-y-auto p-2">
+            {(revisions.find((revision) => revision.id === previewRevisionId)?.changes ?? []).map((change) => (
+              <div key={`${change.rowId}:${change.column}`} className="mb-1 border border-border bg-background p-2 text-[10px]">
+                <p className="font-semibold">{change.rowId} · {change.column}</p>
+                <p className="mt-1 break-words text-muted-foreground">{change.from || '—'} → {change.to || '—'}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-auto">
         <table className="w-max min-w-full border-collapse text-left">
@@ -353,6 +434,7 @@ export function CueSheetEditorPanel({
                 [copy.entity, 'w-44'],
                 [copy.direction, 'w-32'],
                 [copy.notes, 'w-72'],
+                [copy.aiCuration, 'w-80'],
               ].map(([label, width], index) => (
                 <th key={label} className={cn(
                   'mono border border-border bg-muted px-2 py-1.5 text-[10px] font-normal text-muted-foreground',
@@ -369,6 +451,7 @@ export function CueSheetEditorPanel({
               const selected = row.event.event_id === selectedEventId;
               const focused = row.event.event_id === focusTarget?.eventId;
               const action = row.action;
+              const aiCuration = aiCurationFor(rowContradictions, locale);
               const entityOptions = actionEntityOptions(cueSheet, action);
               const routeOptions = [
                 { value: 'stage_left>stage_right', label: directionLabel('stage_left>stage_right', locale) },
@@ -441,6 +524,16 @@ export function CueSheetEditorPanel({
                     disabled: !action || action.type === 'costume_change',
                   })}
                   {cell({ row, field: 'event_notes', value: row.event.notes ?? '', widthClass: 'w-72' })}
+                  <td className="w-80 border border-border bg-edited-bg/20 px-2 py-1.5 align-top">
+                    {aiCuration ? (
+                      <>
+                        <span className="border border-edited/60 px-1.5 py-0.5 text-[8px] text-edited">NON_AUTHORITATIVE</span>
+                        <p className="mt-2 text-xs leading-4">{aiCuration}</p>
+                      </>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">—</span>
+                    )}
+                  </td>
                 </tr>
               );
             })}

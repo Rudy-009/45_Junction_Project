@@ -36,7 +36,7 @@ function actionLabel(action: Action, cueSheet: CueSheet, locale: 'ko' | 'en') {
 function StatusToken({ severity, count }: { severity: 'ERROR' | 'WARNING'; count: number }) {
   return (
     <span className={cn(
-      'mono border px-2 py-1 text-[10px]',
+      'border px-2 py-1 text-[10px]',
       severity === 'ERROR'
         ? 'border-violation bg-violation-bg text-violation'
         : 'border-review bg-review-bg text-review',
@@ -69,7 +69,6 @@ export function CueEventPopup({
     trigger: '트리거',
     actions: '액션',
     findings: '확인 항목',
-    clean: '이 Event에서 발견된 오류나 확인 항목이 없습니다.',
     noAction: '기록된 액션 없음',
     goto: '이 Event로 이동',
   } : {
@@ -77,7 +76,6 @@ export function CueEventPopup({
     trigger: 'Trigger',
     actions: 'Actions',
     findings: 'Findings',
-    clean: 'No errors or action items were found for this event.',
     noAction: 'No recorded action',
     goto: 'Go to this Event',
   };
@@ -86,9 +84,9 @@ export function CueEventPopup({
     <div className="slide-up-panel absolute inset-0 z-40 flex flex-col border-t border-border-strong bg-elevated">
       <header className="flex min-h-10 shrink-0 items-center justify-between border-b border-border px-3 py-1.5">
         <div className="min-w-0">
-          <span className="mono text-[10px] tracking-[0.12em] text-muted-foreground">{copy.title}</span>
+          <span className="text-[10px] tracking-[0.12em] text-muted-foreground">{copy.title}</span>
           <p className="mt-0.5 truncate text-xs">
-            <span className="mono font-semibold">{event.event_id}</span>
+            <span className="font-semibold">{event.event_id}</span>
             <span className="mx-2 text-muted-foreground">·</span>
             {cue.scene_number}
           </p>
@@ -103,24 +101,24 @@ export function CueEventPopup({
           {errors.length > 0 && <StatusToken severity="ERROR" count={errors.length} />}
           {warnings.length > 0 && <StatusToken severity="WARNING" count={warnings.length} />}
           {contradictions.length === 0 && (
-            <span className="mono border border-consistent/50 px-2 py-1 text-[10px] text-consistent">OK</span>
+            <span className="border border-consistent/50 px-2 py-1 text-[10px] text-consistent">OK</span>
           )}
-          <span className="mono border border-border px-2 py-1 text-[10px] text-muted-foreground">{event.trigger.type}</span>
+          <span className="border border-border px-2 py-1 text-[10px] text-muted-foreground">{event.trigger.type}</span>
         </div>
 
         <section className="mt-4 border border-border bg-background p-3">
-          <h3 className="mono text-[10px] text-muted-foreground">{copy.trigger}</h3>
+          <h3 className="text-[10px] text-muted-foreground">{copy.trigger}</h3>
           <p className="mt-2 text-sm leading-5">{event.trigger.description || '—'}</p>
         </section>
 
         <section className="mt-3">
-          <h3 className="mono text-[10px] text-muted-foreground">{copy.actions} · {event.actions.length}</h3>
+          <h3 className="text-[10px] text-muted-foreground">{copy.actions} · {event.actions.length}</h3>
           <div className="mt-2 grid gap-2 sm:grid-cols-2">
             {event.actions.map((action, index) => (
               <article key={`${action.type}-${index}`} className="border border-border bg-background p-2.5">
                 <div className="flex items-center justify-between gap-3">
-                  <span className="mono text-[9px] text-muted-foreground">{String(index + 1).padStart(2, '0')}</span>
-                  <span className="mono text-[9px]">{action.type}</span>
+                  <span className="text-[9px] text-muted-foreground">{String(index + 1).padStart(2, '0')}</span>
+                  <span className="text-[9px]">{action.type}</span>
                 </div>
                 <p className="mt-2 text-xs leading-5">{actionLabel(action, cueSheet, locale)}</p>
               </article>
@@ -132,7 +130,7 @@ export function CueEventPopup({
         </section>
 
         <section className="mt-4">
-          <h3 className="mono text-[10px] text-muted-foreground">{copy.findings} · {contradictions.length}</h3>
+          <h3 className="text-[10px] text-muted-foreground">{copy.findings} · {contradictions.length}</h3>
           <div className="mt-2 grid gap-2">
             {contradictions.map((finding, index) => (
               <article key={`${finding.rule}-${index}`} className={cn(
@@ -142,17 +140,17 @@ export function CueEventPopup({
                   : 'border-review bg-review-bg',
               )}>
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className={cn('mono text-[10px]', finding.severity === 'ERROR' ? 'text-violation' : 'text-review')}>
+                  <span className={cn('text-[10px]', finding.severity === 'ERROR' ? 'text-violation' : 'text-review')}>
                     {finding.severity === 'ERROR' ? 'ERROR' : 'ACTION REQUIRED'}
                   </span>
-                  <span className="mono text-[10px] text-muted-foreground">{finding.rule}</span>
+                  <span className="text-[10px] text-muted-foreground">{finding.rule}</span>
                 </div>
                 <p className="mt-2 text-xs leading-5">{finding.description}</p>
                 {Object.keys(finding.details).length > 0 && (
                   <dl className="mt-3 grid grid-cols-2 gap-px border border-border bg-border text-[10px]">
                     {Object.entries(finding.details).map(([key, value]) => (
                       <div key={key} className="contents">
-                        <dt className="mono bg-muted px-2 py-1 text-muted-foreground">{key}</dt>
+                        <dt className="bg-muted px-2 py-1 text-muted-foreground">{key}</dt>
                         <dd className="break-all bg-background px-2 py-1">{String(value)}</dd>
                       </div>
                     ))}
@@ -160,9 +158,6 @@ export function CueEventPopup({
                 )}
               </article>
             ))}
-            {contradictions.length === 0 && (
-              <p className="border border-consistent/40 bg-consistent-bg p-3 text-xs text-consistent">{copy.clean}</p>
-            )}
           </div>
         </section>
       </div>
