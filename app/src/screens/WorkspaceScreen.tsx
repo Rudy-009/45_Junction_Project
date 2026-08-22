@@ -535,6 +535,7 @@ function Timeline({
             const errorCount = eventContradictions.filter((item) => item.severity === 'ERROR').length;
             const warningCount = eventContradictions.filter((item) => item.severity === 'WARNING').length;
             const selected = event.event_id === selectedEventId;
+            const sceneBoundary = index > 0 && events[index - 1]?.cue.cue_id !== cue.cue_id;
             return (
               <button
                 key={`${cue.cue_id}:${event.event_id}`}
@@ -543,6 +544,7 @@ function Timeline({
                 onClick={() => onSelectEvent(cue.cue_id, event.event_id)}
                 className={cn(
                   'timeline-event-cell relative flex w-48 shrink-0 flex-col justify-between overflow-hidden border p-2 text-left transition-[border-color,background-color,color] duration-150',
+                  sceneBoundary && 'ml-3 border-l-2 border-l-border-strong',
                   selected
                     ? 'is-selected border-foreground bg-foreground/10 outline outline-1 outline-foreground'
                     : errorCount > 0
