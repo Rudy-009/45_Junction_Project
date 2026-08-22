@@ -147,7 +147,7 @@ export function WorkspaceScreen() {
         {/* Event detail */}
         <div className="flex min-h-0 flex-1 flex-col border-b border-border">
           <PanelHeader
-            title={selectedCue ? `${selectedCue.scene_number} · ${selectedCue.scene_type === 'number' ? '넘버' : '씬'}` : '씬 선택'}
+            title={selectedCue ? `${selectedCue.scene_number} · ${selectedCue.scene_type === 'number' ? '넘버' : selectedCue.scene_type === 'dark' ? '암전' : '씬'}` : '씬 선택'}
             right={
               selectedCue?.notes ? (
                 <span className="max-w-[400px] truncate text-[10px] text-muted-foreground">
@@ -476,7 +476,7 @@ function CueOverview({
       <div className="flex items-center gap-3">
         <h2 className="mono text-base font-medium">{cue.scene_number}</h2>
         <span className="mono border border-border px-2 py-[1px] text-[10px] text-muted-foreground">
-          {cue.scene_type === 'number' ? '넘버' : '씬'}
+          {cue.scene_type === 'number' ? '넘버' : cue.scene_type === 'dark' ? '암전' : '씬'}
         </span>
         <span className="mono text-[11px] text-muted-foreground">
           {cue.events.length} events
