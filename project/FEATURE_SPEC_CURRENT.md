@@ -38,8 +38,8 @@ UUID 세션으로 case 소유권을 분리한다. 이 값은 사용자 신원을
 | 입력 | **구현** | MASTER_CUE XLSX/PDF/JSON 한 칸과 STAGE_SPEC 폼을 받음 |
 | Script Sidebar | **case 통합 구현** | DOCX 우선·PDF 보조 파일을 현재 case의 `SCRIPT` source로 업로드한다. Upstage projection의 raw facts는 같은 review queue에 `UNREVIEWED`로 합류하고 기존 snapshot은 무효화된다. 재검토·freeze 후 세 source digest가 workspace에 반영된다 |
 | 로컬 파일 방어 | **구현** | 확장자·signature·50 MiB·SHA-256 검사. 미리 정한 파일명 없음 |
-| JSON 입력 | **운영 경로 통합** | STANDBY CueSheet JSON도 로컬 구조 검사 후 XLSX/PDF와 동일하게 case 업로드·Upstage 추출·fact review를 거친다. 공개 CueSheet JSON에는 duration 추정 필드 없음 |
-| 서버 JSON 전달 | **구현** | API로 받은 원본 JSON bytes/hash는 보존하고 Upstage 전송 때만 JSON Pointer 행의 임시 XLSX로 변환 |
+| RAW JSON 입력 | **직접 Editor 경로 구현** | MASTER_CUE와 별도인 `RAW JSON` 섹션에서 STANDBY CueSheet JSON을 받는다. 브라우저 strict 구조 검사를 통과하면 Upstage를 호출하지 않고 즉시 로컬 CueSheet Editor와 결정론적 validator로 연다. 공개 CueSheet JSON에는 duration 추정 필드 없음 |
+| 비정형 JSON 전달 | **서버 호환 유지** | 서버 API로 직접 들어오는 비정형 JSON source는 원본 bytes/hash를 보존하고, Upstage가 필요한 경로에서만 JSON Pointer 행의 임시 XLSX로 변환한다. 입력 화면이 허용하는 STANDBY CueSheet JSON에는 이 경로를 쓰지 않는다 |
 | 무대 사양 | **구현** | crossover, 환복 시간, route time, route ID/capacity, 인물·소품 초기 배치 |
 | Upstage 추출 | **구현** | Agent 결과를 모두 UNREVIEWED/NON_AUTHORITATIVE로 격리한다. Sidebar 대본도 현재 case의 source·review queue·snapshot으로 수렴하며, 읽기 전용 projection은 같은 case ID를 명시한다 |
 | Stage Spec Extractor | **Studio 설정·서버 배선 구현 / 개별 live smoke 성공** | Config #1 `agt_PxbxmhXXT8iqdzs5WmHfUz`. locator·quote가 붙은 `stage_facts` 후보를 만들되 전부 UNREVIEWED |
@@ -91,9 +91,10 @@ MASTER_CUE XLSX/PDF/JSON 파일 선택
 파일을 다시 선택하면 이전 case·fact review·workspace는 즉시 초기화된다. 원문 role의 `REVIEWED`는
 사람이 그 입력 파일을 선택했다는 의미이고, 추출 fact의 `REVIEWED`와 구분된다.
 
-JSON도 Upstage 추출과 fact review를 거쳐 서버 `VerifiedWorkspace`로 수렴한다. 씬 길이와 환복 소요
-시간은 JSON에서 추정하지 않으며, 시간 판정은 사람이 검토한 명시적 `min_ms`·`max_ms` 근거가 있을 때만
-verifier가 수행한다. 특정 파일 hash에 따른 촬영용 자동 우회는 운영 코드에 존재하지 않는다.
+별도 `RAW JSON` 섹션의 STANDBY CueSheet JSON은 이미 canonical event/action 구조이므로 Upstage 재추출 없이 로컬 Editor로 바로 연다.
+이 직접 경로의 판정은 현재 로컬 결정론적 validator이며 서버 `VerifiedWorkspace`의 evidence/fact snapshot과는
+별도다. 씬 길이와 환복 소요 시간은 JSON에서 추정하지 않는다. 특정 파일 hash에 따른 촬영용 자동 우회는
+운영 코드에 존재하지 않는다.
 
 ---
 

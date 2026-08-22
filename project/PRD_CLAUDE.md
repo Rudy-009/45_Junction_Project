@@ -68,6 +68,9 @@ workspace의 대본 보기는 패널 안에서 DOCX(우선) 또는 PDF(보조)�
 - 부서별 큐가 한 표에 모인 마스터
 - 대사 트리거, 환복시간, 소품 반출입, 상하수 이동
 - 화자는 **배우명**으로 기재됨
+- MASTER_CUE의 XLSX·PDF·JSON은 Upstage가 구조화한 뒤 fact review를 거친다
+- 별도 `RAW JSON` 입력은 이미 STANDBY CueSheet 계약을 만족하는 테스트·연동용 데이터만 받으며,
+  strict validation 후 즉시 Editor로 열고 동일 데이터를 Agent로 재추출하지 않는다
 
 ### 2-3. 무대 사양 (STAGE_SPEC) — MVP 최소 요구 ★
 
