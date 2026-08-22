@@ -1,5 +1,8 @@
 # STANDBY — 데모 비디오 촬영 명세
 
+> 보존 기록: 이 문서는 이미 끝난 촬영의 재현 명세다. R0 이후 production에는 아래 SHA fast path와
+> JSON Editor 직행이 존재하지 않는다. 새 데모는 XLSX/PDF/JSON 공통 서버 review 경로를 사용한다.
+
 | 항목 | 값 |
 |---|---|
 | 목표 길이 | 75초, 최대 90초 |

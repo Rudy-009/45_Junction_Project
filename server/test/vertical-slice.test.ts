@@ -321,6 +321,30 @@ test("unreviewed facts abstain, reviewed facts violate, and a 70s revision clear
   assert.equal(revision.base_source_sha256, originalHash);
   assert.notEqual(revision.revision_id, violation.cue_revision_id);
 
+  const revisionListResponse = await app.inject({
+    method: "GET",
+    url: `/v1/cases/${caseId}/cue-revisions`,
+    headers: headers(),
+  });
+  assert.equal(revisionListResponse.statusCode, 200, revisionListResponse.body);
+  const revisionItems = (revisionListResponse.json() as { items: Array<{ revision_id: string; rows?: unknown }> }).items;
+  assert.equal(revisionItems.length, 2);
+  assert.equal(revisionItems.some((item) => "rows" in item), false);
+
+  const revisionDetailResponse = await app.inject({
+    method: "GET",
+    url: `/v1/cases/${caseId}/cue-revisions/${revision.revision_id}`,
+    headers: headers(),
+  });
+  assert.equal(revisionDetailResponse.statusCode, 200, revisionDetailResponse.body);
+  const revisionDetail = revisionDetailResponse.json() as { rows: Array<Record<string, string>> };
+  const expectedPatch = revisionPayload.patches[0];
+  assert.ok(expectedPatch);
+  assert.equal(
+    revisionDetail.rows.find((row) => row.id === expectedPatch.row_id)?.[expectedPatch.column],
+    expectedPatch.to,
+  );
+
   const repeatedRevision = await app.inject({
     method: "POST",
     url: `/v1/cases/${caseId}/cue-revisions`,

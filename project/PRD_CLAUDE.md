@@ -293,9 +293,9 @@ Storyboard는 timeline 클릭마다 긴 Upstage job을 동기 대기하지 않�
 인접 pair 사전 생성이 아니라 **선택 시 lazy 실행**이며, 늦게 도착한 이전 event 응답은 현재 선택을 덮을 수 없다. 화면에 보이는 `beats`와
 `missing_evidence`는 읽기 전용 보조 결과이며, 정적 snapshot과 deterministic verdict가 언제나 정본이다.
 
-구조화 JSON Editor 직행은 계속 즉시 열린다. 이 로컬 경로는 reviewed case가 없어 Storyboard Agent를
-호출하지 않지만, 대본 DOCX/PDF는 case-independent Script projection endpoint로 구조화할 수 있다.
-정적 snapshot·인접 semantic motion은 그대로 제공한다.
+구조화 JSON도 XLSX/PDF와 같은 case upload·review 경로로 수렴한다. 대본 DOCX/PDF는 workspace의
+Sidebar에서 현재 case의 `SCRIPT` source로 연결하며, 새 raw fact는 `UNREVIEWED`로 review queue에 합류한다.
+새 source digest로 snapshot을 다시 freeze하기 전에는 기존 verified workspace를 계속 사용하지 않는다.
 향후 preview Agent를 붙이더라도 `PREVIEW / NON_AUTHORITATIVE`이며 verified workspace나 세 근거를 갖춘 finding으로 승격하지 않는다.
 공개 CueSheet JSON에는 `estimated_duration_sec`와 `costume_change_duration_sec`를 두지 않는다. 시간 관련
 verdict는 Agent가 장면 길이를 추정해서 만드는 대신, reviewed fact의 명시적 min/max 근거가 있을 때만 계산한다.
@@ -310,6 +310,8 @@ loading scene을 사용한다. 이 loop는 실제 진행률이 아니며 상태�
 - 워크스페이스 내부 좌측에서 접고 펼치는 보조 패널이다. 전역 내비게이션이나 세 번째 화면이 아니다
 - 입력 화면에 SCRIPT 카드를 추가하지 않는다. 패널에서 DOCX(우선) 또는 PDF(보조)를 연결하고, 서버가
   Upstage Script Extractor 결과를 strict `standby.script-projection.v1`으로 투영한다
+- projection과 raw fact는 현재 case ID에 귀속된다. 새 대본 연결은 기존 snapshot을 무효화하고 Fact Review로
+  돌아가며, 사람이 새 snapshot을 freeze한 뒤에만 SCRIPT가 세 근거 중 하나로 사용된다
 - exact `event_id`가 있거나, Script Extractor가 원문에서 보존한 `section_marker`가 큐시트의 장면명과
   유일하게 일치하는 실제 `DIALOGUE`·`STAGE_DIRECTION`만 자동으로 event별 발췌에 묶는다.
   근거가 없거나 둘 이상과 일치하는 구간은 사람이 선택한 현재 event에 연결한다
@@ -347,6 +349,7 @@ Git 비유가 정확하다.
 3. 원본 파일 hash는 어떤 경우에도 변하지 않는다. revision은 `parent_revision_id`로 연결된다
 4. `CONSISTENT`는 현재 revision에서 blocker가 0일 때만 켜진다
 5. 히스토리 항목은 저장 시각·변경 셀 수·저장자를 갖고, 호버 시 **변경 셀만** 미리 보여준다
+6. 이벤트 행 추가·삭제도 cell edit과 같은 append-only revision으로 기록한다. 저장 전에는 verdict를 바꾸지 않는다
 
 ### 왜 바꿨는가
 
@@ -441,9 +444,18 @@ XLSX in  →  Parse · Extract  →  검증 · 편집  →  XLSX out
 |---|---|
 | **원본 보존** | 업로드된 원본 파일과 hash는 변하지 않는다. export는 항상 **새 파일** |
 | **최소 변경** | 사람이 고친 셀만 바뀐다. 열 구성·시트 이름·서식을 임의로 재배치하지 않는다 |
+| **공백 구조 보존** | 원본의 빈 행·빈 열·셀 간 간격을 유지한다. 이벤트 행 추가·삭제가 아닌 공백 정리나 압축은 하지 않는다 |
+| **이벤트 행 변경** | 추가·삭제는 revision의 명시적 row operation으로 기록하고 export에만 반영한다 |
 | **변경 가시성** | export된 시트에서 수정 셀을 식별할 수 있어야 한다 (셀 노트 또는 별도 변경 이력 시트) |
 | **왕복 안정성** | export한 파일을 다시 import하면 같은 fact가 나와야 한다 |
 | **판정 미포함** | verdict는 문서에 쓰지 않는다. 큐시트는 실행 문서지 검증 리포트가 아니다 |
+
+### 10-2-1. 표준 실행본
+
+원본 왕복본과 별도로 같은 revision에서 **하나의 표준 cue 양식**을 만든다. EVENT·TRIGGER·DEPARTMENT·
+ACTION·CAST·LOCATION·NOTES 순서를 Word와 PDF에서 동일하게 유지하고, 값이 없는 칸은 삭제하지 않고
+밑줄 빈칸으로 남긴다. Word는 `.docx`, PDF는 같은 인쇄 HTML을 브라우저의 PDF 저장으로 출력한다.
+두 실행본에도 verdict는 포함하지 않는다.
 
 마지막 항목이 중요하다. 큐시트에 `VIOLATION`을 찍어 배포하면 현장이 혼란스러워진다.
 판정은 STANDBY 안에 남고, 나가는 것은 **합의된 실행 값**뿐이다.

@@ -1,4 +1,4 @@
-import type { FactCandidate, FactNormalizerArtifact, WorkspaceSnapshot } from '@/types/standby';
+import type { CueCellPatch, CueRevision, CueRowOperation, FactCandidate, FactNormalizerArtifact, WorkspaceSnapshot } from '@/types/standby';
 import type { ScriptProjection } from '@/types/script';
 
 export type SourceRole = "SCRIPT" | "MASTER_CUE" | "STAGE_SPEC";
@@ -90,6 +90,17 @@ export class StandbyApi {
     });
   }
 
+  refreshMasterCueFile(caseId: string, file: File, origin: SourceOrigin = "USER_PROVIDED") {
+    const form = new FormData();
+    form.append("origin", origin);
+    form.append("file", file);
+    return this.request<SourceVersion>(`/v1/cases/${caseId}/source-refreshes/MASTER_CUE`, {
+      method: "POST",
+      body: form,
+      idempotent: true,
+    });
+  }
+
   uploadStageSpec(caseId: string, content: unknown, origin: SourceOrigin = "USER_PROVIDED") {
     return this.request<SourceVersion>(`/v1/cases/${caseId}/sources/STAGE_SPEC`, {
       method: "POST",
@@ -124,6 +135,14 @@ export class StandbyApi {
     });
   }
 
+  startCaseScriptProjection(caseId: string) {
+    return this.request<StandbyOperation>(`/v1/cases/${caseId}/script-projections`, {
+      method: "POST",
+      body: "{}",
+      idempotent: true,
+    });
+  }
+
   getOperation(operationId: string) {
     return this.request<StandbyOperation>(`/v1/operations/${operationId}`);
   }
@@ -138,6 +157,10 @@ export class StandbyApi {
 
   getScriptProjection(projectionId: string) {
     return this.request<ScriptProjection>(`/v1/script-projections/${projectionId}`);
+  }
+
+  getCaseScriptProjection(caseId: string) {
+    return this.request<ScriptProjection>(`/v1/cases/${caseId}/script-projection`);
   }
 
   async waitForOperation(
@@ -207,6 +230,72 @@ export class StandbyApi {
 
   getWorkspace(caseId: string) {
     return this.request<WorkspaceSnapshot>(`/v1/cases/${caseId}/workspace`);
+  }
+
+  listCueRevisions(caseId: string) {
+    return this.request<{ items: CueRevision[] }>(`/v1/cases/${caseId}/cue-revisions`);
+  }
+
+  getCueRevision(caseId: string, revisionId: string) {
+    return this.request<CueRevision>(`/v1/cases/${caseId}/cue-revisions/${revisionId}`);
+  }
+
+  createCueRevision(
+    caseId: string,
+    input: { base_revision_id: string; base_source_sha256: string; patches: CueCellPatch[]; row_operations?: CueRowOperation[] },
+  ) {
+    return this.request<CueRevision>(`/v1/cases/${caseId}/cue-revisions`, {
+      method: "POST",
+      body: JSON.stringify(input),
+      idempotent: true,
+    });
+  }
+
+  async downloadCueRevision(caseId: string, revisionId: string) {
+    const sessionId = await this.options.getSessionId();
+    const response = await this.fetchImpl(
+      `${this.baseUrl}/v1/cases/${caseId}/cue-revisions/${revisionId}/export.xlsx`,
+      { headers: { "x-standby-session": sessionId } },
+    );
+    if (!response.ok) {
+      const json = (await response.json()) as ApiErrorBody;
+      throw new StandbyApiError(
+        response.status,
+        json.error?.code ?? "API_ERROR",
+        json.error?.message ?? "XLSX export failed.",
+        json.error?.request_id ?? null,
+      );
+    }
+    return {
+      blob: await response.blob(),
+      disposition: response.headers.get("content-disposition"),
+    };
+  }
+
+  async downloadStandardCueDocx(caseId: string, revisionId: string) {
+    return this.downloadFile(`/v1/cases/${caseId}/cue-revisions/${revisionId}/export.docx`);
+  }
+
+  async getStandardCuePrintHtml(caseId: string, revisionId: string) {
+    const sessionId = await this.options.getSessionId();
+    const response = await this.fetchImpl(
+      `${this.baseUrl}/v1/cases/${caseId}/cue-revisions/${revisionId}/print`,
+      { headers: { "x-standby-session": sessionId } },
+    );
+    if (!response.ok) throw new StandbyApiError(response.status, "PRINT_EXPORT_FAILED", "Print export failed.", null);
+    return response.text();
+  }
+
+  private async downloadFile(path: string) {
+    const sessionId = await this.options.getSessionId();
+    const response = await this.fetchImpl(`${this.baseUrl}${path}`, {
+      headers: { "x-standby-session": sessionId },
+    });
+    if (!response.ok) {
+      const json = (await response.json()) as ApiErrorBody;
+      throw new StandbyApiError(response.status, json.error?.code ?? "API_ERROR", json.error?.message ?? "Export failed.", json.error?.request_id ?? null);
+    }
+    return { blob: await response.blob(), disposition: response.headers.get("content-disposition") };
   }
 
   private async request<T>(

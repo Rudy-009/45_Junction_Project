@@ -2,8 +2,8 @@
 
 | 항목 | 내용 |
 |---|---|
-| 문서 상태 | 공개 데모 런타임 코드 대조 + 촬영용 fast path 반영 |
-| 기준 브랜치 | `feat/demo-fast-path` |
+| 문서 상태 | 공개 런타임 코드 대조 + R0~R2 반영 |
+| 기준 브랜치 | `feat/goal-r0r6` |
 | 목적 | 현재 배포 동작과 후속 운영화를 구분한다 |
 | 제품 목표 | [PRD_CLAUDE.md](PRD_CLAUDE.md) |
 | UI 계약 | [`../Lo-Fi/standby/DESIGN.md`](../Lo-Fi/standby/DESIGN.md) |
@@ -34,24 +34,26 @@ UUID 세션으로 case 소유권을 분리한다. 이 값은 사용자 신원을
 | KOR/ENG i18n | **구현** | 헤더 선택 메뉴로 M3 입력·review·workspace·2D 무대 카피를 전환하고 선택을 localStorage에 보존 |
 | UI 카피 정리 | **구현** | 설명형 슬로건·면책·중복 제목을 제거하고, 선택 화면은 선택지만 남김. 오류·제약·상태와 provenance/hash는 유지하되 provenance는 요청 시 펼침 |
 | 입력 | **구현** | MASTER_CUE XLSX/PDF/JSON 한 칸과 STAGE_SPEC 폼을 받음 |
-| Script Sidebar | **로컬 코드 구현·배포 전** | DOCX 우선·PDF 보조 → 서버 Upstage Script Extractor → `standby.script-projection.v1` 실제 대사·지문을 원문 순서로 모두 표시. exact event ID 또는 원문 section marker와 큐시트 장면명의 유일한 일치만 자동 연결하고 나머지는 사람이 현재 event에 연결. MASTER_CUE fallback 없음 |
+| Script Sidebar | **case 통합 구현** | DOCX 우선·PDF 보조 파일을 현재 case의 `SCRIPT` source로 업로드한다. Upstage projection의 raw facts는 같은 review queue에 `UNREVIEWED`로 합류하고 기존 snapshot은 무효화된다. 재검토·freeze 후 세 source digest가 workspace에 반영된다 |
 | 로컬 파일 방어 | **구현** | 확장자·signature·50 MiB·SHA-256 검사. 미리 정한 파일명 없음 |
-| JSON Editor 직행 | **구현** | STANDBY CueSheet JSON은 로컬 구조 검사를 통과하면 `/workspace` Editor로 이동. reviewed case가 없어 Storyboard Agent는 호출하지 않지만, 대본 DOCX/PDF는 case-independent Script projection endpoint로 구조화 가능. 공개 CueSheet JSON에는 duration 추정 필드 없음 |
+| JSON 입력 | **운영 경로 통합** | STANDBY CueSheet JSON도 로컬 구조 검사 후 XLSX/PDF와 동일하게 case 업로드·Upstage 추출·fact review를 거친다. 공개 CueSheet JSON에는 duration 추정 필드 없음 |
 | 서버 JSON 전달 | **구현** | API로 받은 원본 JSON bytes/hash는 보존하고 Upstage 전송 때만 JSON Pointer 행의 임시 XLSX로 변환 |
 | 무대 사양 | **구현** | crossover, 환복 시간, route time, route ID/capacity, 인물·소품 초기 배치 |
-| Upstage 추출 | **구현** | 저장·live smoke가 확인된 기존 역할 Agent 결과를 모두 UNREVIEWED/NON_AUTHORITATIVE로 격리. 입력 화면의 Master Cue 추출과 별개로 Sidebar 대본은 case-independent Script projection endpoint에서 처리 |
+| Upstage 추출 | **구현** | Agent 결과를 모두 UNREVIEWED/NON_AUTHORITATIVE로 격리한다. Sidebar 대본도 현재 case의 source·review queue·snapshot으로 수렴하며, 읽기 전용 projection은 같은 case ID를 명시한다 |
 | Stage Spec Extractor | **Studio 설정·서버 배선 구현 / live smoke 대기** | Config #1 `agt_PxbxmhXXT8iqdzs5WmHfUz`. locator·quote가 붙은 `stage_facts` 후보를 만들되 전부 UNREVIEWED |
 | Fact Normalizer | **Studio 설정·서버 배선 구현 / live smoke 대기** | Config #1 `agt_6tn639gGApNdV9SdRfAjnE`. raw fact를 allowlist schema의 NON_AUTHORITATIVE normalized type/value로 추천. 추천값은 읽기 전용, 사용자화는 Agent가 고른 type의 값만 편집 |
 | Storyboard Recomposer | **Studio 설정·서버 배선 구현 / live smoke 대기** | Config #1 `agt_go8aoJTVDvEwK8mwXh5gEi`. reviewed graph와 인접 snapshot으로 NON_AUTHORITATIVE transition을 비동기 생성·cache |
 | Rehearsal Brief | **Studio 설정·서버 배선 구현 / live smoke 대기** | Config #1 `agt_9iLkb7fqwdEtaBv48t9tQA`. 결정론적 finding과 evidence를 무대감독용 확인 질문·unknown으로 요약. 새 verdict/finding 생성 금지 |
 | 인접 event semantic transition | **로컬 코드 구현·배포 전** | 인접한 다음 event의 바뀐 entity만 짧게 전환. jump/back·초기 로드는 정적, reduced-motion은 정적 |
 | 장시간 추출 | **구현** | 서버 최대 10분·브라우저 최대 11분 polling, 결과 미리보기와 `S T A N D B Y`가 왼쪽부터 순차 점등되는 로딩 화면 표시. reduced-motion에서는 고정 wordmark |
-| 촬영용 XLSX fast path | **구현** | 승인된 reference XLSX의 SHA-256이 일치할 때만 3.2초 로딩 후 원문이 아닌 8-event `CONTROLLED_FIXTURE` Editor로 이동. 다른 XLSX/PDF는 기존 Upstage 실경로 유지 |
+| 촬영용 XLSX fast path | **운영 코드 제거** | 특정 SHA-256에 의한 클라이언트 분기와 8-event 로컬 fixture를 제거했다. XLSX/PDF/JSON은 모두 실제 API 경로를 사용하며 `CONTROLLED_FIXTURE`는 서버 자동 테스트에서만 사용한다 |
 | Fact review | **구현** | raw field·locator·quote를 보고 승인/제외, 13개 normalized fact와 EVENT_STATE snapshot을 구조화 편집 |
 | Review snapshot | **구현** | 현재 결정을 불변 digest로 동결. 미결정 fact는 authority를 얻지 않음 |
 | Compiler | **구현** | 승인된 normalized envelope만 event graph·stage snapshot으로 변환 |
 | Verifier | **구현** | VR-01 환복, VR-02 경로 수용량, VR-03 소품 연속성을 결정론적으로 계산 |
 | 실제 workspace 배선 | **구현** | 같은 case ID의 event·finding·calculation·evidence·2D snapshot을 표시 |
+| 큐시트 revision 편집 | **서버 배선 구현** | finding의 source row/cell을 편집해 새 append-only revision으로 저장하고 같은 case의 workspace를 서버에서 재검증한다. 저장 전 draft는 verdict를 바꾸지 않는다 |
+| revision 히스토리·복원 | **서버 배선 구현** | revision 목록·상세를 서버에서 읽고, 과거 상태 복원은 기존 이력을 덮지 않고 reverse patch를 가진 새 revision을 생성한다 |
 | 세 verdict | **구현** | `VIOLATION`, `REVIEW`, `INSUFFICIENT_EVIDENCE`; finding 0건은 CONSISTENT |
 | Evidence Trace | **구현** | 모든 finding에 SCRIPT·MASTER_CUE·STAGE_SPEC 역할별 origin·review·locator·quote 표시 |
 | 공개 데모 세션 | **구현** | 로그인 없이 브라우저 UUID를 전송하고 서버가 해시한 actor ID로 사용 |
@@ -62,18 +64,16 @@ UUID 세션으로 case 소유권을 분리한다. 이 값은 사용자 신원을
 | 서체 | **구현** | 본문·라벨은 시스템 기본 서체, STANDBY 로고·추출 loading wordmark만 JetBrains Mono |
 | 데이터 영속성 | **미구현** | 프로세스 재시작 시 case·review·snapshot이 사라짐 |
 | 실제 reference fidelity | **미검증** | 합성 live smoke는 통과했지만 공연 원본 gold fact 대조는 아직 없음 |
-| XLSX 왕복·refresh | **미구현** | 원형 보존 export와 hash 기반 부분 재추출은 후속 milestone |
+| XLSX 왕복·refresh | **구현·배포 전** | 원본 bytes에서 수정 셀과 명시적 이벤트 행 추가·삭제만 적용해 새 XLSX를 만든다. 시트·서식·빈 행/열은 보존하며 동일 hash는 Upstage를 재호출하지 않고, 변경 hash의 새 fact는 UNREVIEWED로 되돌린다 |
+| 표준 실행본 export | **구현·배포 전** | 같은 revision을 EVENT·TRIGGER·DEPARTMENT·ACTION·CAST·LOCATION·NOTES 단일 양식으로 매핑하고, 누락값은 빈칸으로 둔 Word `.docx`와 브라우저 PDF 인쇄본을 제공한다 |
 
 ---
 
 ## 3. 현재 사용자 흐름
 
 ```text
-MASTER_CUE JSON 파일 선택
-  → 로컬 CueSheet 구조 검사
-  → workspace Editor 직행
-
-또는 MASTER_CUE XLSX/PDF 파일 선택
+MASTER_CUE XLSX/PDF/JSON 파일 선택
+  → JSON이면 로컬 CueSheet 구조도 선검사
   → STAGE_SPEC route/time/capacity/initial state 입력
   → case 생성 + Master Cue 및 유효한 Stage Spec 업로드
   → 서버의 Upstage Agent 추출
@@ -84,26 +84,14 @@ MASTER_CUE JSON 파일 선택
   → 같은 case ID의 workspace
   → 이벤트 선택 → stage snapshot + finding + 계산 + 세 근거
                    + Script Sidebar의 같은 event 발췌 스크롤·강조
-
-촬영 승인 reference XLSX 선택 (SHA-256 exact match)
-  → 1.5초 Master Cue 추출 상태
-  → 1.7초 Upstage 추천값 구성 상태
-  → 8-event CONTROLLED_FIXTURE workspace
-  → event 선택·ERROR/WARNING popup·이 위치로 이동·셀 편집·저장
 ```
 
 파일을 다시 선택하면 이전 case·fact review·workspace는 즉시 초기화된다. 원문 role의 `REVIEWED`는
 사람이 그 입력 파일을 선택했다는 의미이고, 추출 fact의 `REVIEWED`와 구분된다.
 
-JSON 직행은 구조화 결과를 빠르게 확인·편집하기 위한 로컬 Editor 경로다. Upstage 추출과 fact review를
-거치지 않으므로 서버의 `VerifiedWorkspace`나 세 근거를 갖춘 authoritative finding으로 표시하지 않는다.
-씬 길이와 환복 소요 시간을 JSON에서 추정하지 않는다. 따라서 JSON 직행 경로는 duration 기반 경고를 만들지
-않고, 시간 판정은 verifier 경로에서 사람이 검토한 명시적 `min_ms`·`max_ms` 근거가 있을 때만 수행한다.
-
-촬영용 XLSX fast path도 같은 로컬 Editor 계열이다. 원본 XLSX 내용이나 Upstage 결과를 가장하지 않고,
-파일 bytes의 exact SHA-256을 데모 선택 신호로만 사용한다. 저장소에는 원본 대본·큐시트와 파생 JSON을
-넣지 않으며, 화면 데이터는 별도 통제 fixture다. 따라서 이 경로의 ERROR/WARNING은 로컬 validator의
-시연 결과이고 authoritative Upstage provenance 또는 서버 verifier 결과라고 발표하지 않는다.
+JSON도 Upstage 추출과 fact review를 거쳐 서버 `VerifiedWorkspace`로 수렴한다. 씬 길이와 환복 소요
+시간은 JSON에서 추정하지 않으며, 시간 판정은 사람이 검토한 명시적 `min_ms`·`max_ms` 근거가 있을 때만
+verifier가 수행한다. 특정 파일 hash에 따른 촬영용 자동 우회는 운영 코드에 존재하지 않는다.
 
 ---
 
@@ -173,11 +161,11 @@ typecheck·production build와 두 패키지의 `npm audit` 0건을 확인했다
 
 ### 촬영 직전 합격선
 
-- 승인된 reference XLSX가 4초 안에 workspace로 이동한다.
-- E1–E8 timeline, 등장·퇴장 상태, ERROR/WARNING popup과 `이 Event로 이동`이 보인다.
-- 큐시트 셀 편집 → 미반영 변경 → 저장이 한 테이크 안에서 끝난다.
+- 일반 XLSX/PDF/JSON이 동일한 서버 review 경로로 진입한다.
+- verified timeline, 등장·퇴장 상태, finding popup과 근거 위치 이동이 보인다.
+- 큐시트 셀 편집 → 미반영 변경 → 서버 revision 저장 → 재검증이 한 테이크 안에서 끝난다.
 - 일반 XLSX/PDF와 서버 verified flow는 제거하지 않는다.
-- 촬영용 fixture를 실제 Upstage 분석 결과나 실제 공연 안전 판정이라고 말하지 않는다.
+- 자동 테스트의 fixture를 실제 Upstage 분석 결과나 실제 공연 안전 판정이라고 말하지 않는다.
 
 네 Agent의 cache 계약은 각각 `source hash`, `raw fact-set digest`, `review/revision`, `verifier result hash`에 Agent/Config ID와
 실제 input hash를 더한다. 같은 key에서는 Upstage를 재호출하지 않는다. timeline 클릭은 cached storyboard를

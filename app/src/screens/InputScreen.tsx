@@ -14,16 +14,10 @@ import {
   type SourceOrigin,
 } from '@/lib/standby-api';
 import { useCueSheetStore, useReviewFlowStore, useStandbyWorkspaceStore } from '@/store';
-import type { CueSheet } from '@/types/cue-sheet';
 import { parseCueSheetJson } from '@/lib/cue-sheet-json';
 import { useI18n, type Locale } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { useNavigate } from '@tanstack/react-router';
-import {
-  createDemoCueSheet,
-  DEMO_FAST_PATH_WAIT_MS,
-  DEMO_REFERENCE_XLSX_SHA256,
-} from '@/fixtures/demo-cue-sheet';
 
 const MAX_SOURCE_BYTES = 50 * 1024 * 1024;
 const SOURCE_ORIGIN: SourceOrigin = 'USER_PROVIDED';
@@ -44,7 +38,6 @@ type SelectedSource = {
   file: File;
   sha256: string;
   origin: SourceOrigin;
-  cueSheet?: CueSheet;
 };
 
 type RouteDraft = {
@@ -135,16 +128,15 @@ async function inspectSourceFile(kind: SourceInputKind, file: File, locale: Loca
   if ((extension === 'docx' || extension === 'xlsx') && !isZip) {
     throw new Error(locale === 'ko' ? '확장자와 Office 파일 서명이 일치하지 않습니다.' : 'The extension does not match the Office file signature.');
   }
-  const cueSheet = extension === 'json' ? parseCueSheetJson(text, locale) : undefined;
+  if (extension === 'json') parseCueSheetJson(text, locale);
 
-  return { file, sha256: await sha256(bytes), origin: SOURCE_ORIGIN, cueSheet };
+  return { file, sha256: await sha256(bytes), origin: SOURCE_ORIGIN };
 }
 
 export function InputScreen() {
   const { locale, t } = useI18n();
   const navigate = useNavigate();
   const clearWorkspace = useStandbyWorkspaceStore((state) => state.clear);
-  const loadCueSheet = useCueSheetStore((state) => state.loadCueSheet);
   const clearCueSheet = useCueSheetStore((state) => state.clearCueSheet);
   const setReviewFlowContext = useReviewFlowStore((state) => state.setReviewContext);
   const clearReviewFlow = useReviewFlowStore((state) => state.clear);
@@ -235,10 +227,6 @@ export function InputScreen() {
       const selected = await inspectSourceFile(kind, file, locale);
       setMasterCue(selected);
       setSourceErrors((current) => ({ ...current, MASTER_CUE: undefined }));
-      if (selected.cueSheet) {
-        loadCueSheet(selected.cueSheet);
-        await navigate({ to: '/workspace' });
-      }
     } catch (error) {
       setMasterCue(null);
       setSourceErrors((current) => ({
@@ -256,21 +244,6 @@ export function InputScreen() {
 
   const startExtraction = async () => {
     if (!masterCue) return;
-
-    if (masterCue.sha256 === DEMO_REFERENCE_XLSX_SHA256) {
-      setPhase('EXTRACTING');
-      setMessage(t('input.status.extract'));
-      window.setTimeout(() => {
-        setPhase('NORMALIZING');
-        setMessage(t('input.status.normalize'));
-      }, 1_500);
-      window.setTimeout(() => {
-        loadCueSheet(createDemoCueSheet());
-        setPhase('REVIEW');
-        void navigate({ to: '/workspace' });
-      }, DEMO_FAST_PATH_WAIT_MS);
-      return;
-    }
 
     const api = apiClient();
     if (!api) {

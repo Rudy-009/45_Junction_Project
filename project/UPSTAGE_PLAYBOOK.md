@@ -234,9 +234,9 @@ normalization type selector는 두지 않는다.
 | cache | `review_snapshot_id + cue_revision_id + from/to event ID + Agent ID + Config ID + input hash` |
 | trust | event/entity/zone/fact ID를 서버 allowlist로 strict 검증. 좌표·곡선·새 event·duration을 추정하지 않음. `beats`·`missing_evidence`는 정적 snapshot이나 deterministic verdict를 만들거나 수정하지 않으며 실패·timeout은 정적 snapshot fallback |
 
-JSON Editor 직행은 review snapshot이 없으므로 현재 Storyboard Agent를 호출하지 않는다. 대본 DOCX/PDF는
-case-independent Script projection endpoint로 구조화하고, 정적 snapshot·인접 semantic motion을 제공한다.
-reviewed workspace에서는 timeline 클릭마다 긴 job을 동기
+JSON도 서버 case review 경로를 사용한다. 대본 DOCX/PDF는 현재 case의 SCRIPT source로 업로드하고
+projection raw fact를 같은 review queue에 `UNREVIEWED`로 합류시킨다. 새 snapshot을 freeze하기 전에는
+기존 verified workspace를 무효화한다. reviewed workspace에서는 timeline 클릭마다 긴 job을 동기
 대기하지 않으며, 늦게 도착한 이전 event 응답이 현재 선택을 덮지 못하게 selection/version을 검사한다.
 
 #### D. Rehearsal Brief
@@ -260,7 +260,7 @@ Script Sidebar에서 DOCX(우선) 또는 PDF(보조)를 연결한다. 서버는 
 reviewed event label은 대본 fallback이 아니다.
 timeline 선택은 같은 event 발췌를 스크롤·강조하고, 발췌 선택은 같은 event로 이동한다. 이 패널은 읽기
 전용이고 localStorage에 원문을 남기지 않으며 Agent가 원문을 보충하거나 fact·snapshot·verdict authority를
-만드는 경로가 아니다. raw fact의 exact `event_id` 또는 원문 `section_marker`와 큐시트 장면명의 유일한
+직접 만드는 경로가 아니다. raw fact는 같은 case review를 거쳐야 authority를 얻는다. exact `event_id` 또는 원문 `section_marker`와 큐시트 장면명의 유일한
 일치만 자동 연결하고, 근거가 없거나 둘 이상과 일치하는 구간은 사람이 현재 event에 연결한다.
 
 ### 중요한 미확정 경계

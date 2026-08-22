@@ -12,6 +12,8 @@ import {
 } from "./domain/source-file.js";
 import type {
   CellPatch,
+  CueRow,
+  CueRowOperation,
   ExtractionAdapter,
   FactReviewCommand,
   Origin,
@@ -241,6 +243,32 @@ export async function buildApp(
     },
   );
 
+  app.post<{ Params: { caseId: string } }>(
+    "/v1/cases/:caseId/script-projections",
+    { config: { rateLimit: { max: 20, timeWindow: "1 hour" } } },
+    async (request, reply) => {
+      store.assertCaseOwner(request.params.caseId, request.standbyActorId);
+      const body = bodyRecord(request);
+      assertAllowedFields(body, []);
+      const response = store.withIdempotency(
+        `POST:/v1/cases/${request.params.caseId}/script-projections`,
+        idempotencyKey(request),
+        body,
+        () => store.startCaseScriptProjection(request.params.caseId, request.standbyActorId),
+      );
+      reply.header("Operation-Location", `/v1/operations/${response.operation_id}`);
+      return reply.status(202).send(response);
+    },
+  );
+
+  app.get<{ Params: { caseId: string } }>(
+    "/v1/cases/:caseId/script-projection",
+    async (request) => {
+      store.assertCaseOwner(request.params.caseId, request.standbyActorId);
+      return store.getCaseScriptProjection(request.params.caseId);
+    },
+  );
+
   app.post("/v1/cases", async (request, reply) => {
     const body = bodyRecord(request);
     const title = requiredString(body.title, "title");
@@ -284,7 +312,7 @@ export async function buildApp(
           media_type: part.mimetype,
           sha256: sha256(bytes),
         };
-        const response = store.withIdempotency(
+        const response = await store.withIdempotency(
           `POST:/v1/cases/${request.params.caseId}/sources/${role}`,
           idempotencyKey(request),
           fingerprint,
@@ -322,6 +350,38 @@ export async function buildApp(
             originalFilename:
               typeof body.original_filename === "string" ? body.original_filename : null,
           }),
+      );
+      return reply.status(201).send(response);
+    },
+  );
+
+  app.post<{ Params: { caseId: string } }>(
+    "/v1/cases/:caseId/source-refreshes/MASTER_CUE",
+    async (request, reply) => {
+      store.assertCaseOwner(request.params.caseId, request.standbyActorId);
+      if (!request.isMultipart()) throw new DomainError(415, "SOURCE_MEDIA_TYPE_INVALID", "Refresh requires a file.");
+      const part = await request.file();
+      if (!part) throw new DomainError(400, "INVALID_ARGUMENT", "file is required.");
+      const originField = part.fields.origin;
+      const origin = originField && "value" in originField && typeof originField.value === "string"
+        ? originField.value : null;
+      if (!ORIGINS.has(origin as Origin)) throw new DomainError(422, "ENUM_VALUE_INVALID", "Unknown source origin.");
+      const filename = sanitizeFilename(part.filename);
+      const bytes = await part.toBuffer();
+      assertSourceFile("MASTER_CUE", filename, part.mimetype, bytes);
+      const fingerprint = { origin, filename, media_type: part.mimetype, sha256: sha256(bytes) };
+      const response = await store.withIdempotency(
+        `POST:/v1/cases/${request.params.caseId}/source-refreshes/MASTER_CUE`,
+        idempotencyKey(request),
+        fingerprint,
+        () => store.refreshFileSource({
+          caseId: request.params.caseId,
+          role: "MASTER_CUE",
+          origin: origin as Origin,
+          bytes,
+          mediaType: part.mimetype,
+          originalFilename: filename,
+        }),
       );
       return reply.status(201).send(response);
     },
@@ -526,6 +586,53 @@ export async function buildApp(
     },
   );
 
+  app.get<{ Params: { caseId: string } }>(
+    "/v1/cases/:caseId/cue-revisions",
+    async (request) => {
+      store.assertCaseOwner(request.params.caseId, request.standbyActorId);
+      return { items: store.listCueRevisions(request.params.caseId).map(revisionProjection) };
+    },
+  );
+
+  app.get<{ Params: { caseId: string; revisionId: string } }>(
+    "/v1/cases/:caseId/cue-revisions/:revisionId",
+    async (request) => {
+      store.assertCaseOwner(request.params.caseId, request.standbyActorId);
+      return store.getCueRevision(request.params.caseId, request.params.revisionId);
+    },
+  );
+
+  app.get<{ Params: { caseId: string; revisionId: string } }>(
+    "/v1/cases/:caseId/cue-revisions/:revisionId/export.xlsx",
+    async (request, reply) => {
+      store.assertCaseOwner(request.params.caseId, request.standbyActorId);
+      const exported = await store.exportCueRevision(request.params.caseId, request.params.revisionId);
+      reply.header("content-type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+      reply.header("content-disposition", `attachment; filename="${exported.filename}"`);
+      return reply.send(Buffer.from(exported.bytes));
+    },
+  );
+
+  app.get<{ Params: { caseId: string; revisionId: string } }>(
+    "/v1/cases/:caseId/cue-revisions/:revisionId/export.docx",
+    async (request, reply) => {
+      store.assertCaseOwner(request.params.caseId, request.standbyActorId);
+      const exported = await store.exportStandardCueDocx(request.params.caseId, request.params.revisionId);
+      reply.header("content-type", "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+      reply.header("content-disposition", `attachment; filename="${exported.filename}"`);
+      return reply.send(Buffer.from(exported.bytes));
+    },
+  );
+
+  app.get<{ Params: { caseId: string; revisionId: string } }>(
+    "/v1/cases/:caseId/cue-revisions/:revisionId/print",
+    async (request, reply) => {
+      store.assertCaseOwner(request.params.caseId, request.standbyActorId);
+      reply.header("content-type", "text/html; charset=utf-8");
+      return reply.send(store.exportStandardCuePrint(request.params.caseId, request.params.revisionId));
+    },
+  );
+
   app.post<{ Params: { caseId: string } }>(
     "/v1/cases/:caseId/cue-revisions",
     async (request, reply) => {
@@ -549,6 +656,26 @@ export async function buildApp(
           to: patch.to as CellPatch["to"],
         };
       });
+      const rowOperations = body.row_operations === undefined ? [] : (() => {
+        if (!Array.isArray(body.row_operations)) {
+          throw new DomainError(400, "INVALID_ARGUMENT", "row_operations must be an array.");
+        }
+        return body.row_operations.map((value): CueRowOperation => {
+          if (value === null || typeof value !== "object" || Array.isArray(value)) {
+            throw new DomainError(400, "INVALID_ARGUMENT", "row operation must be an object.");
+          }
+          const operation = value as Record<string, unknown>;
+          if (operation.type === "DELETE") {
+            return { type: "DELETE", row_id: requiredString(operation.row_id, "row_id") };
+          }
+          if (operation.type === "ADD" && operation.row && typeof operation.row === "object" && !Array.isArray(operation.row)) {
+            const row = Object.fromEntries(Object.entries(operation.row as Record<string, unknown>)
+              .map(([key, item]) => [key, String(item)]));
+            return { type: "ADD", after_row_id: requiredString(operation.after_row_id, "after_row_id"), row: row as CueRow };
+          }
+          throw new DomainError(400, "INVALID_ARGUMENT", "Unknown row operation.");
+        });
+      })();
       const response = store.withIdempotency(
         `POST:/v1/cases/${request.params.caseId}/cue-revisions`,
         idempotencyKey(request),
@@ -560,6 +687,7 @@ export async function buildApp(
             baseRevisionId: requiredString(body.base_revision_id, "base_revision_id"),
             baseSourceSha256: requiredString(body.base_source_sha256, "base_source_sha256"),
             patches,
+            rowOperations,
           }),
       );
       return reply.status(201).send(revisionProjection(response));

@@ -1,5 +1,5 @@
 import { useMemo, useRef, useEffect, useState } from 'react';
-import { useCueSheetStore, useStandbyWorkspaceStore } from '@/store';
+import { useCueSheetStore, useReviewFlowStore, useStandbyWorkspaceStore } from '@/store';
 import { PanelHeader } from '@/components/ui';
 import {
   CueEventPopup,
@@ -155,6 +155,9 @@ export function WorkspaceScreen() {
   const commitCueSheet = useCueSheetStore((s) => s.commitCueSheet);
   const revisions = useCueSheetStore((s) => s.revisions);
   const loadRevision = useCueSheetStore((s) => s.loadRevision);
+  const clearVerifiedWorkspace = useStandbyWorkspaceStore((state) => state.clear);
+  const setVerifiedWorkspace = useStandbyWorkspaceStore((state) => state.setWorkspace);
+  const setReviewFlowContext = useReviewFlowStore((state) => state.setReviewContext);
   const [stageMotion, setStageMotion] = useState<StageMotion>();
   const [storyboardState, setStoryboardState] = useState<StoryboardAgentState>({ status: 'IDLE' });
   const [script, setScript] = useState<ScriptProjection | null>(null);
@@ -210,9 +213,14 @@ export function WorkspaceScreen() {
       setScriptError(t('workspace.scriptApiMissing'));
       return;
     }
+    if (!verifiedCaseId) {
+      setScriptError(t('workspace.scriptApiMissing'));
+      return;
+    }
     setScriptBusy(true);
     try {
-      const operation = await api.startScriptProjection(file);
+      await api.uploadSourceFile(verifiedCaseId, 'SCRIPT', file);
+      const operation = await api.startCaseScriptProjection(verifiedCaseId);
       const completed = await api.waitForOperation(operation.operation_id);
       if (completed.resource_ref.type !== 'script_projection') {
         throw new Error(t('workspace.scriptInvalid'));
@@ -220,6 +228,16 @@ export function WorkspaceScreen() {
       const projection = await api.getScriptProjection(completed.resource_ref.id);
       setScript(projection);
       setScriptLinks({});
+      const queue = await api.getReviewQueue(verifiedCaseId);
+      const normalizerOperation = await api.startProductionAgent(verifiedCaseId, 'FACT_NORMALIZER');
+      const completedNormalizer = await api.waitForOperation(normalizerOperation.operation_id);
+      if (completedNormalizer.resource_ref.type !== 'production_artifact') {
+        throw new Error(t('workspace.scriptInvalid'));
+      }
+      const artifact = await api.getFactNormalizerArtifact(completedNormalizer.resource_ref.id);
+      setReviewFlowContext({ caseId: verifiedCaseId, facts: queue.items, normalizerArtifact: artifact });
+      clearVerifiedWorkspace();
+      await navigate({ to: '/review/mode' });
     } catch (error) {
       setScriptError(error instanceof StandbyApiError
         ? `${error.code}: ${error.message}`
@@ -228,6 +246,41 @@ export function WorkspaceScreen() {
       setScriptBusy(false);
     }
   };
+
+  const refreshMasterCue = async (file: File) => {
+    if (!verifiedCaseId || !verifiedWorkspace) throw new Error(t('workspace.scriptApiMissing'));
+    const api = createStandbyBrowserApi();
+    if (!api) throw new Error(t('workspace.scriptApiMissing'));
+    const previous = verifiedWorkspace.sources.find((source) => source.role === 'MASTER_CUE');
+    const refreshed = await api.refreshMasterCueFile(verifiedCaseId, file);
+    if (previous?.sha256 === refreshed.sha256) return false;
+
+    const extraction = await api.startExtraction(verifiedCaseId, 'UPSTAGE_AGENT');
+    await api.waitForOperation(extraction.operation_id);
+    const queue = await api.getReviewQueue(verifiedCaseId);
+    const normalizer = await api.startProductionAgent(verifiedCaseId, 'FACT_NORMALIZER');
+    const completed = await api.waitForOperation(normalizer.operation_id);
+    if (completed.resource_ref.type !== 'production_artifact') {
+      throw new Error('Normalizer artifact is missing.');
+    }
+    const artifact = await api.getFactNormalizerArtifact(completed.resource_ref.id);
+    setReviewFlowContext({ caseId: verifiedCaseId, facts: queue.items, normalizerArtifact: artifact });
+    clearVerifiedWorkspace();
+    await navigate({ to: '/review/mode' });
+    return true;
+  };
+
+  useEffect(() => {
+    if (!verifiedCaseId || script) return;
+    const api = createStandbyBrowserApi();
+    if (!api) return;
+    void api.getCaseScriptProjection(verifiedCaseId)
+      .then((projection) => setScript(projection))
+      .catch((error) => {
+        if (error instanceof StandbyApiError && error.status === 404) return;
+        setScriptError(error instanceof Error ? error.message : t('workspace.scriptInvalid'));
+      });
+  }, [script, t, verifiedCaseId]);
 
   const linkScriptSegment = (segmentId: string, eventId: string) => {
     setScriptLinks((current) => ({ ...current, [segmentId]: eventId }));
@@ -328,6 +381,8 @@ export function WorkspaceScreen() {
         onScriptFile={(file) => void connectScript(file)}
         storyboardState={storyboardState}
         onStoryboardRequest={(eventId) => void requestStoryboard(eventId)}
+        onWorkspaceUpdated={(workspace) => setVerifiedWorkspace(workspace.case_id, workspace)}
+        onMasterCueRefresh={refreshMasterCue}
       />
     );
   }

@@ -3,12 +3,16 @@ import { AlertTriangle, CircleHelp, ShieldAlert } from 'lucide-react';
 import { StageSimulator, type StageMotion } from './StageSimulator';
 import { ScriptSidebar } from './ScriptSidebar';
 import type {
+  CueCellPatch,
+  CueRevision,
+  CueRowOperation,
   Finding,
   FindingVerdict,
   StageZone,
   StoryboardAgentState,
   WorkspaceSnapshot,
 } from '@/types/standby';
+import { createStandbyBrowserApi, StandbyApiError } from '@/lib/standby-api';
 import type { StageEntity, Zone } from '@/types/ui';
 import { cn } from '@/lib/utils';
 import { useI18n, type MessageKey } from '@/lib/i18n';
@@ -57,6 +61,8 @@ export function VerifiedWorkspace({
   onScriptFile,
   storyboardState,
   onStoryboardRequest,
+  onWorkspaceUpdated,
+  onMasterCueRefresh,
 }: {
   workspace: WorkspaceSnapshot;
   script: ScriptProjection | null;
@@ -68,6 +74,8 @@ export function VerifiedWorkspace({
   onScriptFile: (file: File) => void;
   storyboardState?: StoryboardAgentState;
   onStoryboardRequest?: (eventId: string) => void;
+  onWorkspaceUpdated: (workspace: WorkspaceSnapshot) => void;
+  onMasterCueRefresh: (file: File) => Promise<boolean>;
 }) {
   const { t } = useI18n();
   const initialEventId = workspace.findings[0]?.event_id ?? workspace.events[0]?.event_id ?? null;
@@ -168,6 +176,12 @@ export function VerifiedWorkspace({
                 {selectedFinding ? <FindingDetail finding={selectedFinding} /> : (
                   <div className="flex h-full items-center justify-center text-sm text-consistent">{t('workspace.consistent')}</div>
                 )}
+                <ServerRevisionPanel
+                  workspace={workspace}
+                  finding={selectedFinding}
+                  onWorkspaceUpdated={onWorkspaceUpdated}
+                  onMasterCueRefresh={onMasterCueRefresh}
+                />
               </div>
             </section>
           </div>
@@ -176,6 +190,294 @@ export function VerifiedWorkspace({
         </div>
       </div>
     </div>
+  );
+}
+
+function ServerRevisionPanel({
+  workspace,
+  finding,
+  onWorkspaceUpdated,
+  onMasterCueRefresh,
+}: {
+  workspace: WorkspaceSnapshot;
+  finding: Finding | null;
+  onWorkspaceUpdated: (workspace: WorkspaceSnapshot) => void;
+  onMasterCueRefresh: (file: File) => Promise<boolean>;
+}) {
+  const { locale } = useI18n();
+  const [revisions, setRevisions] = useState<CueRevision[]>([]);
+  const [current, setCurrent] = useState<CueRevision | null>(null);
+  const [draft, setDraft] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const refreshInput = useRef<HTMLInputElement>(null);
+  const target = finding?.target_locator ?? null;
+  const canExportXlsx = workspace.sources.some((source) =>
+    source.role === 'MASTER_CUE'
+      && source.media_type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  const currentValue = target && current?.rows
+    ? current.rows.find((row) => row.id === target.row_id)?.[target.column]
+    : undefined;
+
+  const reload = async () => {
+    const api = createStandbyBrowserApi();
+    if (!api || !workspace.cue_revision_id) {
+      setCurrent(null);
+      setRevisions([]);
+      return;
+    }
+    const [list, active] = await Promise.all([
+      api.listCueRevisions(workspace.case_id),
+      api.getCueRevision(workspace.case_id, workspace.cue_revision_id),
+    ]);
+    setRevisions(list.items);
+    setCurrent(active);
+  };
+
+  useEffect(() => {
+    setError(null);
+    void reload().catch((loadError) => {
+      setError(loadError instanceof Error ? loadError.message : 'Revision history unavailable.');
+    });
+  }, [workspace.case_id, workspace.cue_revision_id]);
+
+  useEffect(() => {
+    setDraft(currentValue ?? '');
+  }, [currentValue, target?.column, target?.row_id]);
+
+  const applyChanges = async (patches: CueCellPatch[], rowOperations: CueRowOperation[] = []) => {
+    if (!current || (patches.length === 0 && rowOperations.length === 0)) return;
+    const api = createStandbyBrowserApi();
+    if (!api) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await api.createCueRevision(workspace.case_id, {
+        base_revision_id: current.revision_id,
+        base_source_sha256: current.base_source_sha256,
+        patches,
+        row_operations: rowOperations,
+      });
+      const nextWorkspace = await api.getWorkspace(workspace.case_id);
+      onWorkspaceUpdated(nextWorkspace);
+    } catch (saveError) {
+      setError(saveError instanceof StandbyApiError
+        ? `${saveError.code}: ${saveError.message}`
+        : saveError instanceof Error ? saveError.message : 'Revision save failed.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const restore = async (revisionId: string) => {
+    if (!current?.rows) return;
+    const api = createStandbyBrowserApi();
+    if (!api) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const targetRevision = await api.getCueRevision(workspace.case_id, revisionId);
+      const targetRows = targetRevision.rows ?? [];
+      const patches: CueCellPatch[] = [];
+      for (const row of current.rows) {
+        const prior = targetRows.find((candidate) => candidate.id === row.id);
+        if (!prior) continue;
+        for (const [column, value] of Object.entries(row)) {
+          if (column === 'id' || prior[column] === undefined || prior[column] === value) continue;
+          patches.push({ row_id: row.id, column, from: value, to: prior[column] });
+        }
+      }
+      await applyChanges(patches);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const exportXlsx = async () => {
+    if (!current) return;
+    const api = createStandbyBrowserApi();
+    if (!api) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const exported = await api.downloadCueRevision(workspace.case_id, current.revision_id);
+      const filename = /filename="([^"]+)"/.exec(exported.disposition ?? '')?.[1] ?? 'master-cue-standby.xlsx';
+      const url = URL.createObjectURL(exported.blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = filename;
+      anchor.click();
+      URL.revokeObjectURL(url);
+    } catch (exportError) {
+      setError(exportError instanceof Error ? exportError.message : 'XLSX export failed.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const downloadBlob = (blob: Blob, filename: string) => {
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = filename;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const exportDocx = async () => {
+    if (!current) return;
+    const api = createStandbyBrowserApi();
+    if (!api) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const exported = await api.downloadStandardCueDocx(workspace.case_id, current.revision_id);
+      downloadBlob(exported.blob, 'standby-standard-cue.docx');
+    } catch (exportError) {
+      setError(exportError instanceof Error ? exportError.message : 'Word export failed.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const printPdf = async () => {
+    if (!current) return;
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      setError(locale === 'ko' ? '팝업을 허용한 뒤 다시 시도하세요.' : 'Allow popups and try again.');
+      return;
+    }
+    const api = createStandbyBrowserApi();
+    if (!api) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const html = await api.getStandardCuePrintHtml(workspace.case_id, current.revision_id);
+      printWindow.document.open();
+      printWindow.document.write(html);
+      printWindow.document.close();
+    } catch (exportError) {
+      printWindow.close();
+      setError(exportError instanceof Error ? exportError.message : 'PDF print failed.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const refreshMasterCue = async (file: File) => {
+    setBusy(true);
+    setError(null);
+    try {
+      const changed = await onMasterCueRefresh(file);
+      if (!changed) {
+        setError(locale === 'ko'
+          ? '같은 파일입니다. Upstage를 다시 호출하지 않았습니다.'
+          : 'Same file. Upstage was not called again.');
+      }
+    } catch (refreshError) {
+      setError(refreshError instanceof Error ? refreshError.message : 'Refresh failed.');
+    } finally {
+      setBusy(false);
+      if (refreshInput.current) refreshInput.current.value = '';
+    }
+  };
+
+  const addEvent = async () => {
+    if (!current?.rows || !target) return;
+    const anchor = current.rows.find((row) => row.id === target.row_id);
+    const sheet = /^t_(\d+)_/.exec(target.row_id)?.[1];
+    if (!anchor || sheet === undefined) return;
+    const row = Object.fromEntries(Object.keys(anchor).map((key) => [key, ''])) as Record<string, string> & { id: string };
+    row.id = `t_${sheet}_n_${crypto.randomUUID()}`;
+    await applyChanges([], [{ type: 'ADD', after_row_id: anchor.id, row }]);
+  };
+
+  const deleteEvent = async () => {
+    if (!target) return;
+    await applyChanges([], [{ type: 'DELETE', row_id: target.row_id }]);
+  };
+
+  return (
+    <section className="border-t border-border bg-surface p-3">
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-[10px] font-medium">{locale === 'ko' ? '큐 수정' : 'Cue edit'}</span>
+        <div className="flex items-center gap-2">
+          <input
+            ref={refreshInput}
+            type="file"
+            className="hidden"
+            accept=".xlsx,.pdf,.json"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) void refreshMasterCue(file);
+            }}
+          />
+          <button type="button" disabled={busy} className="border border-border px-2 py-1 text-[10px]" onClick={() => refreshInput.current?.click()}>
+            {locale === 'ko' ? '새 파일로 갱신' : 'Refresh file'}
+          </button>
+          {target && current?.rows?.some((row) => row.id === target.row_id) && (
+            <>
+              <button type="button" disabled={busy} className="border border-border px-2 py-1 text-[10px]" onClick={() => void addEvent()}>
+                {locale === 'ko' ? '이벤트 추가' : 'Add event'}
+              </button>
+              <button type="button" disabled={busy} className="border border-violation px-2 py-1 text-[10px] text-violation" onClick={() => void deleteEvent()}>
+                {locale === 'ko' ? '이벤트 삭제' : 'Delete event'}
+              </button>
+            </>
+          )}
+          {canExportXlsx && (
+            <button type="button" disabled={busy} className="border border-border px-2 py-1 text-[10px]" onClick={() => void exportXlsx()}>
+              {locale === 'ko' ? 'XLSX 내보내기' : 'Export XLSX'}
+            </button>
+          )}
+          <button type="button" disabled={busy || !current} className="border border-border px-2 py-1 text-[10px]" onClick={() => void exportDocx()}>
+            {locale === 'ko' ? 'Word 실행본' : 'Word handoff'}
+          </button>
+          <button type="button" disabled={busy || !current} className="border border-border px-2 py-1 text-[10px]" onClick={() => void printPdf()}>
+            {locale === 'ko' ? 'PDF 실행본' : 'PDF handoff'}
+          </button>
+        <details className="text-[10px] text-muted-foreground">
+          <summary className="cursor-pointer">{locale === 'ko' ? `히스토리 ${revisions.length}` : `History ${revisions.length}`}</summary>
+          <div className="mt-2 min-w-64 space-y-1 border border-border bg-background p-2">
+            {revisions.slice().reverse().map((revision) => (
+              <div key={revision.revision_id} className="flex items-center justify-between gap-3">
+                <span className="mono truncate">{revision.revision_id.slice(0, 18)}</span>
+                {revision.revision_id !== current?.revision_id && (
+                  <button type="button" disabled={busy} className="border border-border px-2 py-1" onClick={() => void restore(revision.revision_id)}>
+                    {locale === 'ko' ? '복원' : 'Restore'}
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </details>
+        </div>
+      </div>
+      {target && currentValue !== undefined ? (
+        <div className="mt-2 flex gap-2">
+          <label className="sr-only" htmlFor="verified-cue-edit">{target.row_id}:{target.column}</label>
+          <input
+            id="verified-cue-edit"
+            className="min-w-0 flex-1 border border-border bg-background px-2 py-1.5 text-xs"
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+          />
+          <button
+            type="button"
+            disabled={busy || draft === currentValue}
+            className="border border-foreground bg-foreground px-3 py-1.5 text-xs text-background disabled:cursor-not-allowed disabled:opacity-40"
+            onClick={() => void applyChanges([{ row_id: target.row_id, column: target.column, from: currentValue, to: draft }])}
+          >
+            {locale === 'ko' ? '저장·재검증' : 'Save & verify'}
+          </button>
+        </div>
+      ) : (
+        <p className="mt-2 text-[10px] text-muted-foreground">
+          {locale === 'ko' ? '이 finding에는 편집 가능한 원본 셀 위치가 없습니다.' : 'This finding has no editable source-cell locator.'}
+        </p>
+      )}
+      {error && <p className="mt-2 text-[10px] text-violation">{error}</p>}
+    </section>
   );
 }
 

@@ -14,6 +14,7 @@ import {
 import type {
   CaseRecord,
   CellPatch,
+  CueRowOperation,
   CueRevision,
   CueRow,
   ExtractionAdapter,
@@ -39,6 +40,8 @@ import type {
 import { compileEventGraph, workspaceEvents } from "../domain/compiler.js";
 import { verifyProduction } from "../domain/verifier.js";
 import { canonicalJson, hashJson, sha256 } from "../lib/hash.js";
+import { cueRowsFromXlsx, exportXlsxRevision } from "../domain/xlsx-revision.js";
+import { standardCueDocx, standardCuePrintHtml } from "../domain/standard-cue-export.js";
 import type { ExtractionProvider } from "../providers/extraction-provider.js";
 import type { ProductionAgentProvider } from "../providers/production-agent-provider.js";
 import type { ScriptProjectionProvider } from "../providers/script-projection-provider.js";
@@ -83,12 +86,14 @@ export class InMemoryStore {
   private readonly operationCaseIds = new Map<string, string>();
   private readonly operationActorIds = new Map<string, string>();
   private readonly extractionRuns = new Map<string, ExtractionRunRecord>();
+  private readonly extractionCache = new Map<string, string>();
   private readonly productionArtifacts = new Map<string, ProductionArtifact>();
   private readonly productionArtifactCaseIds = new Map<string, string>();
   private readonly productionCache = new Map<string, string>();
   private readonly latestFactNormalizerArtifactByCase = new Map<string, string>();
   private readonly scriptProjections = new Map<string, ScriptProjection>();
   private readonly scriptProjectionOwnerIds = new Map<string, string>();
+  private readonly caseScriptProjectionIds = new Map<string, string>();
   private readonly idempotency = new Map<string, IdempotencyRecord>();
   private sequence = 0;
 
@@ -207,14 +212,14 @@ export class InMemoryStore {
     return this.publicSource(source);
   }
 
-  uploadFileSource(input: {
+  async uploadFileSource(input: {
     caseId: string;
     role: "SCRIPT" | "MASTER_CUE";
     origin: Origin;
     bytes: Uint8Array;
     mediaType: string;
     originalFilename: string;
-  }): SourceVersion {
+  }): Promise<SourceVersion> {
     const record = this.getCase(input.caseId);
     const sourceHash = sha256(input.bytes);
     const existing = record.sources.get(input.role);
@@ -241,7 +246,85 @@ export class InMemoryStore {
       bytes: Uint8Array.from(input.bytes),
     };
     record.sources.set(input.role, source);
+    if (input.role === "MASTER_CUE" && input.mediaType === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet") {
+      const rows = await cueRowsFromXlsx(input.bytes);
+      const baseRevision: CueRevision = {
+        contract_version: "standby.revision.v1",
+        revision_id: `rev_source_${sourceHash.slice(0, 12)}`,
+        case_id: record.case_id,
+        parent_revision_id: null,
+        base_source_sha256: sourceHash,
+        revision_hash: sourceHash,
+        patches: [],
+        created_by: "source-upload",
+        created_at: source.created_at,
+        rows,
+      };
+      record.revisions.push(baseRevision);
+      record.current_revision_id = baseRevision.revision_id;
+    }
     return this.publicSource(source);
+  }
+
+  async refreshFileSource(input: {
+    caseId: string;
+    role: "MASTER_CUE";
+    origin: Origin;
+    bytes: Uint8Array;
+    mediaType: string;
+    originalFilename: string;
+  }): Promise<SourceVersion> {
+    const record = this.getCase(input.caseId);
+    const current = record.sources.get(input.role);
+    const nextHash = sha256(input.bytes);
+    if (current?.sha256 === nextHash) return this.publicSource(current);
+
+    const source = {
+      contract_version: "standby.source.v1" as const,
+      source_id: this.id("source"),
+      case_id: record.case_id,
+      role: input.role,
+      sha256: nextHash,
+      origin: input.origin,
+      authority: "REVIEWED" as const,
+      media_type: input.mediaType,
+      original_filename: input.originalFilename,
+      created_at: this.now(),
+      content: null,
+      bytes: Uint8Array.from(input.bytes),
+    };
+    const rows = input.mediaType === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      ? await cueRowsFromXlsx(input.bytes)
+      : [];
+    record.sources.set(input.role, source);
+    record.facts.clear();
+    record.reviews = [];
+    record.snapshots = [];
+    record.current_snapshot_id = null;
+    record.verification = null;
+    const baseRevision: CueRevision = {
+      contract_version: "standby.revision.v1",
+      revision_id: `rev_source_${nextHash.slice(0, 12)}`,
+      case_id: record.case_id,
+      parent_revision_id: null,
+      base_source_sha256: nextHash,
+      revision_hash: nextHash,
+      patches: [],
+      created_by: "source-refresh",
+      created_at: source.created_at,
+      rows,
+    };
+    record.revisions.push(baseRevision);
+    record.current_revision_id = baseRevision.revision_id;
+    return this.publicSource(source);
+  }
+
+  private extractionCacheKey(record: CaseRecord, adapter: ExtractionAdapter): string {
+    return hashJson({
+      case_id: record.case_id,
+      adapter,
+      sources: ROLES.map((role) => [role, record.sources.get(role)?.sha256 ?? null]),
+    });
   }
 
   startExtraction(caseId: string, adapter: ExtractionAdapter): Operation {
@@ -251,6 +334,25 @@ export class InMemoryStore {
       throw new DomainError(409, "SOURCE_SLOT_MISSING", "MASTER_CUE is required.", {
         missing_roles: missingRoles,
       });
+    }
+
+    const cacheKey = this.extractionCacheKey(record, adapter);
+    const cachedRunId = this.extractionCache.get(cacheKey);
+    if (cachedRunId && this.extractionRuns.has(cachedRunId)) {
+      const createdAt = this.now();
+      const cached: Operation = {
+        operation_id: this.id("operation"),
+        kind: "EXTRACT_SOURCE",
+        status: "SUCCEEDED",
+        result_source: this.extractionRuns.get(cachedRunId)?.result_source ?? null,
+        resource_ref: { type: "extraction_run", id: cachedRunId },
+        error: null,
+        created_at: createdAt,
+        updated_at: createdAt,
+      };
+      this.operations.set(cached.operation_id, cached);
+      this.operationCaseIds.set(cached.operation_id, record.case_id);
+      return structuredClone(cached);
     }
 
     const runId = this.id("extract");
@@ -267,7 +369,7 @@ export class InMemoryStore {
     };
     this.operations.set(operation.operation_id, operation);
     this.operationCaseIds.set(operation.operation_id, record.case_id);
-    queueMicrotask(() => void this.executeExtraction(record, operation, runId, adapter));
+    queueMicrotask(() => void this.executeExtraction(record, operation, runId, adapter, cacheKey));
     return structuredClone(operation);
   }
 
@@ -375,7 +477,39 @@ export class InMemoryStore {
     this.operations.set(operation.operation_id, operation);
     this.operationActorIds.set(operation.operation_id, input.actorId);
     this.scriptProjectionOwnerIds.set(projectionId, input.actorId);
-    queueMicrotask(() => void this.executeScriptProjection(source, operation, projectionId));
+    queueMicrotask(() => void this.executeScriptProjection(source, operation, projectionId, null));
+    return structuredClone(operation);
+  }
+
+  startCaseScriptProjection(caseId: string, actorId: string): Operation {
+    if (!this.scriptProjectionProvider) {
+      throw new DomainError(
+        503,
+        "UPSTAGE_NOT_CONFIGURED",
+        "Script projection adapter is not configured.",
+      );
+    }
+    const record = this.getCase(caseId);
+    const source = record.sources.get("SCRIPT");
+    if (!source || !source.bytes || !source.media_type || !source.original_filename) {
+      throw new DomainError(409, "SOURCE_SLOT_MISSING", "Upload a SCRIPT DOCX or PDF first.");
+    }
+    const projectionId = this.id("script_projection");
+    const createdAt = this.now();
+    const operation: Operation = {
+      operation_id: this.id("operation"),
+      kind: "PROJECT_SCRIPT",
+      status: "QUEUED",
+      result_source: null,
+      resource_ref: { type: "script_projection", id: projectionId },
+      error: null,
+      created_at: createdAt,
+      updated_at: createdAt,
+    };
+    this.operations.set(operation.operation_id, operation);
+    this.operationCaseIds.set(operation.operation_id, caseId);
+    this.scriptProjectionOwnerIds.set(projectionId, actorId);
+    queueMicrotask(() => void this.executeScriptProjection(source, operation, projectionId, record));
     return structuredClone(operation);
   }
 
@@ -385,6 +519,14 @@ export class InMemoryStore {
       throw new DomainError(404, "RESOURCE_NOT_FOUND", "Operation not found.");
     }
     return structuredClone(operation);
+  }
+
+  getCaseScriptProjection(caseId: string): ScriptProjection {
+    const projectionId = this.caseScriptProjectionIds.get(caseId);
+    if (!projectionId) {
+      throw new DomainError(404, "RESOURCE_NOT_FOUND", "Case script projection not found.");
+    }
+    return this.getScriptProjection(projectionId);
   }
 
   getExtractionRun(runId: string): ExtractionRunRecord {
@@ -652,6 +794,7 @@ export class InMemoryStore {
     baseRevisionId: string;
     baseSourceSha256: string;
     patches: CellPatch[];
+    rowOperations?: CueRowOperation[];
   }): CueRevision {
     const record = this.getCase(input.caseId);
     const current = this.currentRevision(record);
@@ -663,8 +806,9 @@ export class InMemoryStore {
     if (current.base_source_sha256 !== input.baseSourceSha256) {
       throw new DomainError(409, "SOURCE_HASH_MISMATCH", "Original MASTER_CUE hash does not match.");
     }
-    if (input.patches.length === 0) {
-      throw new DomainError(422, "CONTRACT_VIOLATION", "At least one cell patch is required.");
+    const rowOperations = input.rowOperations ?? [];
+    if (input.patches.length === 0 && rowOperations.length === 0) {
+      throw new DomainError(422, "CONTRACT_VIOLATION", "At least one cell or row change is required.");
     }
 
     const rows = cloneRows(current.rows);
@@ -685,12 +829,32 @@ export class InMemoryStore {
       }
       row[patch.column] = String(patch.to ?? "");
     }
+    for (const operation of rowOperations) {
+      if (operation.type === "DELETE") {
+        const index = rows.findIndex((row) => row.id === operation.row_id);
+        if (index < 0) throw new DomainError(422, "CELL_LOCATOR_INVALID", "Deleted event row does not exist.");
+        rows.splice(index, 1);
+        continue;
+      }
+      const index = rows.findIndex((row) => row.id === operation.after_row_id);
+      if (index < 0) throw new DomainError(422, "CELL_LOCATOR_INVALID", "Event insertion anchor does not exist.");
+      if (!/^t_\d+_n_[a-zA-Z0-9_-]+$/.test(operation.row.id) || rows.some((row) => row.id === operation.row.id)) {
+        throw new DomainError(422, "CELL_LOCATOR_INVALID", "Added event row ID is invalid or duplicated.");
+      }
+      const anchorSheet = /^t_(\d+)_/.exec(operation.after_row_id)?.[1];
+      const addedSheet = /^t_(\d+)_/.exec(operation.row.id)?.[1];
+      if (!anchorSheet || anchorSheet !== addedSheet) {
+        throw new DomainError(422, "CELL_LOCATOR_INVALID", "Added event must stay in its anchor sheet.");
+      }
+      rows.splice(index + 1, 0, structuredClone(operation.row));
+    }
 
     const createdAt = this.now();
     const revisionHash = hashJson({
       base_source_sha256: current.base_source_sha256,
       parent_revision_id: current.revision_id,
       patches: input.patches,
+      row_operations: rowOperations,
       rows,
     });
     const revision: CueRevision = {
@@ -701,6 +865,7 @@ export class InMemoryStore {
       base_source_sha256: current.base_source_sha256,
       revision_hash: revisionHash,
       patches: input.patches,
+      row_operations: rowOperations,
       created_by: input.actorId,
       created_at: createdAt,
       rows,
@@ -740,6 +905,50 @@ export class InMemoryStore {
       findings: verification.findings,
       verification,
     };
+  }
+
+  listCueRevisions(caseId: string): CueRevision[] {
+    const record = this.getCase(caseId);
+    return record.revisions.map((revision) => structuredClone(revision));
+  }
+
+  getCueRevision(caseId: string, revisionId: string): CueRevision {
+    const record = this.getCase(caseId);
+    const revision = record.revisions.find((candidate) => candidate.revision_id === revisionId);
+    if (!revision) throw new DomainError(404, "RESOURCE_NOT_FOUND", "Cue revision not found.");
+    return structuredClone(revision);
+  }
+
+  async exportCueRevision(caseId: string, revisionId: string): Promise<{ bytes: Uint8Array; filename: string }> {
+    const record = this.getCase(caseId);
+    const revision = this.getCueRevision(caseId, revisionId);
+    const source = record.sources.get("MASTER_CUE");
+    if (!source?.bytes || source.media_type !== "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet") {
+      throw new DomainError(422, "XLSX_EXPORT_UNAVAILABLE", "The original MASTER_CUE is not an XLSX workbook.");
+    }
+    if (revision.base_source_sha256 !== source.sha256) {
+      throw new DomainError(409, "SOURCE_HASH_MISMATCH", "Revision does not belong to the current MASTER_CUE.");
+    }
+    const base = record.revisions.find((candidate) => candidate.parent_revision_id === null
+      && candidate.base_source_sha256 === source.sha256);
+    if (!base) throw new DomainError(409, "SOURCE_SLOT_MISSING", "Base XLSX revision is missing.");
+    const filename = (source.original_filename ?? "master-cue.xlsx").replace(/\.xlsx$/i, "") + "-standby.xlsx";
+    return { bytes: await exportXlsxRevision(source.bytes, base.rows, revision.rows), filename };
+  }
+
+  async exportStandardCueDocx(caseId: string, revisionId: string): Promise<{ bytes: Uint8Array; filename: string }> {
+    const record = this.getCase(caseId);
+    const revision = this.getCueRevision(caseId, revisionId);
+    return {
+      bytes: await standardCueDocx(record.title, revision.revision_id, revision.rows),
+      filename: "standby-standard-cue.docx",
+    };
+  }
+
+  exportStandardCuePrint(caseId: string, revisionId: string): string {
+    const record = this.getCase(caseId);
+    const revision = this.getCueRevision(caseId, revisionId);
+    return standardCuePrintHtml(record.title, revision.revision_id, revision.rows);
   }
 
   private productionAgentInput(
@@ -911,6 +1120,7 @@ export class InMemoryStore {
     source: InternalSourceVersion,
     operation: Operation,
     projectionId: string,
+    record: CaseRecord | null,
   ): Promise<void> {
     operation.status = "RUNNING";
     operation.updated_at = this.now();
@@ -947,6 +1157,7 @@ export class InMemoryStore {
       const projection: ScriptProjection = {
         contract_version: "standby.script-projection.v1",
         projection_id: projectionId,
+        case_id: record?.case_id ?? null,
         authority: "NON_AUTHORITATIVE",
         source: {
           filename: source.original_filename,
@@ -966,7 +1177,16 @@ export class InMemoryStore {
         segments: projectScriptSegments(result.facts),
         created_at: this.now(),
       };
+      if (record) {
+        for (const [factId, fact] of record.facts) {
+          if (fact.source_role === "SCRIPT") record.facts.delete(factId);
+        }
+        for (const fact of result.facts) record.facts.set(fact.fact_id, structuredClone(fact));
+        record.current_snapshot_id = null;
+        record.verification = null;
+      }
       this.scriptProjections.set(projectionId, projection);
+      if (record) this.caseScriptProjectionIds.set(record.case_id, projectionId);
       operation.status = "SUCCEEDED";
       operation.result_source = "UPSTAGE";
       operation.updated_at = this.now();
@@ -1001,7 +1221,32 @@ export class InMemoryStore {
         );
       }
       const result = await this.productionAgentProvider.run(input.role, input.frozenInput);
-      const payload = validateProductionAgentOutput(input.role, result.output, input.allowlist);
+      let fallbackReason: ProductionArtifact["fallback_reason"];
+      let payload: ProductionArtifact["payload"];
+      try {
+        payload = validateProductionAgentOutput(input.role, result.output, input.allowlist);
+      } catch (error) {
+        if (!(error instanceof DomainError)
+          || error.code !== "PRODUCTION_AGENT_RESPONSE_INVALID"
+          || error.message !== "Fact normalization contains an unsupported normalized_fact_type."
+          || input.role !== "FACT_NORMALIZER") throw error;
+        const facts = input.frozenInput.payload.facts;
+        if (!Array.isArray(facts)) throw error;
+        payload = validateProductionAgentOutput("FACT_NORMALIZER", {
+          recommendations: facts.map((value) => {
+            const fact = value as Record<string, unknown>;
+            return {
+              fact_id: fact.fact_id,
+              normalized_fact_type: fact.fact_type,
+              value: fact.raw_value,
+              confidence: "NOT_PROVIDED",
+              authority: "NON_AUTHORITATIVE",
+            };
+          }),
+          missing_evidence: [],
+        }, input.allowlist);
+        fallbackReason = "UPSTAGE_RESPONSE_REJECTED";
+      }
       const artifact: ProductionArtifact = {
         contract_version: "standby.production-artifact.v1",
         artifact_id: input.artifactId,
@@ -1017,6 +1262,7 @@ export class InMemoryStore {
         config_id: result.config_id,
         adapter_version: result.adapter_version,
         raw_response_sha256: result.raw_response_sha256,
+        ...(fallbackReason ? { fallback_reason: fallbackReason } : {}),
         payload,
         created_at: this.now(),
       };
@@ -1046,6 +1292,7 @@ export class InMemoryStore {
     operation: Operation,
     runId: string,
     adapter: ExtractionAdapter,
+    cacheKey: string,
   ): Promise<void> {
     operation.status = "RUNNING";
     operation.updated_at = this.now();
@@ -1102,6 +1349,7 @@ export class InMemoryStore {
         created_at: this.now(),
       };
       this.extractionRuns.set(runId, extractionRun);
+      this.extractionCache.set(cacheKey, runId);
       operation.status = "SUCCEEDED";
       operation.result_source = resultSource;
       operation.updated_at = this.now();
