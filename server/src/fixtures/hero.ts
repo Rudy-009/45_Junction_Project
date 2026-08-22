@@ -108,10 +108,14 @@ export const HERO_ROWS: CueRow[] = [
 ];
 
 const at = (
-  hyewon: StageEntityState,
-  eunbi: StageEntityState,
-  bag: StageEntityState,
-): Record<string, StageEntityState> => ({ hyewon, eunbi, bag });
+  hyewon: Omit<StageEntityState, "kind">,
+  eunbi: Omit<StageEntityState, "kind">,
+  bag: Omit<StageEntityState, "kind">,
+): Record<string, StageEntityState> => ({
+  hyewon: { kind: "PERSON", ...hyewon },
+  eunbi: { kind: "PERSON", ...eunbi },
+  bag: { kind: "PROP", ...bag },
+});
 
 export const HERO_STAGE_SNAPSHOTS: Record<string, Record<string, StageEntityState>> = {
   E1: at(
