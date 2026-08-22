@@ -72,7 +72,7 @@ function sourceEvidence(
   sources: Map<SourceRole, InternalSourceVersion>,
   candidates: FactCandidate[],
   reviewedIds: Set<string>,
-  revision: CueRevision,
+  revision: CueRevision | null,
   useRevision: boolean,
 ): Evidence {
   const source = sources.get(role);
@@ -88,7 +88,7 @@ function sourceEvidence(
     };
   }
 
-  if (role === "MASTER_CUE" && useRevision && revision.patches.length > 0) {
+  if (role === "MASTER_CUE" && useRevision && revision && revision.patches.length > 0) {
     const row = revision.rows.find((candidate) => candidate.id === "R3");
     return {
       role,
@@ -167,7 +167,7 @@ function quickChangeFinding(input: VerifyInput, facts: EffectiveReviewedFact[]):
     if (!available || !routeToChange || minimumChange === null || !routeToEntry) {
       missing.push("MALFORMED_REVIEWED_FACT");
     } else {
-      if (input.revision.patches.length > 0) {
+      if (input.revision && input.revision.patches.length > 0) {
         const row = input.revision.rows.find((candidate) => candidate.id === "R3");
         const patchedMs = row ? secondsFromCell(row.환복시간 ?? "") : null;
         if (patchedMs === null) {
@@ -413,7 +413,7 @@ type VerifyInput = {
   caseId: string;
   sources: Map<SourceRole, InternalSourceVersion>;
   snapshot: InternalReviewSnapshot;
-  revision: CueRevision;
+  revision: CueRevision | null;
 };
 
 export function verifyProduction(input: VerifyInput): VerificationResult {
@@ -428,7 +428,7 @@ export function verifyProduction(input: VerifyInput): VerificationResult {
     source_snapshot_digest: input.snapshot.source_snapshot_digest,
     fact_snapshot_digest: input.snapshot.fact_snapshot_digest,
     reviewed_fact_ids: [...input.snapshot.reviewed_fact_ids].sort(),
-    revision_hash: input.revision.revision_hash,
+    revision_hash: input.revision?.revision_hash ?? null,
     ruleset_version: "standby.rules.v2",
   });
   return {

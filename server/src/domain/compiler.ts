@@ -128,11 +128,15 @@ function stageSnapshot(value: unknown): Record<string, StageEntityState> | null 
   for (const [entityId, rawState] of Object.entries(snapshot)) {
     const state = objectValue(rawState);
     const zone = stageZone(state?.zone);
+    const kind = state?.kind;
     const transition = state?.transition;
-    if (!entityId || !zone || (transition !== undefined && transition !== "ENTER" && transition !== "EXIT")) {
+    if (
+      !entityId || !zone || (kind !== "PERSON" && kind !== "PROP") ||
+      (transition !== undefined && transition !== "ENTER" && transition !== "EXIT")
+    ) {
       return null;
     }
-    result[entityId] = transition ? { zone, transition } : { zone };
+    result[entityId] = transition ? { kind, zone, transition } : { kind, zone };
   }
   return result;
 }

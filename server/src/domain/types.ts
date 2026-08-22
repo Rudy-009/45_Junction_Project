@@ -124,6 +124,7 @@ export type StageZone =
   | "STAGE_RIGHT_CHANGE";
 
 export type StageEntityState = {
+  kind: "PERSON" | "PROP";
   zone: StageZone;
   transition?: "ENTER" | "EXIT";
 };
@@ -192,7 +193,7 @@ export type WorkspaceSnapshot = {
   source_snapshot_digest: string;
   sources: SourceVersion[];
   review_snapshot_id: string;
-  cue_revision_id: string;
+  cue_revision_id: string | null;
   original_master_cue_sha256: string;
   event_graph: EventGraph;
   events: WorkspaceEvent[];
@@ -237,6 +238,7 @@ export type ExtractionRunRecord = {
 
 export type CaseRecord = {
   case_id: string;
+  owner_id: string;
   title: string;
   sources: Map<SourceRole, InternalSourceVersion>;
   facts: Map<string, FactCandidate>;
