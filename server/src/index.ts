@@ -1,27 +1,34 @@
 import { buildApp } from "./app.js";
 import { UpstageAgentProvider } from "./providers/upstage-agent-provider.js";
-import { createSupabaseAuthenticator } from "./security/supabase-auth.js";
-
-function parseBoolean(value: string | undefined): boolean {
-  if (!value) return false;
-  const normalized = value.trim().toLowerCase();
-  return normalized === "true" || normalized === "1" || normalized === "yes" || normalized === "on";
-}
 
 const isProduction = process.env.NODE_ENV === "production";
-const authBypass = process.env.STANDBY_AUTH_BYPASS === "true";
-const allowAnonymousTestJson = parseBoolean(process.env.STANDBY_ALLOW_ANON_TEST_JSON);
-const supabaseUrl = process.env.SUPABASE_URL;
-const authenticateToken = supabaseUrl
-  ? createSupabaseAuthenticator({
-      projectUrl: supabaseUrl,
-      audience: process.env.SUPABASE_JWT_AUDIENCE ?? "authenticated",
-    })
-  : undefined;
+const allowAnonymous = process.env.STANDBY_ALLOW_ANONYMOUS !== "false";
 const apiToken = process.env.STANDBY_API_TOKEN ?? (isProduction ? undefined : "local-dev-token");
-if (isProduction && !authenticateToken && !authBypass && !allowAnonymousTestJson) {
-  throw new Error("SUPABASE_URL is required in production for user JWT verification.");
-}
+const upstageAgentDefaults = {
+  extraction: {
+    script: "agt_7yeqpDe7zmwCGVWoMY377j",
+    masterCue: "agt_FkyNiySGY4WACFvMNV5DRQ",
+    stageSpec: "agt_PxbxmhXXT8iqdzs5WmHfUz",
+    config: {
+      script: "1",
+      masterCue: "3",
+      stageSpec: "1",
+      factNormalizer: "1",
+      storyboardRecomposer: "1",
+      rehearsalBrief: "1",
+    },
+  },
+  production: {
+    factNormalizer: "agt_6tn639gGApNdV9SdRfAjnE",
+    storyboardRecomposer: "agt_go8aoJTVDvEwK8mwXh5gEi",
+    rehearsalBrief: "agt_9iLkb7fqwdEtaBv48t9tQA",
+    config: {
+      factNormalizer: "1",
+      storyboardRecomposer: "1",
+      rehearsalBrief: "1",
+    },
+  },
+};
 
 const allowedOrigins = (process.env.STANDBY_ALLOWED_ORIGINS ?? "http://localhost:5173")
   .split(",")
@@ -32,35 +39,81 @@ const sharedAgentId = process.env.UPSTAGE_AGENT_ID;
 const scriptAgentId = process.env.UPSTAGE_AGENT_ID_SCRIPT ?? sharedAgentId;
 const masterCueAgentId = process.env.UPSTAGE_AGENT_ID_MASTER_CUE ?? sharedAgentId;
 const agentIds = {
-  ...(scriptAgentId ? { SCRIPT: scriptAgentId } : {}),
-  ...(masterCueAgentId ? { MASTER_CUE: masterCueAgentId } : {}),
+  ...(scriptAgentId || upstageAgentDefaults.extraction.script
+    ? { SCRIPT: scriptAgentId ?? upstageAgentDefaults.extraction.script }
+    : {}),
+  ...(masterCueAgentId || upstageAgentDefaults.extraction.masterCue
+    ? { MASTER_CUE: masterCueAgentId ?? upstageAgentDefaults.extraction.masterCue }
+    : {}),
+  ...(process.env.UPSTAGE_AGENT_ID_STAGE_SPEC || upstageAgentDefaults.extraction.stageSpec
+    ? { STAGE_SPEC: process.env.UPSTAGE_AGENT_ID_STAGE_SPEC ?? upstageAgentDefaults.extraction.stageSpec }
+    : {}),
 };
 const configIds = {
-  ...(process.env.UPSTAGE_CONFIG_ID_SCRIPT
-    ? { SCRIPT: process.env.UPSTAGE_CONFIG_ID_SCRIPT }
+  ...(process.env.UPSTAGE_CONFIG_ID_SCRIPT || upstageAgentDefaults.extraction.config.script
+    ? { SCRIPT: process.env.UPSTAGE_CONFIG_ID_SCRIPT ?? upstageAgentDefaults.extraction.config.script }
     : {}),
-  ...(process.env.UPSTAGE_CONFIG_ID_MASTER_CUE
-    ? { MASTER_CUE: process.env.UPSTAGE_CONFIG_ID_MASTER_CUE }
+  ...(process.env.UPSTAGE_CONFIG_ID_MASTER_CUE || upstageAgentDefaults.extraction.config.masterCue
+    ? { MASTER_CUE: process.env.UPSTAGE_CONFIG_ID_MASTER_CUE ?? upstageAgentDefaults.extraction.config.masterCue }
+    : {}),
+  ...(process.env.UPSTAGE_CONFIG_ID_STAGE_SPEC || upstageAgentDefaults.extraction.config.stageSpec
+    ? { STAGE_SPEC: process.env.UPSTAGE_CONFIG_ID_STAGE_SPEC ?? upstageAgentDefaults.extraction.config.stageSpec }
+    : {}),
+};
+const productionAgentIds = {
+  ...(process.env.UPSTAGE_AGENT_ID_FACT_NORMALIZER || upstageAgentDefaults.production.factNormalizer
+    ? { FACT_NORMALIZER: process.env.UPSTAGE_AGENT_ID_FACT_NORMALIZER ?? upstageAgentDefaults.production.factNormalizer }
+    : {}),
+  ...(process.env.UPSTAGE_AGENT_ID_STORYBOARD_RECOMPOSER || upstageAgentDefaults.production.storyboardRecomposer
+    ? {
+      STORYBOARD_RECOMPOSER:
+        process.env.UPSTAGE_AGENT_ID_STORYBOARD_RECOMPOSER
+        ?? upstageAgentDefaults.production.storyboardRecomposer,
+    }
+    : {}),
+  ...(process.env.UPSTAGE_AGENT_ID_REHEARSAL_BRIEF || upstageAgentDefaults.production.rehearsalBrief
+    ? { REHEARSAL_BRIEF: process.env.UPSTAGE_AGENT_ID_REHEARSAL_BRIEF ?? upstageAgentDefaults.production.rehearsalBrief }
+    : {}),
+};
+const productionConfigIds = {
+  ...(process.env.UPSTAGE_CONFIG_ID_FACT_NORMALIZER || upstageAgentDefaults.production.config.factNormalizer
+    ? { FACT_NORMALIZER: process.env.UPSTAGE_CONFIG_ID_FACT_NORMALIZER ?? upstageAgentDefaults.production.config.factNormalizer }
+    : {}),
+  ...(process.env.UPSTAGE_CONFIG_ID_STORYBOARD_RECOMPOSER || upstageAgentDefaults.production.config.storyboardRecomposer
+    ? {
+      STORYBOARD_RECOMPOSER:
+        process.env.UPSTAGE_CONFIG_ID_STORYBOARD_RECOMPOSER
+        ?? upstageAgentDefaults.production.config.storyboardRecomposer,
+    }
+    : {}),
+  ...(process.env.UPSTAGE_CONFIG_ID_REHEARSAL_BRIEF || upstageAgentDefaults.production.config.rehearsalBrief
+    ? { REHEARSAL_BRIEF: process.env.UPSTAGE_CONFIG_ID_REHEARSAL_BRIEF ?? upstageAgentDefaults.production.config.rehearsalBrief }
     : {}),
 };
 
-const extractionProvider = process.env.UPSTAGE_API_KEY
+const upstageProvider = process.env.UPSTAGE_API_KEY
   ? new UpstageAgentProvider({
       apiKey: process.env.UPSTAGE_API_KEY,
       agentIds,
       configIds,
+      productionAgentIds,
+      productionConfigIds,
       pollIntervalMs: Number(process.env.UPSTAGE_POLL_INTERVAL_MS ?? 2_000),
-      timeoutMs: Number(process.env.UPSTAGE_TIMEOUT_MS ?? 120_000),
+      timeoutMs: Number(process.env.UPSTAGE_TIMEOUT_MS ?? 600_000),
     })
   : undefined;
 
 const app = await buildApp({
   allowedOrigins,
   logger: true,
-  ...(allowAnonymousTestJson ? { allowAnonymousTestJson: true } : {}),
-  ...(authBypass ? { authBypass: true } : {}),
-  ...(authenticateToken ? { authenticateToken } : {}),
+  allowAnonymous,
   ...(apiToken ? { apiToken } : {}),
-  ...(extractionProvider ? { extractionProvider } : {}),
+  ...(upstageProvider
+    ? {
+        extractionProvider: upstageProvider,
+        productionAgentProvider: upstageProvider,
+        scriptProjectionProvider: upstageProvider,
+      }
+    : {}),
 });
 await app.listen({ host: "0.0.0.0", port });

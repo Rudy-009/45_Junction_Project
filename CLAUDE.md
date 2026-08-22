@@ -109,13 +109,16 @@ npm run build
 8. **`INSUFFICIENT_EVIDENCE` 회색이 비활성처럼 보이면 안 된다.** 의도된 상태다
 9. **모서리 0px, 그림자 없음, 1px 경계.** 색은 verdict와 person/prop 인코딩에만
 10. **사람=원+cyan, 소품=사각형+amber.** 도형과 색 **둘 다**로 구분한다 (색각 접근성)
+11. **Script Sidebar는 워크스페이스 내부의 접이식 읽기 전용 보조 패널만 허용한다.** DOCX 우선·PDF
+    보조로 받은 대본을 Upstage가 구조화한 실제 대사·지문만 표시하며 timeline과 위치를 맞춘다
 
 ### 명시적 금지 목록
 
-5단계 헤더 · 사이드바 · 좌측 finding 목록 · PROPOSAL Option A/B/C · 병렬 3버튼 ·
+5단계 헤더 · 전역 내비게이션/다목적 사이드바 · 좌측 finding 목록 · PROPOSAL Option A/B/C · 병렬 3버튼 ·
 별도 Final 2D 화면 · revision lineage 패널 · EXPORT LOG · Zoom 슬라이더 ·
 Ctrl+F 검색 · JSON raw 뷰 · 실제 건축 도면 · 라이트모드 토글 ·
-**시뮬레이터 드래그앤드롭** · **노드 이동 애니메이션**
+**시뮬레이터 드래그앤드롭** · **연속 scrub/비인접 event 경로 애니메이션** ·
+Agent가 만든 좌표·실제 blocking 경로 · 반복/bounce/particle motion · **입력 화면의 Script 카드 복원**
 
 ---
 
@@ -125,6 +128,8 @@ Ctrl+F 검색 · JSON raw 뷰 · 실제 건축 도면 · 라이트모드 토글 
 |---|---|---|---|
 | **P0** | **외부 운영 provision** | Railway + Supabase + Vercel | 코드·image는 완료. 프로젝트 생성, secret/public env, live smoke 필요 |
 | **P0** | **실제 reference fidelity** | QA gold fact | 한국어 대본·17열 Master Cue의 locator·critical token을 원문 대조 |
+| **P0** | **Upstage Agent 4종 live smoke** | Studio + provider + review/workspace | Studio Config #1 저장과 서버 배선은 구현. 실제 Agents API 응답·strict decode·fallback을 Agent별로 검증해야 함 |
+| **P0** | **인접 snapshot semantic transition** | `StageSimulator` `WorkspaceScreen` | 180–360ms, jump/back·reduced-motion·Agent 실패는 정적 fallback |
 | P1 | XLSX export | 새 adapter/서비스 | 원본 sheet·열·서식을 보존한 새 파일 |
 | P2 | refresh gate | source/store/workspace | 동일 hash 재호출 금지, 새 fact는 UNREVIEWED |
 | P2 | revision·영속성 | store/DB | 원본 hash 위 append-only patch와 복원 |
@@ -135,9 +140,10 @@ review→snapshot→workspace E2E가 연결됐다. 외부 Railway/Supabase provi
 정적 Vercel SPA에 Upstage key나 정적 API token을 넣어 이 순서를 우회하지 않는다.
 완료 여부를 바꿀 때는 `project/FEATURE_SPEC_CURRENT.md`도 같은 PR에서 갱신한다.
 
-### 이벤트별 무대 스냅샷 — P0 사양
+### 이벤트별 무대 스냅샷과 의미 전환 — P0 사양
 
-**애니메이션이 아니라 정적 스냅샷이다.** 연출자가 알고 싶은 것은 결과 상태이지 이동 과정이 아니다.
+**정본은 이벤트별 정적 스냅샷이다.** motion은 실제 이동 경로나 새 상태를 만들지 않고, 시간순으로
+인접한 두 verified snapshot의 차이만 짧게 보여 준다.
 
 ```ts
 type Transition = "ENTER" | "EXIT";
@@ -160,6 +166,44 @@ type StageSnapshots = Record<EventId, Record<EntityId, EntityStateAtEvent>>;
 `ENTER`/`EXIT`는 `--enter: #22c55e` / `--exit: #ef4444`를 쓴다. MVP에서 색각 대응은 범위 밖이다.
 verdict 색은 저채도 파스텔이라 정상 시야에서 구분되지만, **방향과 라벨이 여전히 주 신호**다.
 (접근성을 다룰 때는 단일 색 + 방향·채움·라벨 3중 인코딩으로 되돌린다 — 측정상 보색 쌍은 존재하지 않는다.)
+
+허용 motion 계약:
+
+- 인접 event에서 바뀐 entity만 180–360ms, 한 전환 총 600ms 이하
+- 비인접 jump/back은 정적 교체 또는 180ms 이하 crossfade
+- `prefers-reduced-motion`은 항상 정적 교체
+- Storyboard Recomposer는 reviewed action의 의미 순서만 `NON_AUTHORITATIVE`로 추천. event/entity/zone/fact
+  allowlist를 벗어나면 거절하고 정적 snapshot으로 fallback
+- timeline 클릭은 cached storyboard를 즉시 선택하며 Agent job을 동기 대기하지 않음
+
+추가 Agent 신뢰 계약:
+
+- Stage Spec Extractor의 fact는 항상 `UNREVIEWED`
+- Fact Normalizer 추천 type/value는 `NON_AUTHORITATIVE`; 추천값은 읽기 전용, 직접 수정은 Agent-fixed type에서
+  값만 편집한다. type 오류는 추천 거절로 처리하고 `모두 승인`도 사람의 명시적 bulk review 기록을 남긴다
+- Rehearsal Brief는 기존 finding/evidence만 요약하고 새 finding·verdict·안전 결론을 만들지 않음
+- Storyboard의 `beats`와 `missing_evidence`는 읽기 전용 `NON_AUTHORITATIVE` 보조 결과다. 정적 snapshot과
+  deterministic verdict가 정본이며 Agent 결과가 이를 만들거나 바꾸지 못한다
+- 네 Agent 모두 Agent/Config/job/input/output hash provenance와 cache key를 남기며 live smoke 전 완료형으로 말하지 않음
+
+현재 Studio/서버 연결 상태 (Config는 모두 `#1`, **live smoke는 아직 대기**):
+
+| Agent | Agent ID | 상태 |
+|---|---|---|
+| Stage Spec Extractor | `agt_PxbxmhXXT8iqdzs5WmHfUz` | Studio 저장 · 서버 배선 구현 |
+| Fact Normalizer | `agt_6tn639gGApNdV9SdRfAjnE` | Studio 저장 · 서버 배선 구현 |
+| Storyboard Recomposer | `agt_go8aoJTVDvEwK8mwXh5gEi` | Studio 저장 · 서버 배선 구현 |
+| Rehearsal Brief | `agt_9iLkb7fqwdEtaBv48t9tQA` | Studio 저장 · 서버 배선 구현 |
+
+### Script Sidebar — 허용되는 유일한 사이드바
+
+- 입력 화면의 세 번째 카드나 별도 화면이 아니라 **워크스페이스 내부의 접이식 읽기 전용 패널**이다
+- 패널에서 DOCX(우선) 또는 PDF(보조)를 받아 서버의 Upstage Script Extractor로
+  `standby.script-projection.v1`을 만든다. 사용자에게 대본 JSON을 요구하지 않는다
+- exact `event_id`가 있는 실제 `DIALOGUE`·`STAGE_DIRECTION`만 자동 연결하고, 나머지는 사람이 현재
+  event에 연결한다. MASTER_CUE trigger·note나 event label로 대체하지 않는다
+- timeline event를 선택하면 해당 발췌로 스크롤하고 강조한다. 발췌를 선택하면 같은 event로 이동한다
+- 대본 원문은 localStorage에 보존하지 않으며 fact·snapshot·verdict authority를 얻지 않는다
 
 ### 시뮬레이터는 읽기 전용이다
 
@@ -212,7 +256,8 @@ export 규칙 — 자세한 계약은 `project/PRD_CLAUDE.md` §10:
 ```
 세 입력 → Upstage 추출 → UNREVIEWED fact 검토·승인 → snapshot freeze
   → reviewed 8-event graph → VR-01/02/03 finding + 근거 3종
-  → 타임라인 사건 선택 → 같은 시점 큐·무대 상태 재현
+  → 타임라인 사건 선택 → 같은 시점 큐·무대 상태 + cached semantic transition 재현
+  → 기존 finding 근거만 사용하는 rehearsal brief 확인
 ```
 
 UI를 바꿨다면 브라우저에서 같은 case ID의 이 흐름을 끝까지 실행하고, 승인 전에는 세 규칙 모두

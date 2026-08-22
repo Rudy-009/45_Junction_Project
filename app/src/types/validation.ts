@@ -3,12 +3,10 @@ export type Severity = 'ERROR' | 'WARNING';
 export type RuleId = 
   | 'duplicate_enter'
   | 'no_backstage_crossover'
-  | 'insufficient_crossover_time'
   | 'prop_location_contradiction'
   | 'prop_already_on_stage'
   | 'prop_not_on_stage'
-  | 'exit_without_enter'
-  | 'insufficient_costume_time';
+  | 'exit_without_enter';
 
 export interface Contradiction {
   severity: Severity;

@@ -3,7 +3,7 @@ import { after, before, test } from "node:test";
 import type { FastifyInstance } from "fastify";
 import { buildApp } from "../src/app.js";
 import { DomainError } from "../src/domain/errors.js";
-import type { InternalSourceVersion, SourceRole } from "../src/domain/types.js";
+import type { FactCandidate, InternalSourceVersion, SourceRole } from "../src/domain/types.js";
 import { HERO_SOURCE_CONTENT } from "../src/fixtures/hero.js";
 import { sha256 } from "../src/lib/hash.js";
 import { UpstageAgentProvider } from "../src/providers/upstage-agent-provider.js";
@@ -91,17 +91,24 @@ test("SCRIPT multipart upload hashes bytes and never echoes file contents", asyn
   assert.equal((replay.json() as { source_id: string }).source_id, source.source_id);
 });
 
-test("real-file API flow reaches human review snapshot with only MASTER_CUE", async () => {
+test("MASTER_CUE JSON file reaches Upstage extraction and human review", async () => {
   const provider: ExtractionProvider = {
     async extract(sources) {
       const roles = ["MASTER_CUE"] as const;
       const facts = roles.map((role) => {
         const current = sources.get(role);
         assert.ok(current);
+        assert.equal(current.media_type, "application/json");
+        assert.equal(current.original_filename, "master.json");
+        assert.ok(current.bytes);
         return {
           fact_id: `fact_${role.toLowerCase()}`,
-          fact_type: `${role}_FACT`,
-          raw_value: { observed: true },
+          fact_type: "QUICK_CHANGE_AVAILABLE_WINDOW",
+          raw_value: {
+            min_ms: 58_000,
+            max_ms: 62_000,
+            target: { row_id: "R3", column: "환복시간" },
+          },
           reviewed_value: null,
           source_role: role,
           source_id: current.source_id,
@@ -149,9 +156,9 @@ test("real-file API flow reaches human review snapshot with only MASTER_CUE", as
     for (const upload of [
       {
         role: "MASTER_CUE",
-        filename: "master.xlsx",
-        mediaType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        bytes: Buffer.from([0x50, 0x4b, 0x03, 0x04]),
+        filename: "master.json",
+        mediaType: "application/json",
+        bytes: Buffer.from('{"events":[]}'),
       },
     ] as const) {
       const boundary = `boundary-${upload.role}`;
@@ -193,7 +200,7 @@ test("real-file API flow reaches human review snapshot with only MASTER_CUE", as
       url: `/v1/cases/${caseId}/review-queue`,
       headers: auth(),
     });
-    const facts = (queue.json() as { items: Array<{ fact_id: string; review_status: string }> }).items;
+    const facts = (queue.json() as { items: FactCandidate[] }).items;
     assert.equal(facts.length, 1);
     assert.ok(facts.every((fact) => fact.review_status === "UNREVIEWED"));
 
@@ -202,7 +209,15 @@ test("real-file API flow reaches human review snapshot with only MASTER_CUE", as
       url: `/v1/cases/${caseId}/fact-reviews:batch`,
       headers: auth("review-live-facts"),
       payload: {
-        reviews: facts.map((fact) => ({ fact_id: fact.fact_id, decision: "REVIEWED" })),
+        reviews: facts.map((fact) => ({
+          fact_id: fact.fact_id,
+          decision: "REVIEWED",
+          source: "CUSTOM",
+          corrected_value: {
+            normalized_fact_type: fact.fact_type,
+            value: fact.raw_value,
+          },
+        })),
       },
     });
     assert.equal(reviews.statusCode, 201, reviews.body);
@@ -237,7 +252,12 @@ test("real-file API flow reaches human review snapshot with only MASTER_CUE", as
 
 function source(
   role: SourceRole,
-  input: { bytes: Uint8Array | null; content: unknown; mediaType: string | null },
+  input: {
+    bytes: Uint8Array | null;
+    content: unknown;
+    mediaType: string | null;
+    originalFilename?: string | null;
+  },
 ): InternalSourceVersion {
   return {
     contract_version: "standby.source.v1",
@@ -248,7 +268,9 @@ function source(
     origin: "USER_PROVIDED",
     authority: "REVIEWED",
     media_type: input.mediaType,
-    original_filename: role === "SCRIPT" ? "script.pdf" : role === "MASTER_CUE" ? "cue.xlsx" : null,
+    original_filename:
+      input.originalFilename ??
+      (role === "SCRIPT" ? "script.pdf" : role === "MASTER_CUE" ? "cue.xlsx" : null),
     created_at: "2026-08-22T00:00:00.000Z",
     content: input.content,
     bytes: input.bytes,
@@ -268,13 +290,28 @@ test("Upstage adapter extracts a master cue without script or stage spec", async
       createBodies.push(body);
       assert.equal(body.config_id, "cfg_cue");
       assert.equal(body.model, "agt_cue");
+      assert.equal("include" in body, false);
       return Response.json({ id: "job-cue" });
     }
     if (url.includes("job-cue")) {
+      const pollUrl = new URL(url);
+      assert.equal(pollUrl.pathname.endsWith("/v2/responses/job-cue"), true);
+      assert.equal(pollUrl.searchParams.get("include[]"), "all");
       return Response.json({
         id: "job-cue",
         status: "completed",
-        output: [{ content: [{ type: "output_text", text: JSON.stringify({ cue_facts: [{ fact_type: "QUICK_CHANGE_AVAILABLE_WINDOW", locator: "Cue!C12", source_quote_raw: "58-62s", min_ms: 58000, max_ms: 62000 }] }) }] }],
+        output: [{ content: [{
+          type: "output_text",
+          additional_values: {
+            cue_facts: [{
+              fact_type: "QUICK_CHANGE_AVAILABLE_WINDOW",
+              locator: "Cue!C12",
+              source_quote_raw: "58-62s",
+              min_ms: 58000,
+              max_ms: 62000,
+            }],
+          },
+        }] }],
       });
     }
     throw new Error(`Unexpected URL: ${url}`);
@@ -298,6 +335,222 @@ test("Upstage adapter extracts a master cue without script or stage spec", async
   assert.ok(result.facts.every((fact) => fact.review_status === "UNREVIEWED"));
   assert.deepEqual(result.sourceRuns.map((run) => run.provider), ["UPSTAGE"]);
   assert.ok(result.sourceRuns.every((run) => /^[a-f0-9]{64}$/.test(run.raw_response_sha256)));
+});
+
+test("Upstage adapter reaches Extract output after a large XLSX Parse payload", async () => {
+  const parseNoise = Array.from({ length: 10_001 }, (_, index) => ({
+    row: index + 1,
+    cells: [{ style_id: index % 8 }],
+  }));
+  const mockFetch: typeof fetch = async (input, init) => {
+    const url = String(input);
+    if (url.endsWith("/v2/files")) return Response.json({ id: "file-large-cue" });
+    if (url.endsWith("/v2/responses") && init?.method === "POST") {
+      return Response.json({ id: "job-large-cue" });
+    }
+    return Response.json({
+      id: "job-large-cue",
+      status: "completed",
+      output: [
+        { type: "parse", additional_values: { rows: parseNoise } },
+        {
+          type: "extract",
+          content: [{
+            type: "output_text",
+            additional_values: {
+              cue_facts: [{
+                fact_type: "CUE_TRIGGER",
+                locator: "전체 큐시트!A6",
+                source_quote_raw: "N#1",
+              }],
+            },
+          }],
+        },
+      ],
+    });
+  };
+  const provider = new UpstageAgentProvider({
+    apiKey: "secret-test-key",
+    agentIds: { MASTER_CUE: "agt_cue" },
+    fetchImpl: mockFetch,
+    pollIntervalMs: 0,
+    timeoutMs: 1_000,
+  });
+
+  const result = await provider.extract(new Map<SourceRole, InternalSourceVersion>([
+    ["MASTER_CUE", source("MASTER_CUE", {
+      bytes: Uint8Array.from([0x50, 0x4b, 1, 2]),
+      content: null,
+      mediaType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    })],
+  ]));
+
+  assert.equal(result.facts.length, 1);
+  assert.equal(result.facts[0]?.fact_type, "CUE_TRIGGER");
+  assert.equal(result.facts[0]?.locator, "전체 큐시트!A6");
+});
+
+test("Upstage adapter accepts the raw locator field from the frozen cue schema", async () => {
+  const mockFetch: typeof fetch = async (input, init) => {
+    const url = String(input);
+    if (url.endsWith("/v2/files")) return Response.json({ id: "file-raw-locator" });
+    if (url.endsWith("/v2/responses") && init?.method === "POST") {
+      return Response.json({ id: "job-raw-locator" });
+    }
+    return Response.json({
+      id: "job-raw-locator",
+      status: "completed",
+      output: [{
+        type: "extract",
+        content: [{
+          type: "output_text",
+          additional_values: {
+            cue_facts: [{
+              record_kind: "ACTION",
+              source_locator_raw: "cue:sheet0:r0046:c0013",
+              source_quote_raw: "노래 시작하면 전체 on",
+            }],
+          },
+        }],
+      }],
+    });
+  };
+  const provider = new UpstageAgentProvider({
+    apiKey: "secret-test-key",
+    agentIds: { MASTER_CUE: "agt_cue" },
+    fetchImpl: mockFetch,
+    pollIntervalMs: 0,
+    timeoutMs: 1_000,
+  });
+
+  const result = await provider.extract(new Map<SourceRole, InternalSourceVersion>([
+    ["MASTER_CUE", source("MASTER_CUE", {
+      bytes: Uint8Array.from([0x50, 0x4b, 1, 2]),
+      content: null,
+      mediaType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    })],
+  ]));
+
+  assert.equal(result.facts.length, 1);
+  assert.equal(result.facts[0]?.fact_type, "ACTION");
+  assert.equal(result.facts[0]?.locator, "cue:sheet0:r0046:c0013");
+  assert.equal(result.facts[0]?.quote, "노래 시작하면 전체 on");
+});
+
+test("Upstage adapter prefers a fully evidenced Extract payload over intermediate cue data", async () => {
+  const mockFetch: typeof fetch = async (input, init) => {
+    const url = String(input);
+    if (url.endsWith("/v2/files")) return Response.json({ id: "file-multiple-candidates" });
+    if (url.endsWith("/v2/responses") && init?.method === "POST") {
+      return Response.json({ id: "job-multiple-candidates" });
+    }
+    return Response.json({
+      id: "job-multiple-candidates",
+      status: "completed",
+      output: [{
+        type: "extract",
+        additional_values: {
+          cue_facts: [{ fact_type: "INTERMEDIATE_ROW" }],
+        },
+        content: [{
+          type: "output_text",
+          text: JSON.stringify({
+            cue_facts: [{
+              fact_type: "CUE_ROW",
+              locator: "t_0_r_5",
+              source_quote_raw: "N#1 We're all adventurers",
+            }],
+          }),
+        }],
+      }],
+    });
+  };
+  const provider = new UpstageAgentProvider({
+    apiKey: "secret-test-key",
+    agentIds: { MASTER_CUE: "agt_cue" },
+    fetchImpl: mockFetch,
+    pollIntervalMs: 0,
+    timeoutMs: 1_000,
+  });
+
+  const result = await provider.extract(new Map<SourceRole, InternalSourceVersion>([
+    ["MASTER_CUE", source("MASTER_CUE", {
+      bytes: Uint8Array.from([0x50, 0x4b, 1, 2]),
+      content: null,
+      mediaType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    })],
+  ]));
+
+  assert.equal(result.facts.length, 1);
+  assert.equal(result.facts[0]?.fact_type, "CUE_ROW");
+  assert.equal(result.facts[0]?.locator, "t_0_r_5");
+});
+
+test("Upstage adapter converts JSON master cues to a supported XLSX transport", async () => {
+  const originalBytes = new TextEncoder().encode(JSON.stringify({
+    cues: [{ cue_id: "E1", trigger: "LIGHT GO" }],
+  }));
+  const originalHash = sha256(originalBytes);
+  let uploadedFile: File | null = null;
+  const mockFetch: typeof fetch = async (input, init) => {
+    const url = String(input);
+    if (url.endsWith("/v2/files")) {
+      assert.ok(init?.body instanceof FormData);
+      const file = init.body.get("file");
+      assert.ok(file instanceof File);
+      uploadedFile = file;
+      assert.equal(file.name, "cue.upstage.xlsx");
+      assert.equal(
+        file.type,
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      );
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      assert.deepEqual([...bytes.subarray(0, 2)], [0x50, 0x4b]);
+      return Response.json({ id: "file-json-cue" });
+    }
+    if (url.endsWith("/v2/responses") && init?.method === "POST") {
+      return Response.json({ id: "job-json-cue" });
+    }
+    const pollUrl = new URL(url);
+    assert.equal(pollUrl.searchParams.get("include[]"), "all");
+    return Response.json({
+      id: "job-json-cue",
+      status: "completed",
+      output: [{
+        content: [{
+          additional_values: JSON.stringify({
+            cue_facts: [{
+              fact_type: "CUE_TRIGGER",
+              locator: "/cues/0/trigger",
+              source_quote_raw: "LIGHT GO",
+            }],
+          }),
+        }],
+      }],
+    });
+  };
+  const jsonSource = source("MASTER_CUE", {
+    bytes: originalBytes,
+    content: null,
+    mediaType: "application/json",
+    originalFilename: "cue.json",
+  });
+  const provider = new UpstageAgentProvider({
+    apiKey: "secret-test-key",
+    agentIds: { MASTER_CUE: "agt_cue" },
+    fetchImpl: mockFetch,
+    pollIntervalMs: 0,
+    timeoutMs: 1_000,
+  });
+
+  const result = await provider.extract(
+    new Map<SourceRole, InternalSourceVersion>([["MASTER_CUE", jsonSource]]),
+  );
+
+  assert.ok(uploadedFile);
+  assert.equal(jsonSource.sha256, originalHash);
+  assert.deepEqual(jsonSource.bytes, originalBytes);
+  assert.equal(result.facts[0]?.locator, "/cues/0/trigger");
 });
 
 test("Upstage adapter fails closed when a generated fact has no evidence quote", async () => {
@@ -330,5 +583,31 @@ test("Upstage adapter fails closed when a generated fact has no evidence quote",
   await assert.rejects(
     () => provider.extract(sources),
     (error: unknown) => error instanceof DomainError && error.code === "UPSTAGE_EVIDENCE_MISSING",
+  );
+});
+
+test("Upstage adapter reports only the failed upstream status", async () => {
+  const provider = new UpstageAgentProvider({
+    apiKey: "secret-test-key",
+    agentIds: { MASTER_CUE: "agt_cue" },
+    fetchImpl: async () => Response.json(
+      { error: "sensitive upstream detail" },
+      { status: 415 },
+    ),
+  });
+  const sources = new Map<SourceRole, InternalSourceVersion>([
+    ["MASTER_CUE", source("MASTER_CUE", {
+      bytes: new TextEncoder().encode('{"rows":[]}'),
+      content: null,
+      mediaType: "application/json",
+    })],
+  ]);
+
+  await assert.rejects(
+    () => provider.extract(sources),
+    (error: unknown) => error instanceof DomainError
+      && error.code === "UPSTAGE_REQUEST_FAILED"
+      && error.message === "Upstage API request failed with status 415."
+      && !error.message.includes("sensitive upstream detail"),
   );
 });

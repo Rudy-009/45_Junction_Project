@@ -1,9 +1,7 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import {
   AlertTriangle,
-  Check,
   FileSpreadsheet,
-  FileText,
   Info,
   LoaderCircle,
   Plus,
@@ -11,14 +9,13 @@ import {
   X,
 } from 'lucide-react';
 import {
-  StandbyApi,
   StandbyApiError,
+  createStandbyBrowserApi,
   type SourceOrigin,
 } from '@/lib/standby-api';
-import { FactReviewPanel, type FactReviewCommand } from '@/components/domain';
-import { useStandbyWorkspaceStore } from '@/store';
-import type { FactCandidate } from '@/types/standby';
-import { authBypassEnabled, authConfigured, getStandbyAccessToken, supabase } from '@/lib/auth';
+import { useCueSheetStore, useReviewFlowStore, useStandbyWorkspaceStore } from '@/store';
+import type { CueSheet } from '@/types/cue-sheet';
+import { parseCueSheetJson } from '@/lib/cue-sheet-json';
 import { useI18n, type Locale } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { useNavigate } from '@tanstack/react-router';
@@ -34,14 +31,15 @@ const ZONES = [
   ['STAGE_LEFT_CHANGE', '하수 환복소'],
 ] as const;
 
-type SourceInputKind = 'MASTER_CUE_FILE' | 'MASTER_CUE_JSON';
+type SourceInputKind = 'MASTER_CUE';
 type Crossover = 'UNKNOWN' | 'AVAILABLE' | 'UNAVAILABLE';
-type SubmitPhase = 'IDLE' | 'UPLOADING' | 'EXTRACTING' | 'REVIEW' | 'VERIFYING' | 'SUCCEEDED' | 'FAILED';
+type SubmitPhase = 'IDLE' | 'UPLOADING' | 'EXTRACTING' | 'NORMALIZING' | 'REVIEW' | 'FAILED';
 
 type SelectedSource = {
   file: File;
   sha256: string;
   origin: SourceOrigin;
+  cueSheet?: CueSheet;
 };
 
 type RouteDraft = {
@@ -66,15 +64,10 @@ const SOURCE_CONFIG: Record<SourceInputKind, {
   accept: string;
   extensions: string[];
 }> = {
-  MASTER_CUE_FILE: {
+  MASTER_CUE: {
     label: 'MASTER CUE',
-    accept: '.xlsx,.pdf',
-    extensions: ['xlsx', 'pdf'],
-  },
-  MASTER_CUE_JSON: {
-    label: 'TEST JSON',
-    accept: '.json',
-    extensions: ['json'],
+    accept: '.xlsx,.pdf,.json',
+    extensions: ['xlsx', 'pdf', 'json'],
   },
 };
 
@@ -137,24 +130,20 @@ async function inspectSourceFile(kind: SourceInputKind, file: File, locale: Loca
   if ((extension === 'docx' || extension === 'xlsx') && !isZip) {
     throw new Error(locale === 'ko' ? '확장자와 Office 파일 서명이 일치하지 않습니다.' : 'The extension does not match the Office file signature.');
   }
-  if (extension === 'json') {
-    try {
-      JSON.parse(text);
-    } catch {
-      throw new Error(locale === 'ko' ? 'JSON 파일 형식이 올바르지 않습니다.' : 'The JSON file format is invalid.');
-    }
-  }
+  const cueSheet = extension === 'json' ? parseCueSheetJson(text, locale) : undefined;
 
-  return { file, sha256: await sha256(bytes), origin: SOURCE_ORIGIN };
+  return { file, sha256: await sha256(bytes), origin: SOURCE_ORIGIN, cueSheet };
 }
 
 export function InputScreen() {
   const { locale, t } = useI18n();
   const navigate = useNavigate();
-  const setWorkspace = useStandbyWorkspaceStore((state) => state.setWorkspace);
   const clearWorkspace = useStandbyWorkspaceStore((state) => state.clear);
+  const loadCueSheet = useCueSheetStore((state) => state.loadCueSheet);
+  const clearCueSheet = useCueSheetStore((state) => state.clearCueSheet);
+  const setReviewFlowContext = useReviewFlowStore((state) => state.setReviewContext);
+  const clearReviewFlow = useReviewFlowStore((state) => state.clear);
   const [masterCue, setMasterCue] = useState<SelectedSource | null>(null);
-  const [masterCueInputKind, setMasterCueInputKind] = useState<SourceInputKind | null>(null);
   const [sourceErrors, setSourceErrors] = useState<Partial<Record<SourceInputKind, string>>>({});
   const [crossover, setCrossover] = useState<Crossover>('UNKNOWN');
   const [minimumChangeSeconds, setMinimumChangeSeconds] = useState('60');
@@ -166,28 +155,6 @@ export function InputScreen() {
   const [stageHash, setStageHash] = useState('계산 중');
   const [phase, setPhase] = useState<SubmitPhase>('IDLE');
   const [message, setMessage] = useState<string | null>(null);
-  const [caseId, setCaseId] = useState<string | null>(null);
-  const [facts, setFacts] = useState<FactCandidate[]>([]);
-  const [authEmail, setAuthEmail] = useState<string | null>(
-    import.meta.env.DEV || authBypassEnabled ? 'standby-demo' : null,
-  );
-  const [loginEmail, setLoginEmail] = useState('');
-  const [authMessage, setAuthMessage] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!supabase || authBypassEnabled) return;
-    let active = true;
-    void supabase.auth.getSession().then(({ data }) => {
-      if (active) setAuthEmail(data.session?.user.email ?? null);
-    });
-    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
-      setAuthEmail(session?.user.email ?? null);
-    });
-    return () => {
-      active = false;
-      data.subscription.unsubscribe();
-    };
-  }, []);
 
   const stageSpec = useMemo(() => ({
     contract_version: 'standby.stage-spec.v1',
@@ -255,24 +222,20 @@ export function InputScreen() {
   const selectSource = async (kind: SourceInputKind, file: File) => {
     setPhase('IDLE');
     setMessage(null);
-    setCaseId(null);
-    setFacts([]);
+    clearReviewFlow();
     clearWorkspace();
+    clearCueSheet();
     setSourceErrors((current) => ({ ...current, [kind]: undefined }));
     try {
       const selected = await inspectSourceFile(kind, file, locale);
       setMasterCue(selected);
-      setMasterCueInputKind(kind);
-      setSourceErrors((current) => ({
-        ...current,
-        MASTER_CUE_FILE: undefined,
-        MASTER_CUE_JSON: undefined,
-      }));
-    } catch (error) {
-      if (masterCueInputKind === kind) {
-        setMasterCue(null);
-        setMasterCueInputKind(null);
+      setSourceErrors((current) => ({ ...current, MASTER_CUE: undefined }));
+      if (selected.cueSheet) {
+        loadCueSheet(selected.cueSheet);
+        await navigate({ to: '/workspace' });
       }
+    } catch (error) {
+      setMasterCue(null);
       setSourceErrors((current) => ({
         ...current,
         [kind]: error instanceof Error ? error.message : locale === 'ko' ? '파일을 확인할 수 없습니다.' : 'Could not inspect the file.',
@@ -281,43 +244,15 @@ export function InputScreen() {
   };
 
   const ready = Boolean(masterCue);
-  const isTestJsonMode = useMemo(
-    () => masterCueInputKind === 'MASTER_CUE_JSON',
-    [masterCueInputKind],
-  );
-  const authenticated = authBypassEnabled || Boolean(authEmail) || isTestJsonMode;
 
-  const apiClient = (options: { testJsonMode: boolean }) => {
-    const { testJsonMode } = options;
-    const baseUrl =
-      import.meta.env.VITE_STANDBY_API_BASE_URL as string | undefined
-      ?? import.meta.env.VITE_STANDBY_API_URL as string | undefined
-      ?? import.meta.env.VITE_API_BASE_URL as string | undefined;
-    return baseUrl && (import.meta.env.DEV || authBypassEnabled || authConfigured || testJsonMode)
-      ? new StandbyApi({
-          baseUrl,
-          getAccessToken: () => getStandbyAccessToken({
-            allowUnauthenticatedTestJson: testJsonMode,
-          }),
-          getRequestHeaders: testJsonMode
-            ? async () => ({
-                'x-standby-anon-test': '1',
-              })
-            : undefined,
-        })
-      : null;
+  const apiClient = () => {
+    return createStandbyBrowserApi();
   };
 
   const startExtraction = async () => {
     if (!masterCue) return;
 
-    if (!authenticated) {
-      setPhase('FAILED');
-      setMessage(t('input.error.login'));
-      return;
-    }
-
-    const api = apiClient({ testJsonMode: isTestJsonMode });
+    const api = apiClient();
     if (!api) {
       setPhase('FAILED');
       setMessage(
@@ -330,16 +265,9 @@ export function InputScreen() {
       setPhase('UPLOADING');
       setMessage(t('input.status.upload'));
       const createdCase = await api.createCase(`STANDBY ${new Date().toLocaleString('ko-KR')}`);
-      const uploads: Promise<unknown>[] = [];
-      if (isTestJsonMode) {
-        const masterCuePayload = JSON.parse(await masterCue.file.text());
-        uploads.push(api.uploadSource(createdCase.case_id, 'MASTER_CUE', masterCuePayload, {
-          origin: masterCue.origin,
-          mediaType: 'application/json',
-        }));
-      } else {
-        uploads.push(api.uploadSourceFile(createdCase.case_id, 'MASTER_CUE', masterCue.file, masterCue.origin));
-      }
+      const uploads = [
+        api.uploadSourceFile(createdCase.case_id, 'MASTER_CUE', masterCue.file, masterCue.origin),
+      ];
       if (stageErrors.length === 0) {
         uploads.push(api.uploadStageSpec(createdCase.case_id, stageSpec, SOURCE_ORIGIN));
       }
@@ -347,17 +275,28 @@ export function InputScreen() {
 
       setPhase('EXTRACTING');
       setMessage(t('input.status.extract'));
-      const operation = await api.startExtraction(
-        createdCase.case_id,
-        isTestJsonMode ? 'CONTROLLED_FIXTURE' : 'UPSTAGE_AGENT',
-      );
+      const operation = await api.startExtraction(createdCase.case_id, 'UPSTAGE_AGENT');
       await api.waitForOperation(operation.operation_id);
       const queue = await api.getReviewQueue(createdCase.case_id);
 
-      setCaseId(createdCase.case_id);
-      setFacts(queue.items);
+      setPhase('NORMALIZING');
+      setMessage(t('input.status.normalize'));
+      const normalizerOperation = await api.startProductionAgent(createdCase.case_id, 'FACT_NORMALIZER');
+      const completedNormalizer = await api.waitForOperation(normalizerOperation.operation_id);
+      if (completedNormalizer.resource_ref.type !== 'production_artifact') {
+        throw new Error(locale === 'ko'
+          ? 'Fact Normalizer 결과 위치가 올바르지 않습니다.'
+          : 'The Fact Normalizer returned an invalid result reference.');
+      }
+      const artifact = await api.getFactNormalizerArtifact(completedNormalizer.resource_ref.id);
+      setReviewFlowContext({
+        caseId: createdCase.case_id,
+        facts: queue.items,
+        normalizerArtifact: artifact,
+      });
       setPhase('REVIEW');
       setMessage(t('input.status.review', { count: queue.items.length }));
+      await navigate({ to: '/review/mode' });
     } catch (error) {
       setPhase('FAILED');
       setMessage(
@@ -368,32 +307,9 @@ export function InputScreen() {
     }
   };
 
-  const completeReview = async (reviews: FactReviewCommand[]) => {
-    const api = apiClient({ testJsonMode: isTestJsonMode });
-    if (!api || !caseId) {
-      setPhase('FAILED');
-      setMessage(t('input.error.noCase'));
-      return;
-    }
-    try {
-      setPhase('VERIFYING');
-      setMessage(t('input.status.verify'));
-      if (reviews.length > 0) await api.reviewFacts(caseId, reviews);
-      await api.freezeReviewSnapshot(caseId);
-      const workspace = await api.getWorkspace(caseId);
-      setWorkspace(caseId, workspace);
-      setPhase('SUCCEEDED');
-      setMessage(t('input.status.done'));
-      await navigate({ to: '/workspace' });
-    } catch (error) {
-      setPhase('FAILED');
-      setMessage(
-        error instanceof StandbyApiError
-          ? `${error.code}: ${error.message}`
-          : error instanceof Error ? error.message : t('input.error.review'),
-      );
-    }
-  };
+  if (phase === 'UPLOADING' || phase === 'EXTRACTING' || phase === 'NORMALIZING') {
+    return <ExtractionLoadingScreen phase={phase} />;
+  }
 
   return (
     <main className="min-h-screen bg-background px-4 py-8 text-foreground lg:px-8">
@@ -402,43 +318,13 @@ export function InputScreen() {
           <h1 className="text-2xl font-medium">{t('input.title')}</h1>
         </header>
 
-        {!import.meta.env.DEV && !authBypassEnabled && !isTestJsonMode && (
-          <AuthPanel
-            configured={authConfigured}
-            email={authEmail}
-            loginEmail={loginEmail}
-            message={authMessage}
-            onEmail={setLoginEmail}
-            onSend={async () => {
-              if (!supabase || !loginEmail.trim()) return;
-              const { error } = await supabase.auth.signInWithOtp({
-                email: loginEmail.trim(),
-                options: { emailRedirectTo: window.location.origin },
-              });
-              setAuthMessage(error ? error.message : t('input.linkSent'));
-            }}
-            onSignOut={async () => {
-              await supabase?.auth.signOut();
-              setAuthMessage(t('input.signedOut'));
-            }}
+        <section className="mt-6 grid items-start gap-4 lg:grid-cols-2">
+          <SourceCard
+            kind="MASTER_CUE"
+            source={masterCue}
+            error={sourceErrors.MASTER_CUE}
+            onFile={(file) => void selectSource('MASTER_CUE', file)}
           />
-        )}
-
-        <section className="mt-6 grid items-start gap-4 lg:grid-cols-[2fr_1fr]">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <SourceCard
-              kind="MASTER_CUE_FILE"
-              source={masterCueInputKind === 'MASTER_CUE_FILE' ? masterCue : null}
-              error={sourceErrors.MASTER_CUE_FILE}
-              onFile={(file) => void selectSource('MASTER_CUE_FILE', file)}
-            />
-            <SourceCard
-              kind="MASTER_CUE_JSON"
-              source={masterCueInputKind === 'MASTER_CUE_JSON' ? masterCue : null}
-              error={sourceErrors.MASTER_CUE_JSON}
-              onFile={(file) => void selectSource('MASTER_CUE_JSON', file)}
-            />
-          </div>
           <StageSpecCard
             crossover={crossover}
             minimumChangeSeconds={minimumChangeSeconds}
@@ -456,80 +342,106 @@ export function InputScreen() {
         <footer className="mt-5 flex justify-end border border-border bg-surface p-4">
           <button
             type="button"
-            disabled={!ready || phase === 'UPLOADING' || phase === 'EXTRACTING' || phase === 'REVIEW' || phase === 'VERIFYING'}
+            disabled={!ready || phase === 'REVIEW'}
             onClick={() => void startExtraction()}
             className={cn(
               'flex min-w-52 items-center justify-center gap-2 border px-5 py-3 text-sm font-medium',
-              ready && phase !== 'UPLOADING' && phase !== 'EXTRACTING' && phase !== 'REVIEW' && phase !== 'VERIFYING'
+              ready && phase !== 'REVIEW'
                 ? 'border-foreground bg-foreground text-background hover:bg-muted-foreground'
                 : 'cursor-not-allowed border-border bg-muted text-muted-foreground',
             )}
           >
-            {(phase === 'UPLOADING' || phase === 'EXTRACTING') && <LoaderCircle className="h-4 w-4 animate-spin" />}
             {t('input.start')}
           </button>
         </footer>
 
         {message && <ExtractionStatus phase={phase} message={message} />}
-
-        {facts.length > 0 && (phase === 'REVIEW' || phase === 'VERIFYING' || phase === 'FAILED') && (
-          <FactReviewPanel
-            key={caseId}
-            facts={facts}
-            busy={phase === 'VERIFYING'}
-            onSubmit={(reviews) => void completeReview(reviews)}
-          />
-        )}
       </div>
     </main>
   );
 }
 
-function AuthPanel({
-  configured,
-  email,
-  loginEmail,
-  message,
-  onEmail,
-  onSend,
-  onSignOut,
-}: {
-  configured: boolean;
-  email: string | null;
-  loginEmail: string;
-  message: string | null;
-  onEmail: (value: string) => void;
-  onSend: () => Promise<void>;
-  onSignOut: () => Promise<void>;
-}) {
+function ExtractionLoadingScreen({ phase }: { phase: 'UPLOADING' | 'EXTRACTING' | 'NORMALIZING' }) {
   const { t } = useI18n();
-  if (!configured) {
-    return (
-      <section className="mt-5 border border-insufficient bg-insufficient/10 p-4">
-        <p className="text-sm font-medium">{t('input.authMissing')}</p>
-        <p className="mt-1 text-xs leading-5 text-muted-foreground">
-          {t('input.authMissingHelp')}
-        </p>
-      </section>
-    );
-  }
-  if (email) {
-    return (
-      <section className="mt-5 flex items-center justify-between border border-consistent bg-consistent-bg p-4">
-        <div><p className="text-sm font-medium">{t('input.authenticated')}</p><p className="mono mt-1 text-[10px] text-muted-foreground">{email}</p></div>
-        <button type="button" onClick={() => void onSignOut()} className="border border-border px-3 py-2 text-xs">{t('input.signOut')}</button>
-      </section>
-    );
-  }
   return (
-    <section className="mt-5 border border-border bg-surface p-4">
-      <p className="text-sm font-medium">{t('input.signIn')}</p>
-      <div className="mt-3 flex gap-2">
-        <input type="email" value={loginEmail} onChange={(event) => onEmail(event.target.value)} placeholder="team@example.com" className="min-w-0 flex-1 border border-border bg-background px-3 py-2 text-sm" />
-        <button type="button" disabled={!loginEmail.trim()} onClick={() => void onSend()} className="border border-foreground bg-foreground px-4 py-2 text-sm text-background disabled:border-border disabled:bg-muted disabled:text-muted-foreground">{t('input.sendLink')}</button>
+    <section
+      role="status"
+      aria-live="polite"
+      className="fixed inset-0 z-50 overflow-y-auto bg-background px-5 py-10"
+    >
+      <div className="mx-auto flex min-h-full max-w-5xl flex-col justify-center">
+        <div className="standby-loading-wordmark brand-mono" aria-label="STANDBY">
+          {'STANDBY'.split('').map((letter, index) => (
+            <span
+              key={letter}
+              aria-hidden="true"
+              className="standby-loading-letter"
+              style={{ '--standby-letter-index': index } as CSSProperties}
+            >
+              {letter}
+            </span>
+          ))}
+        </div>
+        <div className="mt-8">
+          <h2 className="text-2xl font-medium">
+            {t(phase === 'UPLOADING'
+              ? 'input.loading.upload'
+              : phase === 'NORMALIZING'
+                ? 'input.loading.normalize'
+                : 'input.loading.extract')}
+          </h2>
+        </div>
+        <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
+          {t('input.loading.result')}
+        </p>
+
+        <div className="mt-10 grid gap-3 md:grid-cols-3" aria-hidden="true">
+          <LoadingPreview title={t('input.loading.stage')}>
+            <div className="grid h-36 grid-cols-[42px_1fr_42px] items-stretch border border-border bg-background">
+              <div className="border-r border-border bg-muted" />
+              <div className="relative">
+                <span className="absolute left-[28%] top-[34%] h-4 w-4 rounded-full border border-person bg-person/20" />
+                <span className="absolute right-[24%] top-[55%] h-4 w-4 border border-prop bg-prop/20" />
+              </div>
+              <div className="border-l border-border bg-muted" />
+            </div>
+          </LoadingPreview>
+          <LoadingPreview title={t('input.loading.evidence')}>
+            <div className="space-y-3">
+              {[0, 1, 2].map((index) => (
+                <div key={index} className="border border-border bg-background p-3">
+                  <div className="h-2 w-20 animate-pulse bg-muted-foreground/30" />
+                  <div className="mt-3 h-2 w-full animate-pulse bg-muted" />
+                  <div className="mt-2 h-2 w-3/4 animate-pulse bg-muted" />
+                </div>
+              ))}
+            </div>
+          </LoadingPreview>
+          <LoadingPreview title={t('input.loading.timeline')}>
+            <div className="flex h-36 items-end gap-2 overflow-hidden border border-border bg-background p-3">
+              {[48, 72, 58, 92, 66].map((height, index) => (
+                <div
+                  key={index}
+                  className="min-w-12 flex-1 border border-border bg-muted"
+                  style={{ height: `${height}%` }}
+                />
+              ))}
+            </div>
+          </LoadingPreview>
+        </div>
+
+        <p className="mt-6 text-xs text-muted-foreground">{t('input.loading.wait')}</p>
       </div>
-      {message && <p className="mt-2 text-xs text-muted-foreground">{message}</p>}
     </section>
+  );
+}
+
+function LoadingPreview({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <article className="border border-border bg-surface p-4">
+      <h3 className="mb-4 text-sm font-medium">{title}</h3>
+      {children}
+    </article>
   );
 }
 
@@ -549,16 +461,13 @@ function SourceCard({
   const [dragging, setDragging] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const config = SOURCE_CONFIG[kind];
-  const Icon = kind === 'MASTER_CUE_FILE' ? FileSpreadsheet : FileText;
-  const helper = kind === 'MASTER_CUE_FILE'
-    ? t('input.cue.fileHelper')
-    : t('input.cue.jsonHelper');
+  const helper = t('input.cue.fileHelper');
 
   return (
     <article className="border border-border bg-surface">
       <div className="flex items-start justify-between border-b border-border p-4">
         <div className="flex gap-3">
-          <div className="border border-border p-2"><Icon className="h-4 w-4" /></div>
+          <div className="border border-border p-2"><FileSpreadsheet className="h-4 w-4" /></div>
           <div>
             <p className="mono text-xs font-semibold tracking-[0.1em]">{config.label}</p>
             <p className="mt-1 text-xs leading-5 text-muted-foreground">{helper}</p>
@@ -807,10 +716,9 @@ function TimeInput({ label, value, onChange }: { label: string; value: string; o
 }
 
 function ExtractionStatus({ phase, message }: { phase: SubmitPhase; message: string }) {
-  const success = phase === 'SUCCEEDED';
   return (
-    <div className={cn('mt-4 flex gap-3 border p-4', success ? 'border-consistent bg-consistent-bg' : phase === 'FAILED' ? 'border-review bg-review-bg' : 'border-border bg-surface')}>
-      {success ? <Check className="h-5 w-5 shrink-0 text-consistent" /> : phase === 'FAILED' ? <AlertTriangle className="h-5 w-5 shrink-0 text-review" /> : <LoaderCircle className="h-5 w-5 shrink-0 animate-spin" />}
+    <div className={cn('mt-4 flex gap-3 border p-4', phase === 'FAILED' ? 'border-review bg-review-bg' : 'border-border bg-surface')}>
+      {phase === 'FAILED' ? <AlertTriangle className="h-5 w-5 shrink-0 text-review" /> : <LoaderCircle className="h-5 w-5 shrink-0 animate-spin" />}
       <div><p className="mono text-[10px] text-muted-foreground">{phase}</p><p className="mt-1 text-sm leading-6">{message}</p></div>
     </div>
   );

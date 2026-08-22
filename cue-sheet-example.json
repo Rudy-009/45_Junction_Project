@@ -25,7 +25,6 @@
       "cue_id": "cue_001",
       "scene_number": "S#001",
       "scene_type": "scene",
-      "estimated_duration_sec": 180,
       "events": [
         {
           "event_id": "evt_001",
@@ -59,7 +58,6 @@
       "cue_id": "cue_002",
       "scene_number": "S#002",
       "scene_type": "scene",
-      "estimated_duration_sec": 120,
       "events": [
         {
           "event_id": "evt_003",
@@ -81,9 +79,9 @@
           },
           "actions": [
             { "type": "backstage_crossover", "character_id": "char_02", "from": "stage_left", "to": "stage_right" },
-            { "type": "costume_change", "character_id": "char_02", "costume_change_duration_sec": 60, "costume_description": "교복 → 사복" }
+            { "type": "costume_change", "character_id": "char_02", "costume_description": "교복 → 사복" }
           ],
-          "notes": "은비 백스테이지로 하수 이동 + 환복 60초"
+          "notes": "은비 백스테이지로 하수 이동 + 환복"
         }
       ]
     },
@@ -91,7 +89,6 @@
       "cue_id": "cue_003",
       "scene_number": "N#101",
       "scene_type": "number",
-      "estimated_duration_sec": 240,
       "backstage_crossover_time_override_sec": 30,
       "events": [
         {

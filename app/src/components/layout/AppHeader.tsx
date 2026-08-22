@@ -12,7 +12,7 @@ export function AppHeader() {
 
   return (
     <header className="flex h-14 items-center justify-between border-b border-border bg-surface px-4">
-      <span className="mono text-base tracking-[0.28em]">STANDBY</span>
+      <span className="brand-mono text-base tracking-[0.28em]">STANDBY</span>
 
       <div className="flex items-center gap-2">
         <label className="flex h-8 items-center border border-border bg-background">

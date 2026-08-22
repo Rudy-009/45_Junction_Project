@@ -44,10 +44,25 @@ export type ReviewRecord = {
   review_id: string;
   fact_id: string;
   decision: "REVIEWED" | "REJECTED";
+  source: "UPSTAGE_RECOMMENDATION" | "CUSTOM" | "HUMAN_REJECTION";
   corrected_value: unknown | null;
   actor_id: string;
   created_at: string;
 };
+
+export type FactReviewCommand =
+  | {
+      fact_id: string;
+      decision: "REVIEWED";
+      source: "UPSTAGE_RECOMMENDATION" | "CUSTOM";
+      corrected_value: unknown;
+    }
+  | {
+      fact_id: string;
+      decision: "REJECTED";
+      source: "HUMAN_REJECTION";
+      corrected_value: null;
+    };
 
 export type ReviewSnapshot = {
   contract_version: "standby.review-snapshot.v1";
@@ -201,12 +216,154 @@ export type WorkspaceSnapshot = {
   verification: VerificationResult;
 };
 
+export type ProductionAgentRole =
+  | "FACT_NORMALIZER"
+  | "STORYBOARD_RECOMPOSER"
+  | "REHEARSAL_BRIEF";
+
+export type ProductionAgentFrozenInput = {
+  contract_version: "standby.production-agent-input.v1";
+  role: ProductionAgentRole;
+  case_id: string;
+  review_snapshot_id: string | null;
+  source_snapshot_digest: string;
+  cue_revision_id: string | null;
+  verification_result_hash: string | null;
+  payload: Record<string, unknown>;
+};
+
+export type FactNormalizationRecommendation = {
+  fact_id: string;
+  normalized_fact_type: string;
+  value: Record<string, unknown>;
+  confidence: "HIGH" | "LOW" | "NOT_PROVIDED";
+  authority: "NON_AUTHORITATIVE";
+};
+
+export type FactNormalizerArtifactPayload = {
+  recommendations: FactNormalizationRecommendation[];
+  missing_evidence: string[];
+};
+
+export type FactNormalizationRecommendationMap = {
+  contract_version: "standby.fact-normalization-recommendations.v1";
+  artifact_id: string;
+  authority: "NON_AUTHORITATIVE";
+  input_fingerprint: string;
+  is_current: boolean;
+  recommendations_by_fact_id: Record<
+    string,
+    Omit<FactNormalizationRecommendation, "fact_id">
+  >;
+};
+
+export type StoryboardBeat = {
+  entity_id: string;
+  action: "ENTER" | "EXIT" | "MOVE" | "HOLD";
+  from_zone: StageZone | null;
+  to_zone: StageZone | null;
+  evidence_fact_ids: string[];
+};
+
+export type StoryboardArtifactPayload = {
+  event_id: string;
+  beats: StoryboardBeat[];
+  summary: string;
+  missing_evidence: string[];
+};
+
+export type RehearsalDepartment =
+  | "STAGE_MANAGEMENT"
+  | "CAST"
+  | "COSTUME"
+  | "PROPS"
+  | "LIGHTING"
+  | "SOUND"
+  | "BAND";
+
+export type RehearsalBriefSection = {
+  department: RehearsalDepartment;
+  summary: string;
+  event_ids: string[];
+  finding_ids: string[];
+  questions: string[];
+};
+
+export type RehearsalBriefArtifactPayload = {
+  headline: string;
+  sections: RehearsalBriefSection[];
+  missing_evidence: string[];
+};
+
+export type ProductionArtifact = {
+  contract_version: "standby.production-artifact.v1";
+  artifact_id: string;
+  case_id: string;
+  role: ProductionAgentRole;
+  authority: "NON_AUTHORITATIVE";
+  input_fingerprint: string;
+  review_snapshot_id: string | null;
+  cue_revision_id: string | null;
+  provider: "UPSTAGE";
+  provider_job_id: string;
+  agent_id: string;
+  config_id: string | null;
+  adapter_version: string;
+  raw_response_sha256: string;
+  payload:
+    | FactNormalizerArtifactPayload
+    | StoryboardArtifactPayload
+    | RehearsalBriefArtifactPayload;
+  created_at: string;
+};
+
+export type ScriptProjectionSegment = {
+  segment_id: string;
+  sequence_index: number;
+  kind: "DIALOGUE" | "STAGE_DIRECTION";
+  text: string;
+  speaker: string | null;
+  event_id: string | null;
+  locator: string;
+  source_quote: string;
+  provenance: {
+    raw_fact_id: string;
+    raw_fact_sha256: string;
+  };
+};
+
+export type ScriptProjection = {
+  contract_version: "standby.script-projection.v1";
+  projection_id: string;
+  authority: "NON_AUTHORITATIVE";
+  source: {
+    filename: string;
+    sha256: string;
+    media_type: string;
+  };
+  provenance: {
+    provider: "UPSTAGE_AGENT";
+    source_role: "SCRIPT";
+    origin: "USER_PROVIDED";
+    provider_job_id: string;
+    agent_id: string;
+    config_id: string | null;
+    adapter_version: string;
+    raw_response_sha256: string;
+  };
+  segments: ScriptProjectionSegment[];
+  created_at: string;
+};
+
 export type Operation = {
   operation_id: string;
-  kind: "EXTRACT_SOURCE";
+  kind: "EXTRACT_SOURCE" | "RUN_PRODUCTION_AGENT" | "PROJECT_SCRIPT";
   status: "QUEUED" | "RUNNING" | "SUCCEEDED" | "FAILED";
   result_source: "CONTROLLED_FIXTURE" | "UPSTAGE" | "MIXED" | null;
-  resource_ref: { type: "extraction_run"; id: string };
+  resource_ref:
+    | { type: "extraction_run"; id: string }
+    | { type: "production_artifact"; id: string }
+    | { type: "script_projection"; id: string };
   error: { code: string; message: string } | null;
   created_at: string;
   updated_at: string;

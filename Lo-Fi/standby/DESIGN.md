@@ -33,13 +33,14 @@ colors:
   background: '#fbf9f8'
   on-background: '#1b1c1c'
 typography:
-  display-brand: { fontFamily: Inter, fontSize: 20px, fontWeight: '700', lineHeight: 24px, letterSpacing: 0.05em }
-  headline-page: { fontFamily: Inter, fontSize: 18px, fontWeight: '600', lineHeight: 24px }
-  panel-title:   { fontFamily: Inter, fontSize: 14px, fontWeight: '600', lineHeight: 20px }
-  body-main:     { fontFamily: Inter, fontSize: 14px, fontWeight: '400', lineHeight: 20px }
-  data-mono:     { fontFamily: JetBrains Mono, fontSize: 12px, fontWeight: '400', lineHeight: 16px }
-  cell-text:     { fontFamily: Inter, fontSize: 12px, fontWeight: '400', lineHeight: 16px }
-  label-caps:    { fontFamily: Inter, fontSize: 11px, fontWeight: '600', lineHeight: 16px, letterSpacing: 0.02em }
+  display-brand: { fontFamily: JetBrains Mono, fontSize: 20px, fontWeight: '700', lineHeight: 24px, letterSpacing: 0.05em }
+  loading-brand: { fontFamily: JetBrains Mono, fontSize: 36px, fontWeight: '700', lineHeight: 44px, letterSpacing: 0.2em }
+  headline-page: { fontFamily: system-ui, fontSize: 18px, fontWeight: '600', lineHeight: 24px }
+  panel-title:   { fontFamily: system-ui, fontSize: 14px, fontWeight: '600', lineHeight: 20px }
+  body-main:     { fontFamily: system-ui, fontSize: 14px, fontWeight: '400', lineHeight: 20px }
+  data-mono:     { fontFamily: ui-monospace, fontSize: 12px, fontWeight: '400', lineHeight: 16px }
+  cell-text:     { fontFamily: system-ui, fontSize: 12px, fontWeight: '400', lineHeight: 16px }
+  label-caps:    { fontFamily: system-ui, fontSize: 11px, fontWeight: '600', lineHeight: 16px, letterSpacing: 0.02em }
 spacing:
   header-height: 56px
   container-padding: 20px
@@ -63,6 +64,9 @@ STANDBY는 공연 제작 검증 워크스페이스다. 시각 언어는 **Techni
 분석 대시보드나 장식적 디지털 트윈처럼 보이면 실패다.
 
 참조 메타포는 **영상편집기(NLE)**다. 위는 프리뷰, 가운데는 편집 대상, 아래는 트랙.
+
+본문·라벨·입력은 운영체제의 시스템 서체를 쓴다. 별도 Noto Sans KR 웹폰트를 로드하지 않는다.
+JetBrains Mono는 `STANDBY` 워드마크와 extraction loading wordmark에만 사용해 제품 식별자로 남긴다.
 
 ---
 
@@ -89,6 +93,30 @@ P0는 화면 **두 개**뿐이다.
 - Primary CTA: `Upstage 추출 시작` → 완료되면 화면 2로 전환
 - **제외**: 입력 계약 체크리스트, `Source 교체`, `EXPORT LOG`, revision lineage, 5단계 진행 표시
 
+### Extraction loading scene
+
+- 추출 중에는 JetBrains Mono의 `S T A N D B Y` 일곱 글자를 보여 주고, `S`부터 `Y`까지 차례로
+  낮은 명도에서 높은 명도로 밝아지는 짧은 loop를 사용한다.
+- 제품 결과 예시는 보조 정보로 남기되, 장식 spinner·particle·과장된 진행률을 함께 쌓지 않는다.
+- 이 효과는 실제 진행률을 뜻하지 않는다. 추출 상태·실패·timeout은 별도 상태 문구가 담당한다.
+- `prefers-reduced-motion`에서는 순차 밝기 변화를 멈추고 모든 글자를 동일한 명도로 고정한다.
+
+### Fact review — 같은 입력 화면 안의 gate
+
+Fact Normalizer가 연결되더라도 review는 생략하지 않는다. review gate 전체에 선택지는 둘만 둔다.
+
+- `추천값`: Agent가 추천한 normalized type·field를 **읽기 전용**으로 표시
+- `사용자화`: 추천된 allowlist type은 고정하고 field 값만 편집. type dropdown 없음
+- type이 잘못됐으면 다른 type을 고르는 대신 해당 추천을 `REJECTED` 처리
+- `일괄 승인`: 사용자화 mode에서 validation을 통과한 현재 draft에만 사람이 명시적으로 실행. 각 fact의
+  review record를 따로 남기며 snapshot freeze는 별도 CTA
+- 추천값은 `NON_AUTHORITATIVE` token을 가진다. 추천이 보이는 것과 `REVIEWED`는 같은 상태가 아니다
+
+mode는 fact card마다 반복하지 않는다. gate 상단의 한 선택이 전체 목록의 표현과 승인 동작을 바꾸며,
+fact별 승인·거절 기록은 그대로 보존한다.
+
+자동 승인, 화면 진입과 동시에 bulk approve, Normalizer 결과로 verdict 선반영은 금지한다.
+
 ---
 
 ## 화면 2 — 워크스페이스 (메인)
@@ -96,25 +124,36 @@ P0는 화면 **두 개**뿐이다.
 ### 레이아웃
 
 ```
-┌──────────────────────────────────────────────┐  56px
-│ STANDBY   [입력] [워크스페이스]   Production │
-├──────────────────────────────────────────────┤
-│                                              │
-│  패널 A  (무대 시뮬레이터 또는 큐시트)         │  ─┐
-│                                              │   │ 두 패널
-├──────────────────────────────────────────────┤   │ 높이 동일
-│                                              │   │ 순서 스왑 가능
-│  패널 B  (큐시트 또는 무대 시뮬레이터)         │  ─┘
-│                                              │
-├──────────────────────────────────────────────┤
-│  이벤트 타임라인  E1 … E8                     │  132px
-└──────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────┐  56px
+│ STANDBY   [입력] [워크스페이스]               Production │
+├──────────────┬───────────────────────────────────────────┤
+│ Script       │                                           │
+│ (접기 가능)   │  패널 A  (무대 시뮬레이터 또는 큐시트)      │  ─┐
+│              │                                           │   │ 두 패널
+│ event 발췌    ├───────────────────────────────────────────┤   │ 높이 동일
+│              │                                           │   │ 순서 스왑 가능
+│              │  패널 B  (큐시트 또는 무대 시뮬레이터)      │  ─┘
+│              │                                           │
+│              ├───────────────────────────────────────────┤
+│              │  이벤트 타임라인  E1 … E8                  │  132px
+└──────────────┴───────────────────────────────────────────┘
 ```
 
 - **패널 A와 B는 높이가 같다.** 그래야 순서를 바꿔도 레이아웃이 흔들리지 않는다
 - 헤더 우측에 **스왑 버튼**. 큐시트와 비교하려면 큐시트를 위로, 무대와 비교하려면 무대를 위로
-- 좌측 사이드바 없음. 상단 탭 2개로 화면을 오간다
+- 전역 내비게이션 사이드바는 없다. 화면 이동은 상단 탭 2개만 쓴다
 - **finding 목록을 위한 별도 영역은 두지 않는다**
+
+### Script Sidebar — 워크스페이스 내부의 읽기 전용 event 인덱스
+
+- 좌측에서 접고 펼칠 수 있는 보조 패널이다. 새 화면·입력 화면의 세 번째 카드·다목적 내비게이션이 아니다
+- 패널 안에서 DOCX(우선) 또는 PDF(보조)를 연결한다. 서버의 Upstage Script Extractor가 만든
+  `standby.script-projection.v1`의 실제 대사·지문만 표시하고 MASTER_CUE 문구로 대신하지 않는다
+- exact `event_id`가 있는 구간만 자동 연결한다. 나머지는 `이벤트 연결 대기`에 남기고, 사람이 현재
+  timeline event를 선택한 뒤 연결한다
+- timeline에서 event를 고르면 해당 발췌가 보이도록 스크롤하고 강조한다
+- 발췌를 누르면 같은 event의 timeline·stage snapshot으로 이동한다
+- 발췌는 편집할 수 없고 localStorage에 남지 않으며 fact·review·snapshot·verdict authority를 갖지 않는다
 
 ### 패널 — 무대 시뮬레이터
 
@@ -152,16 +191,22 @@ MVP는 **도면이 아니라 네모**다. 목적은 정밀 계측이 아니라 *
 초기 배치(`initial_state`)도 마찬가지다. 큐시트가 제대로 작성돼 있으면 거기서 나온다.
 시뮬레이터에서 손으로 세팅하지 않는다.
 
-#### 이벤트별 상태 — 애니메이션이 아니라 스냅샷 ★
+#### 이벤트별 상태 — 스냅샷이 정본, motion은 인접 차이만 ★
 
-**이동 애니메이션을 만들지 마라.** 검토 후 폐기했다.
+연출자가 확인할 정본은 여전히 *"은비가 지금 어디 있지"*에 답하는 이벤트별 정적 스냅샷이다.
+motion은 실제 blocking 경로나 새 상태를 보여 주는 것이 아니라, **시간순으로 인접한 두 verified snapshot에서
+무엇이 달라졌는지** 짧게 읽게 하는 보조 표현이다.
 
-연출자가 알고 싶은 것은 *"은비가 지금 어디 있지"*(결과 상태)이지
-*"은비가 어떻게 걸어갔지"*(이동 과정)가 아니다.
-E1을 보다가 E6으로 점프하면 애니메이션은 어차피 순간이동이 되고,
-움직이는 노드는 윙 안에서 목록으로 정렬할 수도 없다.
+- 인접 event 앞/뒤 이동: zone이 바뀐 entity만 180–360ms semantic transition. ENTER/EXIT opacity 보조 포함
+- 한 전환의 총 motion은 600ms 이하. 현재 playhead와 바뀐 entity 외에는 움직이지 않음
+- 여러 event jump 또는 비인접 back: 이동 경로를 꾸미지 않고 정적 교체 또는 180ms 이하 crossfade
+- `prefers-reduced-motion`: 모든 이동·fade를 제거하고 target snapshot 즉시 표시
+- 반복·bounce·particle·상시 pulse·노드별 장식 delay 금지
+- 좌표·곡선은 Agent가 만들지 않는다. UI가 reviewed `from_zone → to_zone` 차이만 schematic으로 표시
 
-대신 **각 이벤트는 그 시점의 정적 스냅샷**을 보여준다. 이벤트를 바꾸면 노드가 즉시 재배치된다.
+Storyboard Recomposer는 인접 pair의 action 순서와 짧은 설명만 `NON_AUTHORITATIVE`로 제공한다. 현재
+구현은 timeline 선택 시 frozen input으로 lazy 실행하고, 동일 입력 재요청은 서버 cache를 사용한다.
+cache miss·timeout·strict decode 실패에서도 target snapshot을 먼저 표시하고 정적 상태를 유지한다.
 
 #### 노드 상태 3종
 
@@ -220,6 +265,20 @@ verdict 색(`CONSISTENT` #7ee2a8 · `VIOLATION` #ff8a80)은 저채도 파스텔�
 - 각 카드는 이벤트명과 **상태 색**을 가진다
 - 좌우 스크롤, `이전 / 재생 / 다음` 컨트롤. **Zoom 없음**
 - 현재 이벤트는 검은 채움 + 재생 헤드 세로선
+- event 선택 시 stage snapshot을 먼저 바꾸고 cached Storyboard를 적용하며 Script Sidebar의 같은 event를
+  스크롤·강조한다. Agent job을 기다리느라 선택을
+  잠그거나 전체 화면 loader로 되돌아가지 않는다.
+- 상태 표시는 패널 헤더 우측의 작은 토큰 하나만 쓴다: `STORYBOARD READY | UPDATING | FALLBACK`.
+  Agent 설명문을 timeline 카드마다 반복하지 않는다.
+- Storyboard `beats`와 `missing_evidence`는 펼쳐 보는 읽기 전용 `NON_AUTHORITATIVE` 정보다. 정적 stage
+  snapshot과 deterministic verdict가 정본이며, 이 정보로 둘을 생성하거나 수정하지 않는다.
+
+### Rehearsal Brief — 별도 화면 없음
+
+- finding 상세 하단에 기본 접힘 `REHEARSAL BRIEF` 한 줄만 둔다.
+- 펼치면 기존 finding/evidence에서 만든 확인 항목을 중요도순 **최대 3개** 표시한다.
+- 새 verdict·severity·안전 결론처럼 보이는 배지나 색을 쓰지 않는다.
+- Agent 호출 불가·실패 시 영역을 숨기며 workspace와 finding 검토는 그대로 동작한다.
 
 ### Finding 팝업
 
@@ -303,7 +362,20 @@ open finding이 있는 동안 무대 패널은 `EVIDENCE PREVIEW` 모드이며 `
 
 ## 명시적 제외
 
-5단계 헤더 · 6항목 사이드바 · 좌측 finding 목록 · PROPOSAL Option A/B/C ·
+5단계 헤더 · 전역/6항목 내비게이션 사이드바 · 좌측 finding 목록 · PROPOSAL Option A/B/C ·
 병렬 3버튼 · 별도 Final 2D 화면 · Master v2 재검증 화면 · revision lineage 패널 ·
 `EXPORT LOG` · `Source 교체` · 입력 계약 체크리스트 · Zoom 슬라이더 ·
-Ctrl+F 검색 · JSON raw 뷰 · 실제 도면 · 연속 scrub 애니메이션
+Ctrl+F 검색 · JSON raw 뷰 · 실제 도면 · 연속 scrub 애니메이션 · 비인접 event 경로 animation ·
+반복/bounce/particle motion · Agent가 만든 좌표/실제 blocking 경로 · 입력 화면의 Script 업로드 카드
+
+## Upstage Agent 연결 상태
+
+아래 네 Agent는 Studio에서 Config `#1`이 저장됐고 서버 배선도 구현됐다. **Agents API live smoke는 아직
+완료하지 않았으므로** 화면의 success/fallback 동작을 운영 검증 완료로 표현하지 않는다.
+
+| Agent | Agent ID | UI에 허용되는 결과 |
+|---|---|---|
+| Stage Spec Extractor | `agt_PxbxmhXXT8iqdzs5WmHfUz` | `UNREVIEWED` stage fact 후보 |
+| Fact Normalizer | `agt_6tn639gGApNdV9SdRfAjnE` | 읽기 전용 추천값 또는 사용자화 초안 |
+| Storyboard Recomposer | `agt_go8aoJTVDvEwK8mwXh5gEi` | 읽기 전용 `beats`·`missing_evidence` |
+| Rehearsal Brief | `agt_9iLkb7fqwdEtaBv48t9tQA` | 기존 근거를 압축한 접이식 brief |

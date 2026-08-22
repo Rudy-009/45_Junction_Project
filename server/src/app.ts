@@ -4,12 +4,25 @@ import multipart from "@fastify/multipart";
 import rateLimit from "@fastify/rate-limit";
 import Fastify, { type FastifyRequest } from "fastify";
 import { DomainError } from "./domain/errors.js";
-import { assertSourceFile, MAX_SOURCE_FILE_BYTES, sanitizeFilename } from "./domain/source-file.js";
-import type { CellPatch, ExtractionAdapter, Origin, SourceRole } from "./domain/types.js";
+import {
+  assertScriptProjectionFile,
+  assertSourceFile,
+  MAX_SOURCE_FILE_BYTES,
+  sanitizeFilename,
+} from "./domain/source-file.js";
+import type {
+  CellPatch,
+  ExtractionAdapter,
+  FactReviewCommand,
+  Origin,
+  ProductionAgentRole,
+  SourceRole,
+} from "./domain/types.js";
 import { sha256 } from "./lib/hash.js";
 import type { ExtractionProvider } from "./providers/extraction-provider.js";
+import type { ProductionAgentProvider } from "./providers/production-agent-provider.js";
+import type { ScriptProjectionProvider } from "./providers/script-projection-provider.js";
 import { InMemoryStore } from "./store/in-memory-store.js";
-import type { TokenAuthenticator } from "./security/supabase-auth.js";
 
 declare module "fastify" {
   interface FastifyRequest {
@@ -19,12 +32,12 @@ declare module "fastify" {
 
 export type ServerConfig = {
   apiToken?: string;
-  authenticateToken?: TokenAuthenticator;
-  authBypass?: boolean;
-  allowAnonymousTestJson?: boolean;
+  allowAnonymous?: boolean;
   allowedOrigins: string[];
   logger?: boolean;
   extractionProvider?: ExtractionProvider;
+  productionAgentProvider?: ProductionAgentProvider;
+  scriptProjectionProvider?: ScriptProjectionProvider;
 };
 
 const SOURCE_ROLES = new Set<SourceRole>(["SCRIPT", "MASTER_CUE", "STAGE_SPEC"]);
@@ -33,6 +46,11 @@ const ORIGINS = new Set<Origin>([
   "USER_PROVIDED",
   "CONTROLLED_FIXTURE",
   "MUTATED_FIXTURE",
+]);
+const PRODUCTION_AGENT_ROLES = new Set<ProductionAgentRole>([
+  "FACT_NORMALIZER",
+  "STORYBOARD_RECOMPOSER",
+  "REHEARSAL_BRIEF",
 ]);
 
 function bodyRecord(request: FastifyRequest): Record<string, unknown> {
@@ -50,6 +68,13 @@ function requiredString(value: unknown, field: string): string {
   return value;
 }
 
+function assertAllowedFields(body: Record<string, unknown>, allowed: readonly string[]): void {
+  const allowlist = new Set(allowed);
+  if (Object.keys(body).some((key) => !allowlist.has(key))) {
+    throw new DomainError(400, "INVALID_ARGUMENT", "Request contains unsupported fields.");
+  }
+}
+
 function idempotencyKey(request: FastifyRequest): string {
   const value = request.headers["idempotency-key"];
   if (typeof value !== "string" || value.trim().length === 0) {
@@ -65,7 +90,11 @@ function revisionProjection<T extends { rows: unknown }>(revision: T): Omit<T, "
 
 export async function buildApp(
   config: ServerConfig,
-  store = new InMemoryStore(config.extractionProvider ?? null),
+  store = new InMemoryStore(
+    config.extractionProvider ?? null,
+    config.productionAgentProvider ?? null,
+    config.scriptProjectionProvider ?? null,
+  ),
 ) {
   const app = Fastify({
     logger: config.logger ?? false,
@@ -96,35 +125,25 @@ export async function buildApp(
   });
 
   app.decorateRequest("standbyActorId", "");
-  const isTestJsonRequest = (request: FastifyRequest): boolean => {
-    const header = request.headers["x-standby-anon-test"];
-    return header === "1" || header === "true";
-  };
-
   app.addHook("onRequest", async (request) => {
     if (request.url === "/healthz") return;
     if (!request.url.startsWith("/v1/")) return;
-    if (config.allowAnonymousTestJson && isTestJsonRequest(request)) {
-      request.standbyActorId = "demo-user";
-      return;
-    }
-    if (config.authBypass) {
-      request.standbyActorId = "demo-user";
-      return;
-    }
     const authorization = request.headers.authorization;
     const token = authorization?.startsWith("Bearer ") ? authorization.slice(7).trim() : "";
-    if (!token) {
-      throw new DomainError(401, "UNAUTHENTICATED", "A valid bearer token is required.");
-    }
-    if (config.authenticateToken) {
-      request.standbyActorId = (await config.authenticateToken(token)).actorId;
+    if (token && config.apiToken && token === config.apiToken) {
+      request.standbyActorId = "dev-user";
       return;
     }
-    if (!config.apiToken || token !== config.apiToken) {
-      throw new DomainError(401, "UNAUTHENTICATED", "A valid bearer token is required.");
+    const anonymousSession = request.headers["x-standby-session"];
+    if (
+      config.allowAnonymous &&
+      typeof anonymousSession === "string" &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(anonymousSession)
+    ) {
+      request.standbyActorId = `anonymous_${sha256(anonymousSession).slice(0, 24)}`;
+      return;
     }
-    request.standbyActorId = "dev-user";
+    throw new DomainError(401, "UNAUTHENTICATED", "A valid demo session is required.");
   });
 
   app.setErrorHandler((error, request, reply) => {
@@ -170,6 +189,57 @@ export async function buildApp(
   });
 
   app.get("/healthz", async () => ({ status: "ok" }));
+
+  app.post(
+    "/v1/script-projections",
+    { config: { rateLimit: { max: 20, timeWindow: "1 hour" } } },
+    async (request, reply) => {
+      if (!request.isMultipart()) {
+        throw new DomainError(
+          415,
+          "SOURCE_MEDIA_TYPE_INVALID",
+          "Script projection requires multipart/form-data.",
+        );
+      }
+      const part = await request.file();
+      if (!part || part.fieldname !== "file") {
+        throw new DomainError(400, "INVALID_ARGUMENT", "file is required.");
+      }
+      const filename = sanitizeFilename(part.filename);
+      const bytes = await part.toBuffer();
+      if (Object.keys(part.fields).some((field) => field !== "file")) {
+        throw new DomainError(400, "INVALID_ARGUMENT", "Only the file field is supported.");
+      }
+      assertScriptProjectionFile(filename, part.mimetype, bytes);
+      const fingerprint = {
+        filename,
+        media_type: part.mimetype,
+        sha256: sha256(bytes),
+      };
+      const response = store.withIdempotency(
+        `${request.standbyActorId}:POST:/v1/script-projections`,
+        idempotencyKey(request),
+        fingerprint,
+        () =>
+          store.startScriptProjection({
+            actorId: request.standbyActorId,
+            bytes,
+            mediaType: part.mimetype,
+            originalFilename: filename,
+          }),
+      );
+      reply.header("Operation-Location", `/v1/operations/${response.operation_id}`);
+      return reply.status(202).send(response);
+    },
+  );
+
+  app.get<{ Params: { projectionId: string } }>(
+    "/v1/script-projections/:projectionId",
+    async (request) => {
+      store.assertScriptProjectionOwner(request.params.projectionId, request.standbyActorId);
+      return store.getScriptProjection(request.params.projectionId);
+    },
+  );
 
   app.post("/v1/cases", async (request, reply) => {
     const body = bodyRecord(request);
@@ -259,6 +329,7 @@ export async function buildApp(
 
   app.post<{ Params: { caseId: string } }>(
     "/v1/cases/:caseId/extraction-runs",
+    { config: { rateLimit: { max: 20, timeWindow: "1 hour" } } },
     async (request, reply) => {
       store.assertCaseOwner(request.params.caseId, request.standbyActorId);
       const body = bodyRecord(request);
@@ -293,6 +364,76 @@ export async function buildApp(
     },
   );
 
+  app.post<{ Params: { caseId: string } }>(
+    "/v1/cases/:caseId/production-agent-runs",
+    { config: { rateLimit: { max: 60, timeWindow: "1 hour" } } },
+    async (request, reply) => {
+      store.assertCaseOwner(request.params.caseId, request.standbyActorId);
+      const body = bodyRecord(request);
+      assertAllowedFields(body, ["role", "event_id"]);
+      if (!PRODUCTION_AGENT_ROLES.has(body.role as ProductionAgentRole)) {
+        throw new DomainError(422, "ENUM_VALUE_INVALID", "Unknown Production Agent role.");
+      }
+      const eventId = body.event_id === undefined
+        ? null
+        : requiredString(body.event_id, "event_id");
+      const response = store.withIdempotency(
+        `POST:/v1/cases/${request.params.caseId}/production-agent-runs`,
+        idempotencyKey(request),
+        body,
+        () => store.startProductionAgent({
+          caseId: request.params.caseId,
+          role: body.role as ProductionAgentRole,
+          eventId,
+        }),
+      );
+      reply.header("Operation-Location", `/v1/operations/${response.operation_id}`);
+      return reply.status(202).send(response);
+    },
+  );
+
+  app.get<{ Params: { artifactId: string } }>(
+    "/v1/production-artifacts/:artifactId",
+    async (request) => {
+      store.assertProductionArtifactOwner(request.params.artifactId, request.standbyActorId);
+      return store.getProductionArtifact(request.params.artifactId);
+    },
+  );
+
+  app.get<{ Params: { caseId: string } }>(
+    "/v1/cases/:caseId/fact-normalization-recommendations",
+    async (request) => {
+      store.assertCaseOwner(request.params.caseId, request.standbyActorId);
+      return store.getFactNormalizationRecommendations(request.params.caseId);
+    },
+  );
+
+  app.post<{ Params: { caseId: string } }>(
+    "/v1/cases/:caseId/fact-normalization-recommendations:approve-batch",
+    async (request, reply) => {
+      store.assertCaseOwner(request.params.caseId, request.standbyActorId);
+      const body = bodyRecord(request);
+      assertAllowedFields(body, ["fact_ids"]);
+      if (!Array.isArray(body.fact_ids) || body.fact_ids.length === 0) {
+        throw new DomainError(400, "INVALID_ARGUMENT", "fact_ids must be a non-empty array.");
+      }
+      const factIds = body.fact_ids.map((value, index) =>
+        requiredString(value, `fact_ids[${index}]`),
+      );
+      const response = store.withIdempotency(
+        `POST:/v1/cases/${request.params.caseId}/fact-normalization-recommendations:approve-batch`,
+        idempotencyKey(request),
+        body,
+        () => store.approveFactNormalizationRecommendations({
+          caseId: request.params.caseId,
+          actorId: request.standbyActorId,
+          factIds,
+        }),
+      );
+      return reply.status(201).send(response);
+    },
+  );
+
   app.get<{ Params: { caseId: string } }>(
     "/v1/cases/:caseId/review-queue",
     async (request) => {
@@ -306,10 +447,11 @@ export async function buildApp(
     async (request, reply) => {
       store.assertCaseOwner(request.params.caseId, request.standbyActorId);
       const body = bodyRecord(request);
+      assertAllowedFields(body, ["reviews"]);
       if (!Array.isArray(body.reviews) || body.reviews.length === 0) {
         throw new DomainError(400, "INVALID_ARGUMENT", "reviews must be a non-empty array.");
       }
-      const reviews = body.reviews.map((value) => {
+      const reviews = body.reviews.map((value): FactReviewCommand => {
         if (value === null || typeof value !== "object" || Array.isArray(value)) {
           throw new DomainError(400, "INVALID_ARGUMENT", "review item must be an object.");
         }
@@ -318,10 +460,32 @@ export async function buildApp(
         if (decision !== "REVIEWED" && decision !== "REJECTED") {
           throw new DomainError(422, "ENUM_VALUE_INVALID", "Unknown review decision.");
         }
+        const factId = requiredString(item.fact_id, "fact_id");
+        if (decision === "REJECTED") {
+          assertAllowedFields(item, ["fact_id", "decision"]);
+          return {
+            fact_id: factId,
+            decision,
+            source: "HUMAN_REJECTION",
+            corrected_value: null,
+          };
+        }
+        assertAllowedFields(item, ["fact_id", "decision", "source", "corrected_value"]);
+        if (item.source !== "UPSTAGE_RECOMMENDATION" && item.source !== "CUSTOM") {
+          throw new DomainError(422, "ENUM_VALUE_INVALID", "Unknown reviewed fact source.");
+        }
+        if (!("corrected_value" in item)) {
+          throw new DomainError(
+            422,
+            "NORMALIZED_FACT_VALUE_REQUIRED",
+            "REVIEWED facts require corrected_value.",
+          );
+        }
         return {
-          fact_id: requiredString(item.fact_id, "fact_id"),
-          decision: decision as "REVIEWED" | "REJECTED",
-          corrected_value: (item.corrected_value ?? null) as unknown,
+          fact_id: factId,
+          decision,
+          source: item.source,
+          corrected_value: item.corrected_value,
         };
       });
       const response = store.withIdempotency(
@@ -329,7 +493,7 @@ export async function buildApp(
         idempotencyKey(request),
         body,
         () =>
-          store.reviewFacts({
+          store.commitFactReviewCommands({
             caseId: request.params.caseId,
             actorId: request.standbyActorId,
             reviews,

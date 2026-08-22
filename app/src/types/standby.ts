@@ -78,6 +78,60 @@ export type WorkspaceSnapshot = {
   };
 };
 
+export type StoryboardBeat = {
+  entity_id: string;
+  action: 'ENTER' | 'EXIT' | 'MOVE' | 'HOLD';
+  from_zone: StageZone | null;
+  to_zone: StageZone | null;
+  evidence_fact_ids: string[];
+};
+
+export type StoryboardAgentState = {
+  status: 'IDLE' | 'RECONSTRUCTING' | 'READY' | 'FAILED';
+  summary?: string;
+  version?: string;
+  eventId?: string;
+  authority?: 'NON_AUTHORITATIVE';
+  beats?: StoryboardBeat[];
+  missingEvidence?: string[];
+};
+
+export type FactNormalizationRecommendation = {
+  fact_id: string;
+  normalized_fact_type: NormalizedFactType;
+  value: Record<string, unknown>;
+  confidence: 'HIGH' | 'LOW' | 'NOT_PROVIDED';
+  authority: 'NON_AUTHORITATIVE';
+};
+
+export type FactNormalizerArtifact = {
+  contract_version: 'standby.production-artifact.v1';
+  artifact_id: string;
+  role: 'FACT_NORMALIZER';
+  authority: 'NON_AUTHORITATIVE';
+  agent_id: string;
+  config_id: string | null;
+  payload: {
+    recommendations: FactNormalizationRecommendation[];
+    missing_evidence: string[];
+  };
+};
+
+export type StoryboardAgentArtifact = {
+  contract_version: 'standby.production-artifact.v1';
+  artifact_id: string;
+  role: 'STORYBOARD_RECOMPOSER';
+  authority: 'NON_AUTHORITATIVE';
+  agent_id: string;
+  config_id: string | null;
+  payload: {
+    event_id: string;
+    beats: StoryboardBeat[];
+    summary: string;
+    missing_evidence: string[];
+  };
+};
+
 export const NORMALIZED_FACT_TYPES = [
   'SCRIPT_TIMING_ANCHOR',
   'QUICK_CHANGE_AVAILABLE_WINDOW',

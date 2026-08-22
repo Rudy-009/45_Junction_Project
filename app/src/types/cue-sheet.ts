@@ -42,7 +42,6 @@ export interface Action {
   carried_by?: string;
   from?: Direction;
   to?: Direction;
-  costume_change_duration_sec?: number;
   costume_description?: string;
 }
 
@@ -57,7 +56,6 @@ export interface Cue {
   cue_id: string;
   scene_number: string;
   scene_type: SceneType;
-  estimated_duration_sec?: number;
   backstage_crossover_time_override_sec?: number;
   events: CueEvent[];
   notes?: string;
