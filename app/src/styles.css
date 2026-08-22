@@ -36,6 +36,8 @@
 
   --color-person: var(--person);
   --color-prop: var(--prop);
+  --color-enter: var(--enter);
+  --color-exit: var(--exit);
 }
 
 :root {
@@ -62,6 +64,12 @@
   /* dual encoding: person = circle + cyan, prop = square + amber */
   --person: #4dd0e1;
   --prop: #ffb74d;
+
+  /* 등장·퇴장. MVP 기준으로 색각 대응은 범위 밖이며 관례적인 초록/빨강을 쓴다.
+     verdict 색(CONSISTENT #7ee2a8 · VIOLATION #ff8a80)은 저채도 파스텔이므로
+     아래 고채도와 정상 시야에서 구분된다. 방향과 라벨이 여전히 주 신호다. */
+  --enter: #22c55e;
+  --exit: #ef4444;
 
   color-scheme: dark;
 }
