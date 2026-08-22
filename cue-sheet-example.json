@@ -1,0 +1,125 @@
+{
+  "metadata": {
+    "title": "뮤지컬 예시 공연",
+    "version": "1.0.0",
+    "created_at": "2026-08-22T11:00:00+09:00",
+    "updated_at": "2026-08-22T12:00:00+09:00",
+    "notes": "1막 큐 시트"
+  },
+  "venue": {
+    "has_backstage_crossover": true,
+    "backstage_crossover_time_sec": 45
+  },
+  "characters": [
+    { "id": "char_01", "name": "민수", "actor": "김배우" },
+    { "id": "char_02", "name": "은비", "actor": "이배우" },
+    { "id": "char_03", "name": "지훈", "actor": "박배우" }
+  ],
+  "props": [
+    { "id": "prop_01", "name": "편지", "is_set_piece": false },
+    { "id": "prop_02", "name": "의자", "is_set_piece": true },
+    { "id": "prop_03", "name": "가방", "is_set_piece": false }
+  ],
+  "cues": [
+    {
+      "cue_id": "cue_001",
+      "scene_number": "S#001",
+      "scene_type": "scene",
+      "estimated_duration_sec": 180,
+      "events": [
+        {
+          "event_id": "evt_001",
+          "trigger": {
+            "type": "scene_change",
+            "description": "오프닝 씬 시작"
+          },
+          "actions": [
+            { "type": "character_enter", "character_id": "char_01", "direction": "stage_left" },
+            { "type": "character_enter", "character_id": "char_02", "direction": "stage_right" },
+            { "type": "prop_in", "prop_id": "prop_03", "direction": "stage_left", "carried_by": "char_01" }
+          ],
+          "notes": "민수 상수 등장(가방), 은비 하수 등장"
+        },
+        {
+          "event_id": "evt_002",
+          "trigger": {
+            "type": "dialogue",
+            "character_id": "char_01",
+            "description": "민수: '은비야, 이리 와봐'"
+          },
+          "actions": [
+            { "type": "prop_in", "prop_id": "prop_02", "direction": "stage_right" }
+          ],
+          "notes": "스태프가 하수에서 의자 세팅"
+        }
+      ],
+      "notes": "오프닝"
+    },
+    {
+      "cue_id": "cue_002",
+      "scene_number": "S#002",
+      "scene_type": "scene",
+      "estimated_duration_sec": 120,
+      "events": [
+        {
+          "event_id": "evt_003",
+          "trigger": {
+            "type": "lighting_cue",
+            "description": "암전"
+          },
+          "actions": [
+            { "type": "character_exit", "character_id": "char_02", "direction": "stage_left" },
+            { "type": "prop_out", "prop_id": "prop_02", "direction": "stage_right" }
+          ],
+          "notes": "은비 상수 퇴장, 의자 하수로 반출"
+        },
+        {
+          "event_id": "evt_004",
+          "trigger": {
+            "type": "scene_change",
+            "description": "S#002 전환 중"
+          },
+          "actions": [
+            { "type": "backstage_crossover", "character_id": "char_02", "from": "stage_left", "to": "stage_right" },
+            { "type": "costume_change", "character_id": "char_02", "costume_change_duration_sec": 60, "costume_description": "교복 → 사복" }
+          ],
+          "notes": "은비 백스테이지로 하수 이동 + 환복 60초"
+        }
+      ]
+    },
+    {
+      "cue_id": "cue_003",
+      "scene_number": "N#101",
+      "scene_type": "number",
+      "estimated_duration_sec": 240,
+      "backstage_crossover_time_override_sec": 30,
+      "events": [
+        {
+          "event_id": "evt_005",
+          "trigger": {
+            "type": "sound_cue",
+            "description": "넘버 전주 시작"
+          },
+          "actions": [
+            { "type": "character_exit", "character_id": "char_01", "direction": "stage_left" },
+            { "type": "prop_out", "prop_id": "prop_03", "direction": "stage_left", "carried_by": "char_01" }
+          ],
+          "notes": "민수 상수 퇴장(가방 반출)"
+        },
+        {
+          "event_id": "evt_006",
+          "trigger": {
+            "type": "sound_cue",
+            "description": "넘버 4마디째"
+          },
+          "actions": [
+            { "type": "character_enter", "character_id": "char_02", "direction": "stage_right" },
+            { "type": "character_enter", "character_id": "char_03", "direction": "stage_right" },
+            { "type": "prop_in", "prop_id": "prop_01", "direction": "stage_right", "carried_by": "char_02" }
+          ],
+          "notes": "은비(편지 소지) + 지훈 하수 등장"
+        }
+      ]
+    }
+  ]
+}

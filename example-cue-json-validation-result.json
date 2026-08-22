@@ -1,0 +1,192 @@
+{
+  "file": "example-cue-json.json",
+  "title": "26S <별마루> 전체큐시트",
+  "total_cues": 30,
+  "total_contradictions": 14,
+  "errors": 2,
+  "warnings": 12,
+  "contradictions": [
+    {
+      "severity": "ERROR",
+      "rule": "duplicate_enter",
+      "cue_id": "cue_002",
+      "scene_number": "S#1",
+      "event_id": "evt_003",
+      "description": "'혜원'이(가) 퇴장하지 않고 재등장합니다.",
+      "details": {
+        "character_id": "char_hyewon",
+        "character_name": "혜원"
+      }
+    },
+    {
+      "severity": "WARNING",
+      "rule": "prop_not_on_stage",
+      "cue_id": "cue_007",
+      "scene_number": "N#3",
+      "event_id": "evt_009",
+      "description": "소품 '침대'이(가) 무대에 없는 상태에서 퇴장합니다.",
+      "details": {
+        "prop_id": "prop_bed",
+        "prop_name": "침대"
+      }
+    },
+    {
+      "severity": "WARNING",
+      "rule": "prop_not_on_stage",
+      "cue_id": "cue_007",
+      "scene_number": "N#3",
+      "event_id": "evt_009",
+      "description": "소품 '이불'이(가) 무대에 없는 상태에서 퇴장합니다.",
+      "details": {
+        "prop_id": "prop_blanket",
+        "prop_name": "이불"
+      }
+    },
+    {
+      "severity": "WARNING",
+      "rule": "prop_not_on_stage",
+      "cue_id": "cue_007",
+      "scene_number": "N#3",
+      "event_id": "evt_009",
+      "description": "소품 '베개'이(가) 무대에 없는 상태에서 퇴장합니다.",
+      "details": {
+        "prop_id": "prop_pillow",
+        "prop_name": "베개"
+      }
+    },
+    {
+      "severity": "WARNING",
+      "rule": "prop_not_on_stage",
+      "cue_id": "cue_007",
+      "scene_number": "N#3",
+      "event_id": "evt_009",
+      "description": "소품 '동화책'이(가) 무대에 없는 상태에서 퇴장합니다.",
+      "details": {
+        "prop_id": "prop_storybook",
+        "prop_name": "동화책"
+      }
+    },
+    {
+      "severity": "WARNING",
+      "rule": "prop_already_on_stage",
+      "cue_id": "cue_010",
+      "scene_number": "N#4",
+      "event_id": "evt_014",
+      "description": "소품 '마루가방'이(가) 이미 무대 위에 있는데 다시 진입합니다.",
+      "details": {
+        "prop_id": "prop_maru_bag",
+        "prop_name": "마루가방",
+        "last_cue": "cue_008",
+        "last_scene": "S#5"
+      }
+    },
+    {
+      "severity": "WARNING",
+      "rule": "prop_not_on_stage",
+      "cue_id": "cue_012",
+      "scene_number": "N#5",
+      "event_id": "evt_016",
+      "description": "소품 '치어리딩 솔'이(가) 무대에 없는 상태에서 퇴장합니다.",
+      "details": {
+        "prop_id": "prop_cheer_stick",
+        "prop_name": "치어리딩 솔"
+      }
+    },
+    {
+      "severity": "WARNING",
+      "rule": "prop_already_on_stage",
+      "cue_id": "cue_014",
+      "scene_number": "S#9",
+      "event_id": "evt_018",
+      "description": "소품 '식탁'이(가) 이미 무대 위에 있는데 다시 진입합니다.",
+      "details": {
+        "prop_id": "prop_table",
+        "prop_name": "식탁",
+        "last_cue": "cue_010",
+        "last_scene": "N#4"
+      }
+    },
+    {
+      "severity": "WARNING",
+      "rule": "prop_already_on_stage",
+      "cue_id": "cue_014",
+      "scene_number": "S#9",
+      "event_id": "evt_018",
+      "description": "소품 '의자 1'이(가) 이미 무대 위에 있는데 다시 진입합니다.",
+      "details": {
+        "prop_id": "prop_chair_1",
+        "prop_name": "의자 1",
+        "last_cue": "cue_010",
+        "last_scene": "N#4"
+      }
+    },
+    {
+      "severity": "WARNING",
+      "rule": "prop_already_on_stage",
+      "cue_id": "cue_014",
+      "scene_number": "S#9",
+      "event_id": "evt_018",
+      "description": "소품 '의자 2'이(가) 이미 무대 위에 있는데 다시 진입합니다.",
+      "details": {
+        "prop_id": "prop_chair_2",
+        "prop_name": "의자 2",
+        "last_cue": "cue_010",
+        "last_scene": "N#4"
+      }
+    },
+    {
+      "severity": "WARNING",
+      "rule": "prop_already_on_stage",
+      "cue_id": "cue_018",
+      "scene_number": "S#11",
+      "event_id": "evt_020",
+      "description": "소품 '식탁'이(가) 이미 무대 위에 있는데 다시 진입합니다.",
+      "details": {
+        "prop_id": "prop_table",
+        "prop_name": "식탁",
+        "last_cue": "cue_014",
+        "last_scene": "S#9"
+      }
+    },
+    {
+      "severity": "WARNING",
+      "rule": "prop_already_on_stage",
+      "cue_id": "cue_018",
+      "scene_number": "S#11",
+      "event_id": "evt_020",
+      "description": "소품 '의자 1'이(가) 이미 무대 위에 있는데 다시 진입합니다.",
+      "details": {
+        "prop_id": "prop_chair_1",
+        "prop_name": "의자 1",
+        "last_cue": "cue_014",
+        "last_scene": "S#9"
+      }
+    },
+    {
+      "severity": "WARNING",
+      "rule": "prop_already_on_stage",
+      "cue_id": "cue_018",
+      "scene_number": "S#11",
+      "event_id": "evt_020",
+      "description": "소품 '의자 2'이(가) 이미 무대 위에 있는데 다시 진입합니다.",
+      "details": {
+        "prop_id": "prop_chair_2",
+        "prop_name": "의자 2",
+        "last_cue": "cue_014",
+        "last_scene": "S#9"
+      }
+    },
+    {
+      "severity": "ERROR",
+      "rule": "duplicate_enter",
+      "cue_id": "cue_029",
+      "scene_number": "N#12",
+      "event_id": "evt_024",
+      "description": "'혜원'이(가) 퇴장하지 않고 재등장합니다.",
+      "details": {
+        "character_id": "char_hyewon",
+        "character_name": "혜원"
+      }
+    }
+  ]
+}

@@ -1,0 +1,185 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "StageCueSheet",
+  "description": "무대/뮤지컬 큐 시트 - 동선 모순 감지용 JSON 스키마",
+  "type": "object",
+  "required": ["metadata", "venue", "characters", "props", "cues"],
+  "properties": {
+    "metadata": {
+      "type": "object",
+      "description": "공연 기본 정보",
+      "required": ["title", "version", "created_at"],
+      "properties": {
+        "title": { "type": "string", "description": "공연 제목" },
+        "version": { "type": "string", "description": "큐 시트 버전" },
+        "created_at": { "type": "string", "format": "date-time" },
+        "updated_at": { "type": "string", "format": "date-time" },
+        "notes": { "type": "string", "description": "비고" }
+      }
+    },
+    "venue": {
+      "type": "object",
+      "description": "공연장 설정",
+      "required": ["has_backstage_crossover"],
+      "properties": {
+        "has_backstage_crossover": {
+          "type": "boolean",
+          "description": "백스테이지 상수↔하수 통로 존재 여부"
+        },
+        "backstage_crossover_time_sec": {
+          "type": "number",
+          "description": "백스테이지 상수↔하수 기본 이동 시간(초). 씬별 오버라이드 가능",
+          "minimum": 0
+        }
+      }
+    },
+    "characters": {
+      "type": "array",
+      "description": "등장인물 목록",
+      "items": {
+        "type": "object",
+        "required": ["id", "name"],
+        "properties": {
+          "id": { "type": "string", "description": "인물 고유 ID (예: char_01)" },
+          "name": { "type": "string", "description": "인물 이름 (예: 민수)" },
+          "actor": { "type": "string", "description": "배우 이름 (선택)" }
+        }
+      }
+    },
+    "props": {
+      "type": "array",
+      "description": "소품 목록",
+      "items": {
+        "type": "object",
+        "required": ["id", "name"],
+        "properties": {
+          "id": { "type": "string", "description": "소품 고유 ID (예: prop_01)" },
+          "name": { "type": "string", "description": "소품 이름 (예: 편지, 의자)" },
+          "is_set_piece": {
+            "type": "boolean",
+            "description": "무대 세팅 소품 여부 (가구 등 인물 귀속 아닌 것)",
+            "default": false
+          }
+        }
+      }
+    },
+    "cues": {
+      "type": "array",
+      "description": "큐(씬) 목록 - 시간순 정렬",
+      "items": {
+        "type": "object",
+        "required": ["cue_id", "scene_number", "scene_type", "events"],
+        "properties": {
+          "cue_id": { "type": "string", "description": "큐 고유 ID (예: cue_001)" },
+          "scene_number": { "type": "string", "description": "씬 번호 (예: S#001, N#201)" },
+          "scene_type": {
+            "type": "string",
+            "enum": ["scene", "number"],
+            "description": "씬 유형: scene(일반 씬) / number(넘버/곡)"
+          },
+          "estimated_duration_sec": {
+            "type": "number",
+            "description": "해당 씬의 예상 소요 시간(초)",
+            "minimum": 0
+          },
+          "backstage_crossover_time_override_sec": {
+            "type": "number",
+            "description": "이 씬에서의 백스테이지 이동 시간 오버라이드(초). 미지정 시 venue 기본값 사용",
+            "minimum": 0
+          },
+          "events": {
+            "type": "array",
+            "description": "이벤트 목록 - 배열 순서가 실행 순서",
+            "items": { "$ref": "#/definitions/event" }
+          },
+          "notes": { "type": "string", "description": "비고" }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "event": {
+      "type": "object",
+      "description": "하나의 이벤트 (인물/소품 입퇴장, 환복 등)",
+      "required": ["event_id", "trigger", "actions"],
+      "properties": {
+        "event_id": { "type": "string", "description": "이벤트 고유 ID (예: evt_001)" },
+        "trigger": { "$ref": "#/definitions/trigger" },
+        "actions": {
+          "type": "array",
+          "description": "이 트리거에 의해 동시에 발생하는 액션들",
+          "items": { "$ref": "#/definitions/action" }
+        },
+        "notes": { "type": "string", "description": "비고" }
+      }
+    },
+    "trigger": {
+      "type": "object",
+      "description": "이벤트 발동 조건",
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["dialogue", "scene_change", "lighting_cue", "sound_cue"],
+          "description": "트리거 유형: dialogue(대사) / scene_change(씬전환) / lighting_cue(조명큐) / sound_cue(음향큐)"
+        },
+        "character_id": {
+          "type": "string",
+          "description": "대사 트리거일 경우, 해당 대사를 하는 인물 ID"
+        },
+        "description": {
+          "type": "string",
+          "description": "트리거 상세 설명 (예: '민수: 나 이제 갈게' 대사 후)"
+        }
+      }
+    },
+    "action": {
+      "type": "object",
+      "description": "이벤트 발동 시 실행되는 단일 액션",
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["character_enter", "character_exit", "backstage_crossover", "prop_in", "prop_out", "costume_change"],
+          "description": "액션 유형"
+        },
+        "character_id": {
+          "type": "string",
+          "description": "대상 인물 ID"
+        },
+        "direction": {
+          "type": "string",
+          "enum": ["stage_left", "stage_right"],
+          "description": "입장/퇴장/소품 이동 방향 (상수 or 하수)"
+        },
+        "prop_id": {
+          "type": "string",
+          "description": "소품 ID (prop_in, prop_out 시 사용)"
+        },
+        "carried_by": {
+          "type": "string",
+          "description": "소품을 함께 이동시키는 인물 ID (없으면 스태프 세팅)"
+        },
+        "from": {
+          "type": "string",
+          "enum": ["stage_left", "stage_right"],
+          "description": "백스테이지 이동 출발 (backstage_crossover 시)"
+        },
+        "to": {
+          "type": "string",
+          "enum": ["stage_left", "stage_right"],
+          "description": "백스테이지 이동 도착 (backstage_crossover 시)"
+        },
+        "costume_change_duration_sec": {
+          "type": "number",
+          "description": "환복 소요 시간(초) (costume_change 시)",
+          "minimum": 0
+        },
+        "costume_description": {
+          "type": "string",
+          "description": "환복 내용 (예: 교복 → 사복)"
+        }
+      }
+    }
+  }
+}

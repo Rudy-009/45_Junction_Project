@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://standby.local/contracts/source.v1.schema.json",
+  "title": "STANDBY Source v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "source_id",
+    "case_id",
+    "role",
+    "sha256",
+    "origin",
+    "authority",
+    "created_at"
+  ],
+  "properties": {
+    "contract_version": { "const": "standby.source.v1" },
+    "source_id": { "type": "string", "minLength": 1 },
+    "case_id": { "type": "string", "minLength": 1 },
+    "role": { "enum": ["SCRIPT", "MASTER_CUE", "STAGE_SPEC"] },
+    "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "origin": {
+      "enum": [
+        "REAL_REFERENCE",
+        "USER_PROVIDED",
+        "CONTROLLED_FIXTURE",
+        "MUTATED_FIXTURE"
+      ]
+    },
+    "authority": { "enum": ["UNREVIEWED", "REVIEWED"] },
+    "media_type": { "type": ["string", "null"] },
+    "original_filename": { "type": ["string", "null"] },
+    "created_at": { "type": "string", "format": "date-time" }
+  }
+}

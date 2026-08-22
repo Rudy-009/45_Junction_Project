@@ -1,0 +1,1276 @@
+{
+  "metadata": {
+    "title": "26S <별마루> 전체큐시트",
+    "version": "derived-from-attached-xlsx",
+    "created_at": "2025-08-22T00:00:00Z",
+    "updated_at": "2025-08-22T00:00:00Z",
+    "notes": "첨부된 전체 큐시트를 StageCueSheet 스키마로 보수 변환. OCR 혼선이 있는 구간은 notes에 유지."
+  },
+  "venue": {
+    "has_backstage_crossover": true,
+    "backstage_crossover_time_sec": 0
+  },
+  "characters": [
+    { "id": "char_hyewon", "name": "혜원", "actor": "" },
+    { "id": "char_jungwon", "name": "정원", "actor": "" },
+    { "id": "char_eunbi", "name": "은비", "actor": "" },
+    { "id": "char_minseo", "name": "민서", "actor": "" },
+    { "id": "char_yurim", "name": "유림", "actor": "" },
+    { "id": "char_yunseo", "name": "윤서", "actor": "" },
+    { "id": "char_woohyun", "name": "우현", "actor": "" },
+    { "id": "char_suyeon", "name": "수연", "actor": "" },
+    { "id": "char_hyunseo", "name": "현서", "actor": "" },
+    { "id": "char_jungmin", "name": "정민", "actor": "" },
+    { "id": "char_taejeong", "name": "태정", "actor": "" },
+    { "id": "char_chaewon", "name": "채원", "actor": "" },
+    { "id": "char_maru", "name": "마루", "actor": "" }
+  ],
+  "props": [
+    { "id": "prop_bed", "name": "침대", "is_set_piece": true },
+    { "id": "prop_blanket", "name": "이불", "is_set_piece": false },
+    { "id": "prop_pillow", "name": "베개", "is_set_piece": false },
+    { "id": "prop_storybook", "name": "동화책", "is_set_piece": false },
+    { "id": "prop_cheer_stick", "name": "치어리딩 솔", "is_set_piece": false },
+    { "id": "prop_table", "name": "식탁", "is_set_piece": true },
+    { "id": "prop_chair_1", "name": "의자 1", "is_set_piece": true },
+    { "id": "prop_chair_2", "name": "의자 2", "is_set_piece": true },
+    { "id": "prop_towel", "name": "수건", "is_set_piece": false },
+    { "id": "prop_jungwon_phone", "name": "정원 휴대폰", "is_set_piece": false },
+    { "id": "prop_minseo_phone", "name": "민서 휴대폰 공기계", "is_set_piece": false },
+    { "id": "prop_shopping_bag", "name": "장바구니", "is_set_piece": false },
+    { "id": "prop_maru_bag", "name": "마루가방", "is_set_piece": false },
+    { "id": "prop_english_wordbook", "name": "영단어장", "is_set_piece": false },
+    { "id": "prop_small_light", "name": "작은조명", "is_set_piece": false },
+    { "id": "prop_party_hat", "name": "생일꼬깔모자", "is_set_piece": false }
+  ],
+  "cues": [
+    {
+      "cue_id": "cue_001",
+      "scene_number": "N#1",
+      "scene_type": "number",
+      "estimated_duration_sec": 0,
+      "events": [
+        {
+          "event_id": "evt_001",
+          "trigger": {
+            "type": "scene_change",
+            "character_id": "",
+            "description": "안내멘트 종료 후 막 open"
+          },
+          "actions": [
+            {
+              "type": "character_enter",
+              "character_id": "char_jungwon",
+              "direction": "stage_left",
+              "prop_id": "",
+              "carried_by": "",
+              "from": "",
+              "to": "",
+              "costume_change_duration_sec": 0,
+              "costume_description": ""
+            },
+            {
+              "type": "character_enter",
+              "character_id": "char_hyewon",
+              "direction": "stage_right",
+              "prop_id": "",
+              "carried_by": "",
+              "from": "",
+              "to": "",
+              "costume_change_duration_sec": 0,
+              "costume_description": ""
+            }
+          ],
+          "notes": "전캐스트 무대대기 및 스페셜캐스트 등장 정보가 있음"
+        },
+        {
+          "event_id": "evt_002",
+          "trigger": {
+            "type": "scene_change",
+            "character_id": "",
+            "description": "N#1 종료 후 캐스트 퇴장"
+          },
+          "actions": [
+            {
+              "type": "character_exit",
+              "character_id": "char_jungwon",
+              "direction": "stage_left",
+              "prop_id": "",
+              "carried_by": "",
+              "from": "",
+              "to": "",
+              "costume_change_duration_sec": 0,
+              "costume_description": ""
+            },
+            {
+              "type": "prop_in",
+              "character_id": "",
+              "direction": "stage_right",
+              "prop_id": "prop_table",
+              "carried_by": "",
+              "from": "",
+              "to": "",
+              "costume_change_duration_sec": 0,
+              "costume_description": ""
+            },
+            {
+              "type": "prop_in",
+              "character_id": "",
+              "direction": "stage_right",
+              "prop_id": "prop_chair_1",
+              "carried_by": "",
+              "from": "",
+              "to": "",
+              "costume_change_duration_sec": 0,
+              "costume_description": ""
+            },
+            {
+              "type": "prop_in",
+              "character_id": "",
+              "direction": "stage_right",
+              "prop_id": "prop_chair_2",
+              "carried_by": "",
+              "from": "",
+              "to": "",
+              "costume_change_duration_sec": 0,
+              "costume_description": ""
+            },
+            {
+              "type": "prop_in",
+              "character_id": "",
+              "direction": "stage_right",
+              "prop_id": "prop_towel",
+              "carried_by": "",
+              "from": "",
+              "to": "",
+              "costume_change_duration_sec": 0,
+              "costume_description": ""
+            },
+            {
+              "type": "prop_in",
+              "character_id": "",
+              "direction": "stage_right",
+              "prop_id": "prop_jungwon_phone",
+              "carried_by": "",
+              "from": "",
+              "to": "",
+              "costume_change_duration_sec": 0,
+              "costume_description": ""
+            }
+          ],
+          "notes": "하수 덧마루 앞 식탁+의자2 in, 식탁 위 수건/정원휴대폰 in [1](#docchat-1-1-46)"
+        }
+      ],
+      "notes": "N#1 We're all adventurers [2](#docchat-group-doc1p1h46--doc1p3h1)"
+    },
+    {
+      "cue_id": "cue_002",
+      "scene_number": "S#1",
+      "scene_type": "scene",
+      "estimated_duration_sec": 0,
+      "events": [
+        {
+          "event_id": "evt_003",
+          "trigger": {
+            "type": "scene_change",
+            "character_id": "",
+            "description": "S#1 시작"
+          },
+          "actions": [
+            {
+              "type": "character_enter",
+              "character_id": "char_hyewon",
+              "direction": "stage_left",
+              "prop_id": "",
+              "carried_by": "",
+              "from": "",
+              "to": "",
+              "costume_change_duration_sec": 0,
+              "costume_description": ""
+            }
+          ],
+          "notes": "혜원 바로 입장 [1](#docchat-1-1-46)"
+        }
+      ],
+      "notes": "S#1 마루, 우현의 우주이야기 [3](#docchat-group-doc1p1h46--doc1p2h63--doc1p3h1)"
+    },
+    {
+      "cue_id": "cue_003",
+      "scene_number": "N#2",
+      "scene_type": "number",
+      "estimated_duration_sec": 0,
+      "events": [
+        {
+          "event_id": "evt_004",
+          "trigger": {
+            "type": "sound_cue",
+            "character_id": "",
+            "description": "전주 시작"
+          },
+          "actions": [
+            {
+              "type": "character_enter",
+              "character_id": "char_jungwon",
+              "direction": "stage_left",
+              "prop_id": "",
+              "carried_by": "",
+              "from": "",
+              "to": "",
+              "costume_change_duration_sec": 0,
+              "costume_description": ""
+            }
+          ],
+          "notes": "전주시작시 캐스트 입장, 음악 끝날무렵 캐스트 퇴장. 정원/혜원 제외 여부가 문맥상 섞여 있어 notes 유지 [1](#docchat-1-1-46)"
+        }
+      ],
+      "notes": "N#2 A million miles away [2](#docchat-group-doc1p1h46--doc1p3h1)"
+    },
+    {
+      "cue_id": "cue_004",
+      "scene_number": "S#2",
+      "scene_type": "scene",
+      "estimated_duration_sec": 0,
+      "events": [
+        {
+          "event_id": "evt_005",
+          "trigger": {
+            "type": "dialogue",
+            "character_id": "char_eunbi",
+            "description": "은비 입장 문맥"
+          },
+          "actions": [
+            {
+              "type": "prop_in",
+              "character_id": "",
+              "direction": "stage_left",
+              "prop_id": "prop_shopping_bag",
+              "carried_by": "char_eunbi",
+              "from": "",
+              "to": "",
+              "costume_change_duration_sec": 0,
+              "costume_description": ""
+            }
+          ],
+          "notes": "장바구니 in (은비 입장하면서) [1](#docchat-1-1-46)"
+        }
+      ],
+      "notes": "S#2 수연의 등장, 마루 침실이동 [3](#docchat-group-doc1p1h46--doc1p2h120--doc1p3h1)"
+    },
+    {
+      "cue_id": "cue_005",
+      "scene_number": "S#3",
+      "scene_type": "scene",
+      "estimated_duration_sec": 0,
+      "events": [
+        {
+          "event_id": "evt_006",
+          "trigger": {
+            "type": "sound_cue",
+            "character_id": "",
+            "description": "전화벨 S.E."
+          },
+          "actions": [
+            {
+              "type": "character_enter",
+              "character_id": "char_minseo",
+              "direction": "stage_right",
+              "prop_id": "",
+              "carried_by": "",
+              "from": "",
+              "to": "",
+              "costume_change_duration_sec": 0,
+              "costume_description": ""
+            },
+            {
+              "type": "prop_in",
+              "character_id": "",
+              "direction": "stage_right",
+              "prop_id": "prop_minseo_phone",
+              "carried_by": "char_minseo",
+              "from": "",
+              "to": "",
+              "costume_change_duration_sec": 0,
+              "costume_description": ""
+            },
+            {
+              "type": "costume_change",
+              "character_id": "char_minseo",
+              "direction": "",
+              "prop_id": "",
+              "carried_by": "",
+              "from": "",
+              "to": "",
+              "costume_change_duration_sec": 35,
+              "costume_description": "의사가운 걸치기 / 상의만 환복"
+            }
+          ],
+          "notes": "민서 하수등장, 민서휴대폰 공기계 in, 민서 의사가운 걸치기 [3](#docchat-group-doc1p1h46--doc1p2h123--doc1p3h1)"
+        }
+      ],
+      "notes": "S#3 우현과 의사의 통화 [3](#docchat-group-doc1p1h46--doc1p2h130--doc1p3h1)"
+    },
+    {
+      "cue_id": "cue_006",
+      "scene_number": "S#4",
+      "scene_type": "scene",
+      "estimated_duration_sec": 0,
+      "events": [
+        {
+          "event_id": "evt_007",
+          "trigger": {
+            "type": "dialogue",
+            "character_id": "char_jungwon",
+            "description": "정원 대사 후 장면 전환"
+          },
+          "actions": [
+            {
+              "type": "prop_out",
+              "character_id": "",
+              "direction": "stage_right",
+              "prop_id": "prop_minseo_phone",
+              "carried_by": "char_minseo",
+              "from": "",
+              "to": "",
+              "costume_change_duration_sec": 0,
+              "costume_description": ""
+            },
+            {
+              "type": "prop_out",
+              "character_id": "",
+              "direction": "stage_right",
+              "prop_id": "prop_table",
+              "carried_by": "",
+              "from": "",
+              "to": "",
+              "costume_change_duration_sec": 0,
+              "costume_description": ""
+            },
+            {
+              "type": "prop_out",
+              "character_id": "",
+              "direction": "stage_right",
+              "prop_id": "prop_chair_1",
+              "carried_by": "",
+              "from": "",
+              "to": "",
+              "costume_change_duration_sec": 0,
+              "costume_description": ""
+            },
+            {
+              "type": "prop_out",
+              "character_id": "",
+              "direction": "stage_right",
+              "prop_id": "prop_chair_2",
+              "carried_by": "",
+              "from": "",
+              "to": "",
+              "costume_change_duration_sec": 0,
+              "costume_description": ""
+            },
+            {
+              "type": "prop_out",
+              "character_id": "",
+              "direction": "stage_right",
+              "prop_id": "prop_towel",
+              "carried_by": "",
+              "from": "",
+              "to": "",
+              "costume_change_duration_sec": 0,
+              "costume_description": ""
+            },
+            {
+              "type": "prop_out",
+              "character_id": "",
+              "direction": "stage_right",
+              "prop_id": "prop_shopping_bag",
+              "carried_by": "",
+              "from": "",
+              "to": "",
+              "costume_change_duration_sec": 0,
+              "costume_description": ""
+            },
+            {
+              "type": "costume_change",
+              "character_id": "char_minseo",
+              "direction": "",
+              "prop_id": "",
+              "carried_by": "",
+              "from": "",
+              "to": "",
+              "costume_change_duration_sec": 0,
+              "costume_description": "의사가운 벗기"
+            }
+          ],
+          "notes": "민서휴대폰 공기계 out, 식탁/의자 out, 수건+장바구니 out, 민서 의사가운 벗기 [1](#docchat-1-1-46)"
+        }
+      ],
+      "notes": "S#4 마루의 방으로 들어간 우현 [3](#docchat-group-doc1p1h46--doc1p2h138--doc1p3h1)"
+    },
+    {
+      "cue_id": "cue_007",
+      "scene_number": "N#3",
+      "scene_type": "number",
+      "estimated_duration_sec": 0,
+      "events": [
+        {
+          "event_id": "evt_008",
+          "trigger": {
+            "type": "sound_cue",
+            "character_id": "",
+            "description": "전주 시작"
+          },
+          "actions": [
+            {
+              "type": "character_enter",
+              "character_id": "char_yurim",
+              "direction": "stage_left",
+              "prop_id": "",
+              "carried_by": "",
+              "from": "",
+              "to": "",
+              "costume_change_duration_sec": 0,
+              "costume_description": ""
+            },
+            {
+              "type": "character_enter",
+              "character_id": "char_yunseo",
+              "direction": "stage_right",
+              "prop_id": "",
+              "carried_by": "",
+              "from": "",
+              "to": "",
+              "costume_change_duration_sec": 0,
+              "costume_description": ""
+            }
+          ],
+          "notes": "전주 시작시 캐스트 입장, 노래 마지막 소절 캐스트 퇴장 [1](#docchat-1-1-46)"
+        },
+        {
+          "event_id": "evt_009",
+          "trigger": {
+            "type": "scene_change",
+            "character_id": "",
+            "description": "정원 퇴장 후 세트 전환"
+          },
+          "actions": [
+            {
+              "type": "character_exit",
+              "character_id": "char_jungwon",
+              "direction": "stage_left",
+              "prop_id": "",
+              "carried_by": "",
+              "from": "",
+              "to": "",
+              "costume_change_duration_sec": 0,
+              "costume_description": ""
+            },
+            {
+              "type": "prop_out",
+              "character_id": "",
+              "direction": "stage_left",
+              "prop_id": "prop_bed",
+              "carried_by": "",
+              "from": "",
+              "to": "",
+              "costume_change_duration_sec": 0,
+              "costume_description": ""
+            },
+            {
+              "type": "prop_out",
+              "character_id": "",
+              "direction": "stage_left",
+              "prop_id": "prop_blanket",
+              "carried_by": "",
+              "from": "",
+              "to": "",
+              "costume_change_duration_sec": 0,
+              "costume_description": ""
+            },
+            {
+              "type": "prop_out",
+              "character_id": "",
+              "direction": "stage_left",
+              "prop_id": "prop_pillow",
+              "carried_by": "",
+              "from": "",
+              "to": "",
+              "costume_change_duration_sec": 0,
+              "costume_description": ""
+            },
+            {
+              "type": "prop_out",
+              "character_id": "",
+              "direction": "stage_left",
+              "prop_id": "prop_storybook",
+              "carried_by": "",
+              "from": "",
+              "to": "",
+              "costume_change_duration_sec": 0,
+              "costume_description": ""
+            },
+            {
+              "type": "prop_in",
+              "character_id": "",
+              "direction": "stage_right",
+              "prop_id": "prop_table",
+              "carried_by": "",
+              "from": "",
+              "to": "",
+              "costume_change_duration_sec": 0,
+              "costume_description": ""
+            },
+            {
+              "type": "prop_in",
+              "character_id": "",
+              "direction": "stage_right",
+              "prop_id": "prop_chair_1",
+              "carried_by": "",
+              "from": "",
+              "to": "",
+              "costume_change_duration_sec": 0,
+              "costume_description": ""
+            },
+            {
+              "type": "prop_in",
+              "character_id": "",
+              "direction": "stage_right",
+              "prop_id": "prop_chair_2",
+              "carried_by": "",
+              "from": "",
+              "to": "",
+              "costume_change_duration_sec": 0,
+              "costume_description": ""
+            },
+            {
+              "type": "prop_in",
+              "character_id": "",
+              "direction": "stage_right",
+              "prop_id": "prop_party_hat",
+              "carried_by": "",
+              "from": "",
+              "to": "",
+              "costume_change_duration_sec": 0,
+              "costume_description": ""
+            }
+          ],
+          "notes": "침대+이불베개+동화책 out, 식탁+의자2 in, 꼬깔모자 in [1](#docchat-1-1-46)"
+        }
+      ],
+      "notes": "N#3 기쁨, 슬픔, 아름다운 마음 [3](#docchat-group-doc1p1h46--doc1p2h194--doc1p3h1)"
+    },
+    {
+      "cue_id": "cue_008",
+      "scene_number": "S#5",
+      "scene_type": "scene",
+      "estimated_duration_sec": 0,
+      "events": [
+        {
+          "event_id": "evt_010",
+          "trigger": {
+            "type": "dialogue",
+            "character_id": "char_hyewon",
+            "description": "생일파티 장면 진행 중"
+          },
+          "actions": [
+            {
+              "type": "prop_in",
+              "character_id": "",
+              "direction": "stage_right",
+              "prop_id": "prop_maru_bag",
+              "carried_by": "char_jungwon",
+              "from": "",
+              "to": "",
+              "costume_change_duration_sec": 0,
+              "costume_description": ""
+            },
+            {
+              "type": "prop_out",
+              "character_id": "",
+              "direction": "stage_right",
+              "prop_id": "prop_party_hat",
+              "carried_by": "char_hyewon",
+              "from": "",
+              "to": "",
+              "costume_change_duration_sec": 0,
+              "costume_description": ""
+            },
+            {
+              "type": "costume_change",
+              "character_id": "char_jungwon",
+              "direction": "",
+              "prop_id": "",
+              "carried_by": "",
+              "from": "",
+              "to": "",
+              "costume_change_duration_sec": 0,
+              "costume_description": "가디건 걸치기"
+            }
+          ],
+          "notes": "마루가방 in(정원), 꼬깔모자 out(혜원), 정원 가디건 걸치기 [1](#docchat-1-1-46)"
+        },
+        {
+          "event_id": "evt_011",
+          "trigger": {
+            "type": "scene_change",
+            "character_id": "",
+            "description": "장면 후반 세트 정리"
+          },
+          "actions": [
+            {
+              "type": "prop_out",
+              "character_id": "",
+              "direction": "stage_right",
+              "prop_id": "prop_table",
+              "carried_by": "",
+              "from": "",
+              "to": "",
+              "costume_change_duration_sec": 0,
+              "costume_description": ""
+            },
+            {
+              "type": "prop_out",
+              "character_id": "",
+              "direction": "stage_right",
+              "prop_id": "prop_chair_1",
+              "carried_by": "",
+              "from": "",
+              "to": "",
+              "costume_change_duration_sec": 0,
+              "costume_description": ""
+            },
+            {
+              "type": "prop_out",
+              "character_id": "",
+              "direction": "stage_right",
+              "prop_id": "prop_chair_2",
+              "carried_by": "",
+              "from": "",
+              "to": "",
+              "costume_change_duration_sec": 0,
+              "costume_description": ""
+            }
+          ],
+          "notes": "하수 덧마루 앞 식탁+의자2 out, 식탁 위 마루가방 [1](#docchat-1-1-46)"
+        }
+      ],
+      "notes": "S#5 마루의 생일파티, 별1,2의 대화 [3](#docchat-group-doc1p1h46--doc1p2h194--doc1p3h1)"
+    },
+    {
+      "cue_id": "cue_009",
+      "scene_number": "S#6",
+      "scene_type": "scene",
+      "estimated_duration_sec": 0,
+      "events": [
+        {
+          "event_id": "evt_012",
+          "trigger": {
+            "type": "lighting_cue",
+            "character_id": "",
+            "description": "별1,2 조명 in"
+          },
+          "actions": [
+            {
+              "type": "character_enter",
+              "character_id": "char_jungwon",
+              "direction": "stage_left",
+              "prop_id": "",
+              "carried_by": "",
+              "from": "",
+              "to": "",
+              "costume_change_duration_sec": 0,
+              "costume_description": ""
+            }
+          ],
+          "notes": "정원 입장 [1](#docchat-1-1-46)"
+        }
+      ],
+      "notes": "S#6 밖으로 나온 우현, 뒤따라가는 별들 [3](#docchat-group-doc1p1h46--doc1p2h200--doc1p3h1)"
+    },
+    {
+      "cue_id": "cue_010",
+      "scene_number": "N#4",
+      "scene_type": "number",
+      "estimated_duration_sec": 0,
+      "events": [
+        {
+          "event_id": "evt_013",
+          "trigger": {
+            "type": "sound_cue",
+            "character_id": "",
+            "description": "전주 시작"
+          },
+          "actions": [
+            {
+              "type": "character_enter",
+              "character_id": "char_eunbi",
+              "direction": "stage_left",
+              "prop_id": "",
+              "carried_by": "",
+              "from": "",
+              "to": "",
+              "costume_change_duration_sec": 0,
+              "costume_description": ""
+            }
+          ],
+          "notes": "전주 시작시 캐스트 입장, 후렴 끝나면 은비 중퇴 [3](#docchat-group-doc1p1h46--doc1p2h254--doc1p3h1)"
+        },
+        {
+          "event_id": "evt_014",
+          "trigger": {
+            "type": "scene_change",
+            "character_id": "",
+            "description": "넘버 중 세트 전환"
+          },
+          "actions": [
+            {
+              "type": "prop_in",
+              "character_id": "",
+              "direction": "stage_right",
+              "prop_id": "prop_table",
+              "carried_by": "",
+              "from": "",
+              "to": "",
+              "costume_change_duration_sec": 0,
+              "costume_description": ""
+            },
+            {
+              "type": "prop_in",
+              "character_id": "",
+              "direction": "stage_right",
+              "prop_id": "prop_chair_1",
+              "carried_by": "",
+              "from": "",
+              "to": "",
+              "costume_change_duration_sec": 0,
+              "costume_description": ""
+            },
+            {
+              "type": "prop_in",
+              "character_id": "",
+              "direction": "stage_right",
+              "prop_id": "prop_chair_2",
+              "carried_by": "",
+              "from": "",
+              "to": "",
+              "costume_change_duration_sec": 0,
+              "costume_description": ""
+            },
+            {
+              "type": "prop_in",
+              "character_id": "",
+              "direction": "stage_right",
+              "prop_id": "prop_maru_bag",
+              "carried_by": "",
+              "from": "",
+              "to": "",
+              "costume_change_duration_sec": 0,
+              "costume_description": ""
+            },
+            {
+              "type": "costume_change",
+              "character_id": "char_hyewon",
+              "direction": "",
+              "prop_id": "",
+              "carried_by": "",
+              "from": "",
+              "to": "",
+              "costume_change_duration_sec": 260,
+              "costume_description": "배역의상에 상의만 긴팔 흰셔츠(퀵체)"
+            },
+            {
+              "type": "costume_change",
+              "character_id": "char_eunbi",
+              "direction": "",
+              "prop_id": "",
+              "carried_by": "",
+              "from": "",
+              "to": "",
+              "costume_change_duration_sec": 260,
+              "costume_description": "배역의상 유지 / 넘버 중퇴환복"
+            }
+          ],
+          "notes": "식탁+의자2 in, 식탁옆 마루가방 in, 혜원/은비 환복 정보 [1](#docchat-1-1-46)"
+        }
+      ],
+      "notes": "N#4 UGLY [3](#docchat-group-doc1p1h46--doc1p2h254--doc1p3h1)"
+    },
+    {
+      "cue_id": "cue_011",
+      "scene_number": "S#7",
+      "scene_type": "scene",
+      "estimated_duration_sec": 0,
+      "events": [
+        {
+          "event_id": "evt_015",
+          "trigger": {
+            "type": "dialogue",
+            "character_id": "char_suyeon",
+            "description": "수연: 같이 가, 마루야!"
+          },
+          "actions": [
+            {
+              "type": "prop_out",
+              "character_id": "",
+              "direction": "stage_right",
+              "prop_id": "prop_maru_bag",
+              "carried_by": "char_hyewon",
+              "from": "",
+              "to": "",
+              "costume_change_duration_sec": 0,
+              "costume_description": ""
+            }
+          ],
+          "notes": "마루가방 out(혜원) [2](#docchat-group-doc1p1h46--doc1p2h267)"
+        }
+      ],
+      "notes": "S#7 학예회날 아침 마루와 수연 [3](#docchat-group-doc1p1h46--doc1p2h267--doc1p3h1)"
+    },
+    {
+      "cue_id": "cue_012",
+      "scene_number": "N#5",
+      "scene_type": "number",
+      "estimated_duration_sec": 0,
+      "events": [
+        {
+          "event_id": "evt_016",
+          "trigger": {
+            "type": "sound_cue",
+            "character_id": "",
+            "description": "노래 종료"
+          },
+          "actions": [
+            {
+              "type": "prop_out",
+              "character_id": "",
+              "direction": "stage_left",
+              "prop_id": "prop_cheer_stick",
+              "carried_by": "char_hyewon",
+              "from": "",
+              "to": "",
+              "costume_change_duration_sec": 0,
+              "costume_description": ""
+            }
+          ],
+          "notes": "솔 캐스트가 각자 들고 out [1](#docchat-1-1-46)"
+        }
+      ],
+      "notes": "N#5 혜성 [3](#docchat-group-doc1p1h46--doc1p2h301--doc1p3h1)"
+    },
+    {
+      "cue_id": "cue_013",
+      "scene_number": "S#8",
+      "scene_type": "scene",
+      "estimated_duration_sec": 0,
+      "events": [
+        {
+          "event_id": "evt_017",
+          "trigger": {
+            "type": "dialogue",
+            "character_id": "char_eunbi",
+            "description": "은비: 일단 집으로 가요"
+          },
+          "actions": [
+            {
+              "type": "character_exit",
+              "character_id": "char_jungwon",
+              "direction": "stage_left",
+              "prop_id": "",
+              "carried_by": "",
+              "from": "",
+              "to": "",
+              "costume_change_duration_sec": 0,
+              "costume_description": ""
+            },
+            {
+              "type": "character_exit",
+              "character_id": "char_eunbi",
+              "direction": "stage_right",
+              "prop_id": "",
+              "carried_by": "",
+              "from": "",
+              "to": "",
+              "costume_change_duration_sec": 0,
+              "costume_description": ""
+            }
+          ],
+          "notes": "정원, 은비 퇴장 [2](#docchat-group-doc1p1h46--doc1p2h306)"
+        }
+      ],
+      "notes": "S#8 학예회에 늦은 우현 [3](#docchat-group-doc1p1h46--doc1p2h306--doc1p3h1)"
+    },
+    {
+      "cue_id": "cue_014",
+      "scene_number": "S#9",
+      "scene_type": "scene",
+      "estimated_duration_sec": 0,
+      "events": [
+        {
+          "event_id": "evt_018",
+          "trigger": {
+            "type": "scene_change",
+            "character_id": "",
+            "description": "거실 장면 세트 준비"
+          },
+          "actions": [
+            {
+              "type": "prop_in",
+              "character_id": "",
+              "direction": "stage_right",
+              "prop_id": "prop_table",
+              "carried_by": "",
+              "from": "",
+              "to": "",
+              "costume_change_duration_sec": 0,
+              "costume_description": ""
+            },
+            {
+              "type": "prop_in",
+              "character_id": "",
+              "direction": "stage_right",
+              "prop_id": "prop_chair_1",
+              "carried_by": "",
+              "from": "",
+              "to": "",
+              "costume_change_duration_sec": 0,
+              "costume_description": ""
+            },
+            {
+              "type": "prop_in",
+              "character_id": "",
+              "direction": "stage_right",
+              "prop_id": "prop_chair_2",
+              "carried_by": "",
+              "from": "",
+              "to": "",
+              "costume_change_duration_sec": 0,
+              "costume_description": ""
+            }
+          ],
+          "notes": "하수 덧마루 앞 식탁+의자2 in [1](#docchat-1-1-46)"
+        }
+      ],
+      "notes": "S#9 집으로 돌아온 가족, 다그치는 수연 [2](#docchat-group-doc1p1h46--doc1p2h318)"
+    },
+    {
+      "cue_id": "cue_015",
+      "scene_number": "N#6",
+      "scene_type": "number",
+      "estimated_duration_sec": 0,
+      "events": [
+        {
+          "event_id": "evt_019",
+          "trigger": {
+            "type": "dialogue",
+            "character_id": "char_eunbi",
+            "description": "은비 솔로 시작"
+          },
+          "actions": [
+            {
+              "type": "character_enter",
+              "character_id": "char_eunbi",
+              "direction": "stage_right",
+              "prop_id": "",
+              "carried_by": "",
+              "from": "",
+              "to": "",
+              "costume_change_duration_sec": 0,
+              "costume_description": ""
+            }
+          ],
+          "notes": "은비 솔로 시작시 캐스트 입장 [2](#docchat-group-doc1p1h46--doc1p2h347)"
+        }
+      ],
+      "notes": "N#6 Good for you [3](#docchat-group-doc1p1h46--doc1p2h347--doc1p3h1)"
+    },
+    {
+      "cue_id": "cue_016",
+      "scene_number": "S#10",
+      "scene_type": "scene",
+      "estimated_duration_sec": 0,
+      "events": [],
+      "notes": "S#10 우현의 시한부 고백 [2](#docchat-group-doc1p1h46--doc1p2h368)"
+    },
+    {
+      "cue_id": "cue_017",
+      "scene_number": "N#7",
+      "scene_type": "number",
+      "estimated_duration_sec": 0,
+      "events": [],
+      "notes": "N#7 하나의 답 [2](#docchat-group-doc1p2h403--doc1p4h1)"
+    },
+    {
+      "cue_id": "cue_018",
+      "scene_number": "S#11",
+      "scene_type": "scene",
+      "estimated_duration_sec": 0,
+      "events": [
+        {
+          "event_id": "evt_020",
+          "trigger": {
+            "type": "dialogue",
+            "character_id": "char_hyewon",
+            "description": "혜원 관련 대사 진행 중"
+          },
+          "actions": [
+            {
+              "type": "prop_in",
+              "character_id": "",
+              "direction": "stage_left",
+              "prop_id": "prop_maru_bag",
+              "carried_by": "char_hyewon",
+              "from": "",
+              "to": "",
+              "costume_change_duration_sec": 0,
+              "costume_description": ""
+            },
+            {
+              "type": "prop_in",
+              "character_id": "",
+              "direction": "stage_right",
+              "prop_id": "prop_english_wordbook",
+              "carried_by": "",
+              "from": "",
+              "to": "",
+              "costume_change_duration_sec": 0,
+              "costume_description": ""
+            },
+            {
+              "type": "prop_in",
+              "character_id": "",
+              "direction": "stage_right",
+              "prop_id": "prop_table",
+              "carried_by": "",
+              "from": "",
+              "to": "",
+              "costume_change_duration_sec": 0,
+              "costume_description": ""
+            },
+            {
+              "type": "prop_in",
+              "character_id": "",
+              "direction": "stage_right",
+              "prop_id": "prop_chair_1",
+              "carried_by": "",
+              "from": "",
+              "to": "",
+              "costume_change_duration_sec": 0,
+              "costume_description": ""
+            },
+            {
+              "type": "prop_in",
+              "character_id": "",
+              "direction": "stage_right",
+              "prop_id": "prop_chair_2",
+              "carried_by": "",
+              "from": "",
+              "to": "",
+              "costume_change_duration_sec": 0,
+              "costume_description": ""
+            }
+          ],
+          "notes": "마루가방 in(혜원), 영단어장 in, 식탁+의자2 in [2](#docchat-group-doc1p1h46--doc1p2h403)"
+        }
+      ],
+      "notes": "S#11 마루를 놀리는 친구1,2 [2](#docchat-group-doc1p1h46--doc1p2h403)"
+    },
+    {
+      "cue_id": "cue_019",
+      "scene_number": "N#8",
+      "scene_type": "number",
+      "estimated_duration_sec": 0,
+      "events": [],
+      "notes": "N#8 Larger than life [1](#docchat-1-2-403)"
+    },
+    {
+      "cue_id": "cue_020",
+      "scene_number": "S#12",
+      "scene_type": "scene",
+      "estimated_duration_sec": 0,
+      "events": [
+        {
+          "event_id": "evt_021",
+          "trigger": {
+            "type": "dialogue",
+            "character_id": "char_eunbi",
+            "description": "은비: 마루야 오늘 학교에서 무슨 일 있었어?"
+          },
+          "actions": [
+            {
+              "type": "character_enter",
+              "character_id": "char_jungwon",
+              "direction": "stage_right",
+              "prop_id": "",
+              "carried_by": "",
+              "from": "",
+              "to": "",
+              "costume_change_duration_sec": 0,
+              "costume_description": ""
+            }
+          ],
+          "notes": "정원/은비 하수 무대대기 후 장면 진행 [1](#docchat-1-2-411)"
+        }
+      ],
+      "notes": "S#12 우현이 마루에게 사과 [2](#docchat-group-doc1p1h46--doc1p2h411)"
+    },
+    {
+      "cue_id": "cue_021",
+      "scene_number": "S#13",
+      "scene_type": "scene",
+      "estimated_duration_sec": 0,
+      "events": [],
+      "notes": "S#13 놀이공원에 온 가족들 [2](#docchat-group-doc1p1h46--doc1p2h426)"
+    },
+    {
+      "cue_id": "cue_022",
+      "scene_number": "N#9",
+      "scene_type": "number",
+      "estimated_duration_sec": 0,
+      "events": [],
+      "notes": "N#9 한 페이지가 될 수 있게 [2](#docchat-group-doc1p2h464--doc1p4h1)"
+    },
+    {
+      "cue_id": "cue_023",
+      "scene_number": "S#14",
+      "scene_type": "scene",
+      "estimated_duration_sec": 0,
+      "events": [
+        {
+          "event_id": "evt_022",
+          "trigger": {
+            "type": "dialogue",
+            "character_id": "char_yurim",
+            "description": "유림: 가자"
+          },
+          "actions": [
+            {
+              "type": "backstage_crossover",
+              "character_id": "char_yurim",
+              "direction": "",
+              "prop_id": "",
+              "carried_by": "",
+              "from": "stage_right",
+              "to": "stage_left",
+              "costume_change_duration_sec": 0,
+              "costume_description": ""
+            },
+            {
+              "type": "backstage_crossover",
+              "character_id": "char_yunseo",
+              "direction": "",
+              "prop_id": "",
+              "carried_by": "",
+              "from": "stage_right",
+              "to": "stage_left",
+              "costume_change_duration_sec": 0,
+              "costume_description": ""
+            }
+          ],
+          "notes": "별들의 대화 후 바로 하수 조명 out, 상수 조명 in 문맥을 상하수 이동으로 보수 반영 [1](#docchat-1-2-474)"
+        }
+      ],
+      "notes": "S#14 별1,2의 대화 / 우현의 이별고백 [2](#docchat-group-doc1p2h474--doc1p4h1)"
+    },
+    {
+      "cue_id": "cue_024",
+      "scene_number": "N#10",
+      "scene_type": "number",
+      "estimated_duration_sec": 0,
+      "events": [],
+      "notes": "N#10 기쁨, 슬픔 reprise [1](#docchat-1-2-509)"
+    },
+    {
+      "cue_id": "cue_025",
+      "scene_number": "S#15",
+      "scene_type": "scene",
+      "estimated_duration_sec": 0,
+      "events": [],
+      "notes": "S#15 마루와 수연의 대화 [1](#docchat-1-2-516)"
+    },
+    {
+      "cue_id": "cue_026",
+      "scene_number": "N#11",
+      "scene_type": "number",
+      "estimated_duration_sec": 0,
+      "events": [
+        {
+          "event_id": "evt_023",
+          "trigger": {
+            "type": "dialogue",
+            "character_id": "char_eunbi",
+            "description": "은비: 다 잘할 수 있겠어?"
+          },
+          "actions": [
+            {
+              "type": "backstage_crossover",
+              "character_id": "char_hyewon",
+              "direction": "",
+              "prop_id": "",
+              "carried_by": "",
+              "from": "stage_left",
+              "to": "stage_right",
+              "costume_change_duration_sec": 0,
+              "costume_description": ""
+            }
+          ],
+          "notes": "문서에 상하수 교차 명시 [1](#docchat-1-2-525)"
+        }
+      ],
+      "notes": "N#11 Goodbye [2](#docchat-group-doc1p2h540--doc1p4h1)"
+    },
+    {
+      "cue_id": "cue_027",
+      "scene_number": "S#16",
+      "scene_type": "scene",
+      "estimated_duration_sec": 60,
+      "events": [],
+      "notes": "긴 암전 약 1분 [1](#docchat-1-2-546)"
+    },
+    {
+      "cue_id": "cue_028",
+      "scene_number": "S#17",
+      "scene_type": "scene",
+      "estimated_duration_sec": 0,
+      "events": [],
+      "notes": "S#17 우주비행사가 된 마루 [1](#docchat-1-2-560)"
+    },
+    {
+      "cue_id": "cue_029",
+      "scene_number": "N#12",
+      "scene_type": "number",
+      "estimated_duration_sec": 0,
+      "events": [
+        {
+          "event_id": "evt_024",
+          "trigger": {
+            "type": "dialogue",
+            "character_id": "char_hyewon",
+            "description": "혜원: 다녀오겠습니다!"
+          },
+          "actions": [
+            {
+              "type": "character_enter",
+              "character_id": "char_hyewon",
+              "direction": "stage_left",
+              "prop_id": "",
+              "carried_by": "",
+              "from": "",
+              "to": "",
+              "costume_change_duration_sec": 0,
+              "costume_description": ""
+            }
+          ],
+          "notes": "N#12 Fantasy 시작 트리거 [1](#docchat-1-2-565)"
+        }
+      ],
+      "notes": "N#12 Fantasy [1](#docchat-1-2-570)"
+    },
+    {
+      "cue_id": "cue_030",
+      "scene_number": "N#13",
+      "scene_type": "number",
+      "estimated_duration_sec": 0,
+      "events": [],
+      "notes": "N#13 Goodbye reprise (커튼콜) [2](#docchat-group-doc1p2h572--doc1p4h1)"
+    }
+  ]
+}
