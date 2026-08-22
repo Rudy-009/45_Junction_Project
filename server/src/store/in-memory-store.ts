@@ -89,6 +89,7 @@ export class InMemoryStore {
   private readonly latestFactNormalizerArtifactByCase = new Map<string, string>();
   private readonly scriptProjections = new Map<string, ScriptProjection>();
   private readonly scriptProjectionOwnerIds = new Map<string, string>();
+  private readonly caseScriptProjectionIds = new Map<string, string>();
   private readonly idempotency = new Map<string, IdempotencyRecord>();
   private sequence = 0;
 
@@ -375,7 +376,39 @@ export class InMemoryStore {
     this.operations.set(operation.operation_id, operation);
     this.operationActorIds.set(operation.operation_id, input.actorId);
     this.scriptProjectionOwnerIds.set(projectionId, input.actorId);
-    queueMicrotask(() => void this.executeScriptProjection(source, operation, projectionId));
+    queueMicrotask(() => void this.executeScriptProjection(source, operation, projectionId, null));
+    return structuredClone(operation);
+  }
+
+  startCaseScriptProjection(caseId: string, actorId: string): Operation {
+    if (!this.scriptProjectionProvider) {
+      throw new DomainError(
+        503,
+        "UPSTAGE_NOT_CONFIGURED",
+        "Script projection adapter is not configured.",
+      );
+    }
+    const record = this.getCase(caseId);
+    const source = record.sources.get("SCRIPT");
+    if (!source || !source.bytes || !source.media_type || !source.original_filename) {
+      throw new DomainError(409, "SOURCE_SLOT_MISSING", "Upload a SCRIPT DOCX or PDF first.");
+    }
+    const projectionId = this.id("script_projection");
+    const createdAt = this.now();
+    const operation: Operation = {
+      operation_id: this.id("operation"),
+      kind: "PROJECT_SCRIPT",
+      status: "QUEUED",
+      result_source: null,
+      resource_ref: { type: "script_projection", id: projectionId },
+      error: null,
+      created_at: createdAt,
+      updated_at: createdAt,
+    };
+    this.operations.set(operation.operation_id, operation);
+    this.operationCaseIds.set(operation.operation_id, caseId);
+    this.scriptProjectionOwnerIds.set(projectionId, actorId);
+    queueMicrotask(() => void this.executeScriptProjection(source, operation, projectionId, record));
     return structuredClone(operation);
   }
 
@@ -385,6 +418,14 @@ export class InMemoryStore {
       throw new DomainError(404, "RESOURCE_NOT_FOUND", "Operation not found.");
     }
     return structuredClone(operation);
+  }
+
+  getCaseScriptProjection(caseId: string): ScriptProjection {
+    const projectionId = this.caseScriptProjectionIds.get(caseId);
+    if (!projectionId) {
+      throw new DomainError(404, "RESOURCE_NOT_FOUND", "Case script projection not found.");
+    }
+    return this.getScriptProjection(projectionId);
   }
 
   getExtractionRun(runId: string): ExtractionRunRecord {
@@ -911,6 +952,7 @@ export class InMemoryStore {
     source: InternalSourceVersion,
     operation: Operation,
     projectionId: string,
+    record: CaseRecord | null,
   ): Promise<void> {
     operation.status = "RUNNING";
     operation.updated_at = this.now();
@@ -947,6 +989,7 @@ export class InMemoryStore {
       const projection: ScriptProjection = {
         contract_version: "standby.script-projection.v1",
         projection_id: projectionId,
+        case_id: record?.case_id ?? null,
         authority: "NON_AUTHORITATIVE",
         source: {
           filename: source.original_filename,
@@ -966,7 +1009,16 @@ export class InMemoryStore {
         segments: projectScriptSegments(result.facts),
         created_at: this.now(),
       };
+      if (record) {
+        for (const [factId, fact] of record.facts) {
+          if (fact.source_role === "SCRIPT") record.facts.delete(factId);
+        }
+        for (const fact of result.facts) record.facts.set(fact.fact_id, structuredClone(fact));
+        record.current_snapshot_id = null;
+        record.verification = null;
+      }
       this.scriptProjections.set(projectionId, projection);
+      if (record) this.caseScriptProjectionIds.set(record.case_id, projectionId);
       operation.status = "SUCCEEDED";
       operation.result_source = "UPSTAGE";
       operation.updated_at = this.now();

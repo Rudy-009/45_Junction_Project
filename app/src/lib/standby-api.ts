@@ -124,6 +124,14 @@ export class StandbyApi {
     });
   }
 
+  startCaseScriptProjection(caseId: string) {
+    return this.request<StandbyOperation>(`/v1/cases/${caseId}/script-projections`, {
+      method: "POST",
+      body: "{}",
+      idempotent: true,
+    });
+  }
+
   getOperation(operationId: string) {
     return this.request<StandbyOperation>(`/v1/operations/${operationId}`);
   }
@@ -138,6 +146,10 @@ export class StandbyApi {
 
   getScriptProjection(projectionId: string) {
     return this.request<ScriptProjection>(`/v1/script-projections/${projectionId}`);
+  }
+
+  getCaseScriptProjection(caseId: string) {
+    return this.request<ScriptProjection>(`/v1/cases/${caseId}/script-projection`);
   }
 
   async waitForOperation(

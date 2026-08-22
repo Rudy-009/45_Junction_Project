@@ -293,9 +293,9 @@ Storyboard는 timeline 클릭마다 긴 Upstage job을 동기 대기하지 않�
 인접 pair 사전 생성이 아니라 **선택 시 lazy 실행**이며, 늦게 도착한 이전 event 응답은 현재 선택을 덮을 수 없다. 화면에 보이는 `beats`와
 `missing_evidence`는 읽기 전용 보조 결과이며, 정적 snapshot과 deterministic verdict가 언제나 정본이다.
 
-구조화 JSON Editor 직행은 계속 즉시 열린다. 이 로컬 경로는 reviewed case가 없어 Storyboard Agent를
-호출하지 않지만, 대본 DOCX/PDF는 case-independent Script projection endpoint로 구조화할 수 있다.
-정적 snapshot·인접 semantic motion은 그대로 제공한다.
+구조화 JSON도 XLSX/PDF와 같은 case upload·review 경로로 수렴한다. 대본 DOCX/PDF는 workspace의
+Sidebar에서 현재 case의 `SCRIPT` source로 연결하며, 새 raw fact는 `UNREVIEWED`로 review queue에 합류한다.
+새 source digest로 snapshot을 다시 freeze하기 전에는 기존 verified workspace를 계속 사용하지 않는다.
 향후 preview Agent를 붙이더라도 `PREVIEW / NON_AUTHORITATIVE`이며 verified workspace나 세 근거를 갖춘 finding으로 승격하지 않는다.
 공개 CueSheet JSON에는 `estimated_duration_sec`와 `costume_change_duration_sec`를 두지 않는다. 시간 관련
 verdict는 Agent가 장면 길이를 추정해서 만드는 대신, reviewed fact의 명시적 min/max 근거가 있을 때만 계산한다.
@@ -310,6 +310,8 @@ loading scene을 사용한다. 이 loop는 실제 진행률이 아니며 상태�
 - 워크스페이스 내부 좌측에서 접고 펼치는 보조 패널이다. 전역 내비게이션이나 세 번째 화면이 아니다
 - 입력 화면에 SCRIPT 카드를 추가하지 않는다. 패널에서 DOCX(우선) 또는 PDF(보조)를 연결하고, 서버가
   Upstage Script Extractor 결과를 strict `standby.script-projection.v1`으로 투영한다
+- projection과 raw fact는 현재 case ID에 귀속된다. 새 대본 연결은 기존 snapshot을 무효화하고 Fact Review로
+  돌아가며, 사람이 새 snapshot을 freeze한 뒤에만 SCRIPT가 세 근거 중 하나로 사용된다
 - exact `event_id`가 있거나, Script Extractor가 원문에서 보존한 `section_marker`가 큐시트의 장면명과
   유일하게 일치하는 실제 `DIALOGUE`·`STAGE_DIRECTION`만 자동으로 event별 발췌에 묶는다.
   근거가 없거나 둘 이상과 일치하는 구간은 사람이 선택한 현재 event에 연결한다

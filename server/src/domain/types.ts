@@ -336,6 +336,7 @@ export type ScriptProjectionSegment = {
 export type ScriptProjection = {
   contract_version: "standby.script-projection.v1";
   projection_id: string;
+  case_id: string | null;
   authority: "NON_AUTHORITATIVE";
   source: {
     filename: string;

@@ -216,6 +216,7 @@ test("DOCX projection runs through the configured Upstage Script Agent and retur
     const projection = projectionResponse.json() as ScriptProjection;
     assert.equal(uploadSeen, true);
     assert.equal(projection.contract_version, "standby.script-projection.v1");
+    assert.equal(projection.case_id, null);
     assert.equal(projection.authority, "NON_AUTHORITATIVE");
     assert.deepEqual(projection.source, {
       filename: "script.docx",
@@ -258,6 +259,107 @@ test("DOCX projection runs through the configured Upstage Script Agent and retur
     );
     assert.ok(projection.segments.every((segment) => /^[a-f0-9]{64}$/.test(segment.provenance.raw_fact_sha256)));
     assert.equal("bytes" in projection.source, false);
+  } finally {
+    await app.close();
+  }
+});
+
+test("case-owned script projection joins the review queue and invalidates the old snapshot", async () => {
+  const pdfBytes = Buffer.from("%PDF-1.7\ncase script fixture\n%%EOF");
+  const provider: ScriptProjectionProvider = {
+    async projectScript(source) {
+      return {
+        facts: [{
+          fact_id: "fact_case_script",
+          fact_type: "DIALOGUE",
+          raw_value: { dialogue_raw: "같은 case의 대사", event_id_raw: "E3" },
+          reviewed_value: null,
+          source_role: "SCRIPT",
+          source_id: source.source_id,
+          locator: "p.1:l.1",
+          quote: "같은 case의 대사",
+          origin: "USER_PROVIDED",
+          confidence: "HIGH",
+          review_status: "UNREVIEWED",
+        }],
+        run: {
+          source_id: source.source_id,
+          role: "SCRIPT",
+          provider: "UPSTAGE",
+          provider_job_id: "job_case_script",
+          agent_id: "agt_script",
+          config_id: "1",
+          adapter_version: "test.v1",
+          schema_version: "standby.extraction.v1",
+          raw_response_sha256: sha256("case-script-response"),
+        },
+      };
+    },
+  };
+  const app = await buildApp({
+    apiToken: TOKEN,
+    allowedOrigins: ["http://localhost:5173"],
+    scriptProjectionProvider: provider,
+  });
+  try {
+    const created = await app.inject({
+      method: "POST",
+      url: "/v1/cases",
+      headers: auth("create-case-script"),
+      payload: { title: "case script" },
+    });
+    const caseId = (created.json() as { case_id: string }).case_id;
+    const boundary = "standby-case-script";
+    const upload = await app.inject({
+      method: "POST",
+      url: `/v1/cases/${caseId}/sources/SCRIPT`,
+      headers: {
+        ...auth("upload-case-script"),
+        "content-type": `multipart/form-data; boundary=${boundary}`,
+      },
+      payload: Buffer.concat([
+        Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="origin"\r\n\r\nUSER_PROVIDED\r\n`),
+        multipartFile({ boundary, filename: "script.pdf", mediaType: "application/pdf", bytes: pdfBytes }),
+      ]),
+    });
+    assert.equal(upload.statusCode, 201, upload.body);
+
+    const started = await app.inject({
+      method: "POST",
+      url: `/v1/cases/${caseId}/script-projections`,
+      headers: auth("project-case-script"),
+      payload: {},
+    });
+    assert.equal(started.statusCode, 202, started.body);
+    const operationId = (started.json() as { operation_id: string }).operation_id;
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    const operation = await app.inject({
+      method: "GET",
+      url: `/v1/operations/${operationId}`,
+      headers: auth(),
+    });
+    assert.equal(operation.statusCode, 200, operation.body);
+    assert.equal((operation.json() as { status: string }).status, "SUCCEEDED");
+
+    const projectionResponse = await app.inject({
+      method: "GET",
+      url: `/v1/cases/${caseId}/script-projection`,
+      headers: auth(),
+    });
+    assert.equal(projectionResponse.statusCode, 200, projectionResponse.body);
+    const projection = projectionResponse.json() as ScriptProjection;
+    assert.equal(projection.case_id, caseId);
+    assert.equal(projection.segments[0]?.text, "같은 case의 대사");
+
+    const queue = await app.inject({
+      method: "GET",
+      url: `/v1/cases/${caseId}/review-queue`,
+      headers: auth(),
+    });
+    assert.equal(queue.statusCode, 200, queue.body);
+    const items = (queue.json() as { items: FactCandidate[] }).items;
+    assert.equal(items[0]?.source_role, "SCRIPT");
+    assert.equal(items[0]?.review_status, "UNREVIEWED");
   } finally {
     await app.close();
   }

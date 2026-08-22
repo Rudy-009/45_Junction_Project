@@ -241,6 +241,32 @@ export async function buildApp(
     },
   );
 
+  app.post<{ Params: { caseId: string } }>(
+    "/v1/cases/:caseId/script-projections",
+    { config: { rateLimit: { max: 20, timeWindow: "1 hour" } } },
+    async (request, reply) => {
+      store.assertCaseOwner(request.params.caseId, request.standbyActorId);
+      const body = bodyRecord(request);
+      assertAllowedFields(body, []);
+      const response = store.withIdempotency(
+        `POST:/v1/cases/${request.params.caseId}/script-projections`,
+        idempotencyKey(request),
+        body,
+        () => store.startCaseScriptProjection(request.params.caseId, request.standbyActorId),
+      );
+      reply.header("Operation-Location", `/v1/operations/${response.operation_id}`);
+      return reply.status(202).send(response);
+    },
+  );
+
+  app.get<{ Params: { caseId: string } }>(
+    "/v1/cases/:caseId/script-projection",
+    async (request) => {
+      store.assertCaseOwner(request.params.caseId, request.standbyActorId);
+      return store.getCaseScriptProjection(request.params.caseId);
+    },
+  );
+
   app.post("/v1/cases", async (request, reply) => {
     const body = bodyRecord(request);
     const title = requiredString(body.title, "title");

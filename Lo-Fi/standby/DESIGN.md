@@ -149,6 +149,8 @@ fact별 승인·거절 기록은 그대로 보존한다.
 - 좌측에서 접고 펼칠 수 있는 보조 패널이다. 새 화면·입력 화면의 세 번째 카드·다목적 내비게이션이 아니다
 - 패널 안에서 DOCX(우선) 또는 PDF(보조)를 연결한다. 서버의 Upstage Script Extractor가 만든
   `standby.script-projection.v1`의 실제 대사·지문만 표시하고 MASTER_CUE 문구로 대신하지 않는다
+- 파일은 현재 case의 SCRIPT source로 귀속된다. 연결 직후 기존 snapshot을 폐기하고 Fact Review로 돌아가며,
+  새 snapshot 전에는 verified finding의 SCRIPT 근거로 사용하지 않는다
 - exact `event_id`가 있는 구간만 자동 연결한다. 나머지는 `이벤트 연결 대기`에 남기고, 사람이 현재
   timeline event를 선택한 뒤 연결한다
 - timeline에서 event를 고르면 해당 발췌가 보이도록 스크롤하고 강조한다

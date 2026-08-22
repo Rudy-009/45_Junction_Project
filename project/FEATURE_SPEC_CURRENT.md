@@ -34,12 +34,12 @@ UUID 세션으로 case 소유권을 분리한다. 이 값은 사용자 신원을
 | KOR/ENG i18n | **구현** | 헤더 선택 메뉴로 M3 입력·review·workspace·2D 무대 카피를 전환하고 선택을 localStorage에 보존 |
 | UI 카피 정리 | **구현** | 설명형 슬로건·면책·중복 제목을 제거하고, 선택 화면은 선택지만 남김. 오류·제약·상태와 provenance/hash는 유지하되 provenance는 요청 시 펼침 |
 | 입력 | **구현** | MASTER_CUE XLSX/PDF/JSON 한 칸과 STAGE_SPEC 폼을 받음 |
-| Script Sidebar | **로컬 코드 구현·배포 전** | DOCX 우선·PDF 보조 → 서버 Upstage Script Extractor → `standby.script-projection.v1` 실제 대사·지문을 원문 순서로 모두 표시. exact event ID 또는 원문 section marker와 큐시트 장면명의 유일한 일치만 자동 연결하고 나머지는 사람이 현재 event에 연결. MASTER_CUE fallback 없음 |
+| Script Sidebar | **case 통합 구현** | DOCX 우선·PDF 보조 파일을 현재 case의 `SCRIPT` source로 업로드한다. Upstage projection의 raw facts는 같은 review queue에 `UNREVIEWED`로 합류하고 기존 snapshot은 무효화된다. 재검토·freeze 후 세 source digest가 workspace에 반영된다 |
 | 로컬 파일 방어 | **구현** | 확장자·signature·50 MiB·SHA-256 검사. 미리 정한 파일명 없음 |
 | JSON 입력 | **운영 경로 통합** | STANDBY CueSheet JSON도 로컬 구조 검사 후 XLSX/PDF와 동일하게 case 업로드·Upstage 추출·fact review를 거친다. 공개 CueSheet JSON에는 duration 추정 필드 없음 |
 | 서버 JSON 전달 | **구현** | API로 받은 원본 JSON bytes/hash는 보존하고 Upstage 전송 때만 JSON Pointer 행의 임시 XLSX로 변환 |
 | 무대 사양 | **구현** | crossover, 환복 시간, route time, route ID/capacity, 인물·소품 초기 배치 |
-| Upstage 추출 | **구현** | 저장·live smoke가 확인된 기존 역할 Agent 결과를 모두 UNREVIEWED/NON_AUTHORITATIVE로 격리. 입력 화면의 Master Cue 추출과 별개로 Sidebar 대본은 case-independent Script projection endpoint에서 처리 |
+| Upstage 추출 | **구현** | Agent 결과를 모두 UNREVIEWED/NON_AUTHORITATIVE로 격리한다. Sidebar 대본도 현재 case의 source·review queue·snapshot으로 수렴하며, 읽기 전용 projection은 같은 case ID를 명시한다 |
 | Stage Spec Extractor | **Studio 설정·서버 배선 구현 / live smoke 대기** | Config #1 `agt_PxbxmhXXT8iqdzs5WmHfUz`. locator·quote가 붙은 `stage_facts` 후보를 만들되 전부 UNREVIEWED |
 | Fact Normalizer | **Studio 설정·서버 배선 구현 / live smoke 대기** | Config #1 `agt_6tn639gGApNdV9SdRfAjnE`. raw fact를 allowlist schema의 NON_AUTHORITATIVE normalized type/value로 추천. 추천값은 읽기 전용, 사용자화는 Agent가 고른 type의 값만 편집 |
 | Storyboard Recomposer | **Studio 설정·서버 배선 구현 / live smoke 대기** | Config #1 `agt_go8aoJTVDvEwK8mwXh5gEi`. reviewed graph와 인접 snapshot으로 NON_AUTHORITATIVE transition을 비동기 생성·cache |
