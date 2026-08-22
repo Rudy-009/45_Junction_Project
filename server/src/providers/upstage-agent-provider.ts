@@ -57,57 +57,78 @@ function nonEmptyString(value: unknown, label: string): string {
   return value.trim();
 }
 
-function responseObjectCandidates(job: JsonObject): JsonObject[] {
+function findResponseObject(
+  job: JsonObject,
+  matches: (value: JsonObject) => boolean,
+): JsonObject | null {
   const output = job.output;
-  if (!Array.isArray(output)) return [];
-  const values: unknown[] = [];
-  for (const step of output) {
+  if (!Array.isArray(output)) return null;
+
+  // Upstage's include=all response can put tens of thousands of parsed XLSX
+  // cells in an early Parse step. Search the latest (Extract) step first and
+  // give every candidate its own bounded traversal budget so Parse noise can
+  // never hide a later structured result.
+  for (const step of [...output].reverse()) {
     if (step === null || typeof step !== "object" || Array.isArray(step)) continue;
     const stepObject = step as JsonObject;
+    const values: unknown[] = [];
     if (stepObject.additional_values !== undefined) values.push(stepObject.additional_values);
     const content = stepObject.content;
     const contentItems = Array.isArray(content)
-      ? content
+      ? [...content].reverse()
       : content !== null && typeof content === "object"
         ? [content]
         : [];
     for (const item of contentItems) {
       if (item === null || typeof item !== "object" || Array.isArray(item)) continue;
       const itemObject = item as JsonObject;
-      if (typeof itemObject.text === "string" && itemObject.text.trim()) {
-        values.push(itemObject.text);
-      }
       if (itemObject.additional_values !== undefined) {
         values.push(itemObject.additional_values);
       }
+      if (typeof itemObject.text === "string" && itemObject.text.trim()) {
+        values.push(itemObject.text);
+      }
+      values.push(itemObject);
+    }
+    values.push(stepObject);
+
+    for (const value of values) {
+      let visited = 0;
+      const visit = (candidate: unknown, depth: number): JsonObject | null => {
+        if (depth > 10 || visited >= 10_000) return null;
+        visited += 1;
+        if (typeof candidate === "string") {
+          if (!candidate.trim() || candidate.length > 2_000_000) return null;
+          try {
+            return visit(JSON.parse(candidate) as unknown, depth + 1);
+          } catch {
+            // Instruct steps may contain prose; only valid JSON can become a payload candidate.
+            return null;
+          }
+        }
+        if (Array.isArray(candidate)) {
+          for (const item of candidate) {
+            const found = visit(item, depth + 1);
+            if (found) return found;
+          }
+          return null;
+        }
+        if (candidate === null || typeof candidate !== "object") return null;
+        const object = candidate as JsonObject;
+        if (matches(object)) return object;
+        for (const child of Object.values(object)) {
+          const found = visit(child, depth + 1);
+          if (found) return found;
+        }
+        return null;
+      };
+
+      const found = visit(value, 0);
+      if (found) return found;
     }
   }
 
-  const objects: JsonObject[] = [];
-  let visited = 0;
-  const visit = (value: unknown, depth: number): void => {
-    if (depth > 10 || visited >= 10_000) return;
-    visited += 1;
-    if (typeof value === "string") {
-      if (!value.trim() || value.length > 2_000_000) return;
-      try {
-        visit(JSON.parse(value) as unknown, depth + 1);
-      } catch {
-        // Instruct steps may contain prose; only valid JSON can become a payload candidate.
-      }
-      return;
-    }
-    if (Array.isArray(value)) {
-      value.forEach((item) => visit(item, depth + 1));
-      return;
-    }
-    if (value === null || typeof value !== "object") return;
-    const object = value as JsonObject;
-    objects.push(object);
-    Object.values(object).forEach((child) => visit(child, depth + 1));
-  };
-  values.forEach((value) => visit(value, 0));
-  return objects;
+  return null;
 }
 
 function locateFact(role: SourceRole, value: JsonObject): { locator: string; quote: string } {
@@ -174,30 +195,31 @@ function roleFactKey(role: SourceRole): "script_facts" | "cue_facts" | "stage_fa
 
 function parseRolePayload(role: SourceRole, job: JsonObject): JsonObject {
   const key = roleFactKey(role);
-  for (const object of responseObjectCandidates(job).reverse()) {
-    if (Array.isArray(object[key])) return object;
-  }
+  const payload = findResponseObject(job, (object) => Array.isArray(object[key]));
+  if (payload) return payload;
   throw new DomainError(502, "UPSTAGE_RESPONSE_INVALID", `No ${key} JSON output was found.`);
 }
 
 function parseProductionPayload(role: ProductionAgentRole, job: JsonObject): JsonObject {
-  for (const object of responseObjectCandidates(job).reverse()) {
-    if (role === "FACT_NORMALIZER" && Array.isArray(object.recommendations)) return object;
+  const payload = findResponseObject(job, (object) => {
+    if (role === "FACT_NORMALIZER" && Array.isArray(object.recommendations)) return true;
     if (
       role === "STORYBOARD_RECOMPOSER" &&
       typeof object.event_id === "string" &&
       Array.isArray(object.beats)
     ) {
-      return object;
+      return true;
     }
     if (
       role === "REHEARSAL_BRIEF" &&
       typeof object.headline === "string" &&
       Array.isArray(object.sections)
     ) {
-      return object;
+      return true;
     }
-  }
+    return false;
+  });
+  if (payload) return payload;
   throw new DomainError(
     502,
     "UPSTAGE_RESPONSE_INVALID",

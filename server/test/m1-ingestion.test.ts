@@ -337,6 +337,59 @@ test("Upstage adapter extracts a master cue without script or stage spec", async
   assert.ok(result.sourceRuns.every((run) => /^[a-f0-9]{64}$/.test(run.raw_response_sha256)));
 });
 
+test("Upstage adapter reaches Extract output after a large XLSX Parse payload", async () => {
+  const parseNoise = Array.from({ length: 10_001 }, (_, index) => ({
+    row: index + 1,
+    cells: [{ style_id: index % 8 }],
+  }));
+  const mockFetch: typeof fetch = async (input, init) => {
+    const url = String(input);
+    if (url.endsWith("/v2/files")) return Response.json({ id: "file-large-cue" });
+    if (url.endsWith("/v2/responses") && init?.method === "POST") {
+      return Response.json({ id: "job-large-cue" });
+    }
+    return Response.json({
+      id: "job-large-cue",
+      status: "completed",
+      output: [
+        { type: "parse", additional_values: { rows: parseNoise } },
+        {
+          type: "extract",
+          content: [{
+            type: "output_text",
+            additional_values: {
+              cue_facts: [{
+                fact_type: "CUE_TRIGGER",
+                locator: "전체 큐시트!A6",
+                source_quote_raw: "N#1",
+              }],
+            },
+          }],
+        },
+      ],
+    });
+  };
+  const provider = new UpstageAgentProvider({
+    apiKey: "secret-test-key",
+    agentIds: { MASTER_CUE: "agt_cue" },
+    fetchImpl: mockFetch,
+    pollIntervalMs: 0,
+    timeoutMs: 1_000,
+  });
+
+  const result = await provider.extract(new Map<SourceRole, InternalSourceVersion>([
+    ["MASTER_CUE", source("MASTER_CUE", {
+      bytes: Uint8Array.from([0x50, 0x4b, 1, 2]),
+      content: null,
+      mediaType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    })],
+  ]));
+
+  assert.equal(result.facts.length, 1);
+  assert.equal(result.facts[0]?.fact_type, "CUE_TRIGGER");
+  assert.equal(result.facts[0]?.locator, "전체 큐시트!A6");
+});
+
 test("Upstage adapter converts JSON master cues to a supported XLSX transport", async () => {
   const originalBytes = new TextEncoder().encode(JSON.stringify({
     cues: [{ cue_id: "E1", trigger: "LIGHT GO" }],
