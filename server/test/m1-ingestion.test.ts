@@ -337,3 +337,29 @@ test("Upstage adapter fails closed when a generated fact has no evidence quote",
     (error: unknown) => error instanceof DomainError && error.code === "UPSTAGE_EVIDENCE_MISSING",
   );
 });
+
+test("Upstage adapter reports only the failed upstream status", async () => {
+  const provider = new UpstageAgentProvider({
+    apiKey: "secret-test-key",
+    agentIds: { MASTER_CUE: "agt_cue" },
+    fetchImpl: async () => Response.json(
+      { error: "sensitive upstream detail" },
+      { status: 415 },
+    ),
+  });
+  const sources = new Map<SourceRole, InternalSourceVersion>([
+    ["MASTER_CUE", source("MASTER_CUE", {
+      bytes: new TextEncoder().encode('{"rows":[]}'),
+      content: null,
+      mediaType: "application/json",
+    })],
+  ]);
+
+  await assert.rejects(
+    () => provider.extract(sources),
+    (error: unknown) => error instanceof DomainError
+      && error.code === "UPSTAGE_REQUEST_FAILED"
+      && error.message === "Upstage API request failed with status 415."
+      && !error.message.includes("sensitive upstream detail"),
+  );
+});
