@@ -15,7 +15,7 @@ export interface Revision {
   changes: { rowId: string; column: string; from: string; to: string }[];
 }
 
-export type Zone = '상수윙' | '무대' | '하수윙' | '하수환복소';
+export type Zone = '상수윙' | '무대' | '하수윙' | '상수환복소' | '하수환복소';
 export type Transition = 'ENTER' | 'EXIT';
 
 export interface StageEntity {
