@@ -65,7 +65,6 @@ export function ReviewScreen() {
       <div className="mx-auto max-w-[1500px]">
         <div className="mb-4 flex items-center justify-between gap-3">
           <div>
-            <p className="mono text-[10px] text-muted-foreground">{t('review.route')}</p>
             <h1 className="text-xl font-medium">{t('review.title')}</h1>
           </div>
           <button

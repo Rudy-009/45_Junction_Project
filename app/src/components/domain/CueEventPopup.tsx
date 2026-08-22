@@ -69,7 +69,6 @@ export function CueEventPopup({
     trigger: '트리거',
     actions: '액션',
     findings: '확인 항목',
-    clean: '이 Event에서 발견된 오류나 확인 항목이 없습니다.',
     noAction: '기록된 액션 없음',
     goto: '이 Event로 이동',
   } : {
@@ -77,7 +76,6 @@ export function CueEventPopup({
     trigger: 'Trigger',
     actions: 'Actions',
     findings: 'Findings',
-    clean: 'No errors or action items were found for this event.',
     noAction: 'No recorded action',
     goto: 'Go to this Event',
   };
@@ -160,9 +158,6 @@ export function CueEventPopup({
                 )}
               </article>
             ))}
-            {contradictions.length === 0 && (
-              <p className="border border-consistent/40 bg-consistent-bg p-3 text-xs text-consistent">{copy.clean}</p>
-            )}
           </div>
         </section>
       </div>
