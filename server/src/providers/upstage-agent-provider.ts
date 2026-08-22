@@ -131,7 +131,7 @@ function findResponseObject(
   return null;
 }
 
-function locateFact(role: SourceRole, value: JsonObject): { locator: string; quote: string } {
+function factEvidence(value: JsonObject): { locator: string; quote: string } | null {
   const quote = [value.source_quote_raw, value.source_quote, value.quote].find(
     (candidate): candidate is string => typeof candidate === "string" && candidate.trim().length > 0,
   );
@@ -146,14 +146,17 @@ function locateFact(role: SourceRole, value: JsonObject): { locator: string; quo
       : rawLocator !== null && typeof rawLocator === "object"
         ? canonicalJson(rawLocator)
         : null;
-  if (!quote || !locator) {
-    throw new DomainError(
-      502,
-      "UPSTAGE_EVIDENCE_MISSING",
-      `${role} fact is missing an exact source locator or quote.`,
-    );
-  }
-  return { locator, quote: quote.trim() };
+  return quote && locator ? { locator, quote: quote.trim() } : null;
+}
+
+function locateFact(role: SourceRole, value: JsonObject): { locator: string; quote: string } {
+  const evidence = factEvidence(value);
+  if (evidence) return evidence;
+  throw new DomainError(
+    502,
+    "UPSTAGE_EVIDENCE_MISSING",
+    `${role} fact is missing an exact source locator or quote.`,
+  );
 }
 
 function decodeFacts(
@@ -199,6 +202,20 @@ function roleFactKey(role: SourceRole): "script_facts" | "cue_facts" | "stage_fa
 
 function parseRolePayload(role: SourceRole, job: JsonObject): JsonObject {
   const key = roleFactKey(role);
+  const evidencedPayload = findResponseObject(job, (object) => {
+    const rawFacts = object[key];
+    return Array.isArray(rawFacts) && rawFacts.length > 0 && rawFacts.every((rawFact) => (
+      rawFact !== null &&
+      typeof rawFact === "object" &&
+      !Array.isArray(rawFact) &&
+      factEvidence(rawFact as JsonObject) !== null
+    ));
+  });
+  if (evidencedPayload) return evidencedPayload;
+
+  // Keep the precise fail-closed error for a genuine malformed extraction.
+  // The strict pass above only prevents an intermediate include=all payload
+  // from shadowing a later, fully evidenced Extract result.
   const payload = findResponseObject(job, (object) => Array.isArray(object[key]));
   if (payload) return payload;
   throw new DomainError(502, "UPSTAGE_RESPONSE_INVALID", `No ${key} JSON output was found.`);

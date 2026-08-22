@@ -437,6 +437,55 @@ test("Upstage adapter accepts the raw locator field from the frozen cue schema",
   assert.equal(result.facts[0]?.quote, "노래 시작하면 전체 on");
 });
 
+test("Upstage adapter prefers a fully evidenced Extract payload over intermediate cue data", async () => {
+  const mockFetch: typeof fetch = async (input, init) => {
+    const url = String(input);
+    if (url.endsWith("/v2/files")) return Response.json({ id: "file-multiple-candidates" });
+    if (url.endsWith("/v2/responses") && init?.method === "POST") {
+      return Response.json({ id: "job-multiple-candidates" });
+    }
+    return Response.json({
+      id: "job-multiple-candidates",
+      status: "completed",
+      output: [{
+        type: "extract",
+        additional_values: {
+          cue_facts: [{ fact_type: "INTERMEDIATE_ROW" }],
+        },
+        content: [{
+          type: "output_text",
+          text: JSON.stringify({
+            cue_facts: [{
+              fact_type: "CUE_ROW",
+              locator: "t_0_r_5",
+              source_quote_raw: "N#1 We're all adventurers",
+            }],
+          }),
+        }],
+      }],
+    });
+  };
+  const provider = new UpstageAgentProvider({
+    apiKey: "secret-test-key",
+    agentIds: { MASTER_CUE: "agt_cue" },
+    fetchImpl: mockFetch,
+    pollIntervalMs: 0,
+    timeoutMs: 1_000,
+  });
+
+  const result = await provider.extract(new Map<SourceRole, InternalSourceVersion>([
+    ["MASTER_CUE", source("MASTER_CUE", {
+      bytes: Uint8Array.from([0x50, 0x4b, 1, 2]),
+      content: null,
+      mediaType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    })],
+  ]));
+
+  assert.equal(result.facts.length, 1);
+  assert.equal(result.facts[0]?.fact_type, "CUE_ROW");
+  assert.equal(result.facts[0]?.locator, "t_0_r_5");
+});
+
 test("Upstage adapter converts JSON master cues to a supported XLSX transport", async () => {
   const originalBytes = new TextEncoder().encode(JSON.stringify({
     cues: [{ cue_id: "E1", trigger: "LIGHT GO" }],
