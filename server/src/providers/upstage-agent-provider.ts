@@ -8,9 +8,15 @@ import type {
 } from "../domain/types.js";
 import { canonicalJson, hashJson, sha256 } from "../lib/hash.js";
 import type { ExtractionProvider, ExtractionProviderResult } from "./extraction-provider.js";
+import {
+  jsonToUpstageXlsx,
+  jsonTransportFilename,
+  XLSX_MEDIA_TYPE,
+} from "./json-xlsx-transport.js";
 
-const ADAPTER_VERSION = "upstage-agent.v1";
+const ADAPTER_VERSION = "upstage-agent.v2";
 const DEFAULT_BASE_URL = "https://api.upstage.ai";
+const DEFAULT_TIMEOUT_MS = 600_000;
 
 type FetchLike = typeof fetch;
 type JsonObject = Record<string, unknown>;
@@ -143,7 +149,7 @@ export class UpstageAgentProvider implements ExtractionProvider {
     this.fetchImpl = config.fetchImpl ?? fetch;
     this.baseUrl = (config.baseUrl ?? DEFAULT_BASE_URL).replace(/\/$/, "");
     this.pollIntervalMs = config.pollIntervalMs ?? 2_000;
-    this.timeoutMs = config.timeoutMs ?? 120_000;
+    this.timeoutMs = config.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   }
 
   async extract(
@@ -230,13 +236,20 @@ export class UpstageAgentProvider implements ExtractionProvider {
 
   private async uploadFile(source: InternalSourceVersion): Promise<string> {
     if (source.bytes === null) throw new Error("File source bytes are missing.");
+    const useJsonTransport =
+      source.media_type === "application/json" || source.original_filename?.toLowerCase().endsWith(".json");
+    const uploadBytes = useJsonTransport ? await jsonToUpstageXlsx(source.bytes) : source.bytes;
+    const uploadMediaType = useJsonTransport ? XLSX_MEDIA_TYPE : source.media_type ?? "application/octet-stream";
+    const uploadFilename = useJsonTransport
+      ? jsonTransportFilename(source.original_filename, source.sha256)
+      : source.original_filename ?? `${source.role.toLowerCase()}-${source.sha256.slice(0, 8)}`;
     const form = new FormData();
     form.append(
       "file",
-      new Blob([Uint8Array.from(source.bytes).buffer], {
-        type: source.media_type ?? "application/octet-stream",
+      new Blob([Uint8Array.from(uploadBytes).buffer], {
+        type: uploadMediaType,
       }),
-      source.original_filename ?? `${source.role.toLowerCase()}-${source.sha256.slice(0, 8)}`,
+      uploadFilename,
     );
     form.append("purpose", "user_data");
     const response = await this.upstageFetch("/v2/files", { method: "POST", body: form });
