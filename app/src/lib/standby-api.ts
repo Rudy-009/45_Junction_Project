@@ -1,4 +1,4 @@
-import type { CueCellPatch, CueRevision, FactCandidate, FactNormalizerArtifact, WorkspaceSnapshot } from '@/types/standby';
+import type { CueCellPatch, CueRevision, CueRowOperation, FactCandidate, FactNormalizerArtifact, WorkspaceSnapshot } from '@/types/standby';
 import type { ScriptProjection } from '@/types/script';
 
 export type SourceRole = "SCRIPT" | "MASTER_CUE" | "STAGE_SPEC";
@@ -84,6 +84,17 @@ export class StandbyApi {
     form.append("origin", origin);
     form.append("file", file);
     return this.request<SourceVersion>(`/v1/cases/${caseId}/sources/${role}`, {
+      method: "POST",
+      body: form,
+      idempotent: true,
+    });
+  }
+
+  refreshMasterCueFile(caseId: string, file: File, origin: SourceOrigin = "USER_PROVIDED") {
+    const form = new FormData();
+    form.append("origin", origin);
+    form.append("file", file);
+    return this.request<SourceVersion>(`/v1/cases/${caseId}/source-refreshes/MASTER_CUE`, {
       method: "POST",
       body: form,
       idempotent: true,
@@ -231,13 +242,34 @@ export class StandbyApi {
 
   createCueRevision(
     caseId: string,
-    input: { base_revision_id: string; base_source_sha256: string; patches: CueCellPatch[] },
+    input: { base_revision_id: string; base_source_sha256: string; patches: CueCellPatch[]; row_operations?: CueRowOperation[] },
   ) {
     return this.request<CueRevision>(`/v1/cases/${caseId}/cue-revisions`, {
       method: "POST",
       body: JSON.stringify(input),
       idempotent: true,
     });
+  }
+
+  async downloadCueRevision(caseId: string, revisionId: string) {
+    const sessionId = await this.options.getSessionId();
+    const response = await this.fetchImpl(
+      `${this.baseUrl}/v1/cases/${caseId}/cue-revisions/${revisionId}/export.xlsx`,
+      { headers: { "x-standby-session": sessionId } },
+    );
+    if (!response.ok) {
+      const json = (await response.json()) as ApiErrorBody;
+      throw new StandbyApiError(
+        response.status,
+        json.error?.code ?? "API_ERROR",
+        json.error?.message ?? "XLSX export failed.",
+        json.error?.request_id ?? null,
+      );
+    }
+    return {
+      blob: await response.blob(),
+      disposition: response.headers.get("content-disposition"),
+    };
   }
 
   private async request<T>(

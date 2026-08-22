@@ -64,7 +64,7 @@ UUID 세션으로 case 소유권을 분리한다. 이 값은 사용자 신원을
 | 서체 | **구현** | 본문·라벨은 시스템 기본 서체, STANDBY 로고·추출 loading wordmark만 JetBrains Mono |
 | 데이터 영속성 | **미구현** | 프로세스 재시작 시 case·review·snapshot이 사라짐 |
 | 실제 reference fidelity | **미검증** | 합성 live smoke는 통과했지만 공연 원본 gold fact 대조는 아직 없음 |
-| XLSX 왕복·refresh | **미구현** | 원형 보존 export와 hash 기반 부분 재추출은 후속 milestone |
+| XLSX 왕복·refresh | **구현·배포 전** | 원본 bytes에서 수정 셀과 명시적 이벤트 행 추가·삭제만 적용해 새 XLSX를 만든다. 시트·서식·빈 행/열은 보존하며 동일 hash는 Upstage를 재호출하지 않고, 변경 hash의 새 fact는 UNREVIEWED로 되돌린다 |
 
 ---
 

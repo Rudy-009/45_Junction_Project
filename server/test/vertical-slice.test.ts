@@ -339,6 +339,7 @@ test("unreviewed facts abstain, reviewed facts violate, and a 70s revision clear
   assert.equal(revisionDetailResponse.statusCode, 200, revisionDetailResponse.body);
   const revisionDetail = revisionDetailResponse.json() as { rows: Array<Record<string, string>> };
   const expectedPatch = revisionPayload.patches[0];
+  assert.ok(expectedPatch);
   assert.equal(
     revisionDetail.rows.find((row) => row.id === expectedPatch.row_id)?.[expectedPatch.column],
     expectedPatch.to,

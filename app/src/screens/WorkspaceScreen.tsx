@@ -247,6 +247,29 @@ export function WorkspaceScreen() {
     }
   };
 
+  const refreshMasterCue = async (file: File) => {
+    if (!verifiedCaseId || !verifiedWorkspace) throw new Error(t('workspace.scriptApiMissing'));
+    const api = createStandbyBrowserApi();
+    if (!api) throw new Error(t('workspace.scriptApiMissing'));
+    const previous = verifiedWorkspace.sources.find((source) => source.role === 'MASTER_CUE');
+    const refreshed = await api.refreshMasterCueFile(verifiedCaseId, file);
+    if (previous?.sha256 === refreshed.sha256) return false;
+
+    const extraction = await api.startExtraction(verifiedCaseId, 'UPSTAGE_AGENT');
+    await api.waitForOperation(extraction.operation_id);
+    const queue = await api.getReviewQueue(verifiedCaseId);
+    const normalizer = await api.startProductionAgent(verifiedCaseId, 'FACT_NORMALIZER');
+    const completed = await api.waitForOperation(normalizer.operation_id);
+    if (completed.resource_ref.type !== 'production_artifact') {
+      throw new Error('Normalizer artifact is missing.');
+    }
+    const artifact = await api.getFactNormalizerArtifact(completed.resource_ref.id);
+    setReviewFlowContext({ caseId: verifiedCaseId, facts: queue.items, normalizerArtifact: artifact });
+    clearVerifiedWorkspace();
+    await navigate({ to: '/review/mode' });
+    return true;
+  };
+
   useEffect(() => {
     if (!verifiedCaseId || script) return;
     const api = createStandbyBrowserApi();
@@ -359,6 +382,7 @@ export function WorkspaceScreen() {
         storyboardState={storyboardState}
         onStoryboardRequest={(eventId) => void requestStoryboard(eventId)}
         onWorkspaceUpdated={(workspace) => setVerifiedWorkspace(workspace.case_id, workspace)}
+        onMasterCueRefresh={refreshMasterCue}
       />
     );
   }

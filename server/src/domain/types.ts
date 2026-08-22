@@ -87,6 +87,10 @@ export type CellPatch = {
   to: string | number | boolean | null;
 };
 
+export type CueRowOperation =
+  | { type: "DELETE"; row_id: string }
+  | { type: "ADD"; after_row_id: string; row: CueRow };
+
 export type CueRow = Record<string, string> & { id: string };
 
 export type CueRevision = {
@@ -97,6 +101,7 @@ export type CueRevision = {
   base_source_sha256: string;
   revision_hash: string;
   patches: CellPatch[];
+  row_operations?: CueRowOperation[];
   created_by: string;
   created_at: string;
   rows: CueRow[];

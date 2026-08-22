@@ -65,6 +65,12 @@ export type WorkspaceSnapshot = {
   case_id: string;
   title: string;
   source_snapshot_digest: string;
+  sources: Array<{
+    role: SourceRole;
+    media_type: string | null;
+    original_filename: string | null;
+    sha256: string;
+  }>;
   review_snapshot_id: string;
   cue_revision_id: string | null;
   original_master_cue_sha256: string;
@@ -85,6 +91,10 @@ export type CueCellPatch = {
   to: string | number | boolean | null;
 };
 
+export type CueRowOperation =
+  | { type: 'DELETE'; row_id: string }
+  | { type: 'ADD'; after_row_id: string; row: Record<string, string> & { id: string } };
+
 export type CueRevision = {
   contract_version: 'standby.revision.v1';
   revision_id: string;
@@ -93,6 +103,7 @@ export type CueRevision = {
   base_source_sha256: string;
   revision_hash: string;
   patches: CueCellPatch[];
+  row_operations?: CueRowOperation[];
   created_by: string;
   created_at: string;
   rows?: Array<Record<string, string> & { id: string }>;
