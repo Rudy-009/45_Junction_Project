@@ -9,7 +9,9 @@
 
 무대 사양은 이 문장에 적힌 검출과 시뮬레이션을 가능하게 하는 세 번째 입력이다. 마스터 큐시트와 부서별 사본의 변경 누락 비교는 유효하지만, STANDBY 전체가 아니라 **cue synchronization·revision consistency 모듈**이다.
 
-이 문서는 공식 Upstage 문서·제품 페이지·공식 사례를 기준으로 작성했다. 아직 프로젝트 계정의 실제 API key로 큐시트를 호출하지 않았으므로, `🧪` 표시는 라이브 검증 전에는 확정 사실처럼 발표하지 않는다.
+이 문서는 공식 Upstage 문서·제품 페이지·공식 사례를 기준으로 작성했다. 2026-08-22 프로젝트 계정의
+저장 Config #1로 합성 PDF/XLSX smoke는 통과했지만, 실제 공연 원본과 한국어 복합 레이아웃의 추출
+정확도는 아직 검증하지 않았다. `🧪` 표시는 해당 조건의 라이브 검증 전에는 확정 사실처럼 발표하지 않는다.
 
 ---
 
@@ -540,10 +542,30 @@ Case 상태:
 
 현재 저장 스키마:
 
-- Script Config #1: Parse → Extract(Standard), `script_facts` 15개 raw 필드
+- Script Config #1: Parse → Extract(Standard), `script_facts` 14개 raw 필드
 - Master Cue Config #1: Parse → Extract(Standard), `cue_facts` 16개 raw 필드
 
-실제 request body hash와 smoke fixture 결과 hash를 함께 보관해 Config 변경을 감시한다.
+실제 Agent/Config ID와 smoke fixture의 raw response hash를 함께 보관해 Config 변경을 감시한다.
+
+### 2026-08-22 합성 live smoke
+
+비공개 원본을 전송하지 않고, 직접 만든 합성 Script PDF와 Master Cue PDF/XLSX로 다음 경로를 실행했다.
+
+```text
+Files API → 역할별 Agent Config #1 → job polling → strict decoder → UNREVIEWED facts
+```
+
+| 입력 조합 | 결과 | Script | Master Cue | Stage Spec | review gate |
+|---|---|---:|---:|---:|---|
+| Script PDF + Master Cue PDF + Stage Spec JSON | 통과 | 12 | 5 | 3 | 전부 `UNREVIEWED` |
+| Script PDF + Master Cue XLSX + Stage Spec JSON | 통과 | 12 | 5 | 3 | 전부 `UNREVIEWED` |
+
+- PDF run: Script `job_YPFgaia4HoyvzmjW7W5Rtk`, Master Cue `job_bH8PBxZYd8mW9fzCYgbCco`
+- XLSX run: Script `job_5h692JBNzFCceiFzgbwDtj`, Master Cue `job_Sa8VH787dXnmCPvbpDh3xD`
+- decoder가 관측한 key는 Script 14개, Master Cue 16개로 저장 Config schema와 일치했다.
+- 이 결과는 **API 연결·파일 형식·schema·review gate**를 검증한다. 실제 대본/큐시트에 대한 recall,
+  locator 품질, 표 병합·줄바꿈 보존율이나 제품 정확도를 증명하지는 않는다.
+- 공개 가능한 sanitized evidence는 `qa/upstage-live-smoke-2026-08-22.json`에 보관한다.
 
 - [Create Job](https://console.upstage.ai/api/agents/jobs/create-job)
 - [Studio 버전·배포](https://console.upstage.ai/docs/studio/deployment)

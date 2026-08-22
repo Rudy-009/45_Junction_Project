@@ -32,7 +32,7 @@ Upstage가 추출한 결과는 아니다. 두 데이터 흐름은 아직 연결�
 | 세 입력 UI | **미구현** | 현재 입력 화면은 통합 JSON 하나만 받으며 SCRIPT·MASTER_CUE·STAGE_SPEC 원본을 받지 않음 |
 | JSON 입력 | **구현** | `.json`을 읽어 `metadata`, `venue`, `characters`, `props`, `cues[].events` 최소 구조를 확인하고 Zustand에 적재 |
 | 원문 파일 업로드 | **백엔드 구현 / UI 미배선** | SCRIPT PDF/DOCX, MASTER_CUE XLSX/PDF를 multipart로 받고 byte SHA-256을 고정 |
-| Upstage 추출 | **adapter+Studio Config 구현 / UI 미배선** | Files API → 역할별 Agent/Config #1 job → polling → strict decoder 구현. live smoke는 미실행 |
+| Upstage 추출 | **live adapter 검증 / UI 미배선** | Files API → 역할별 Agent/Config #1 job → polling → strict decoder를 합성 Script PDF + Master Cue PDF/XLSX로 실제 통과 |
 | Fact/authority 검토 | **백엔드 구현 / UI 없음** | review queue와 snapshot API는 있으나 현재 화면에서 확인·승인할 수 없음 |
 | 이벤트 타임라인 | **구현** | JSON의 cue/event를 가로 타임라인에 렌더링하고 선택 이벤트로 자동 스크롤 |
 | 이벤트별 2D 무대 | **구현** | 선택 이벤트까지 action을 순서대로 재생산해 인물/소품의 무대·상수윙·하수윙 상태와 ENTER/EXIT 표시 |
@@ -47,7 +47,7 @@ Upstage가 추출한 결과는 아니다. 두 데이터 흐름은 아직 연결�
 | refresh/변경 감지 | **미구현** | source hash 비교, 변경 문서 재추출, UNREVIEWED 게이트 없음 |
 | 프런트–백엔드 연결 | **client 구현 / 화면 미배선** | `app/src/lib/standby-api.ts`에 case→upload→operation→review→snapshot client가 있으나 화면은 fixture 상태 |
 | 백엔드 API 수직 슬라이스 | **구현** | case→source→비동기 extraction→review→snapshot→workspace→cue revision 흐름을 메모리에서 제공 |
-| 실제 Upstage 연동 | **코드+Studio Config 구현 / live 미검증** | 역할별 Agent와 저장 Config #1을 env로 받고 `/v2/files`, `/v2/responses`, polling을 실행 |
+| 실제 Upstage 연동 | **합성 live smoke 통과** | 역할별 저장 Config #1로 PDF/PDF와 PDF/XLSX를 실행해 12 Script + 5 Cue + 3 Stage facts와 전건 `UNREVIEWED`를 확인. 실제 원본 fidelity는 미검증 |
 | 결정론적 verifier | **부분 구현** | 백엔드는 `VR-01 QUICK_CHANGE_IMPOSSIBLE` 통제 fixture만 계산 |
 | strict JSON 계약 | **계약·decoder·테스트 구현** | 역할별 `script_facts`/`cue_facts`, locator·quote를 fail-closed로 검사하고 새 fact를 `UNREVIEWED`로 격리 |
 | 데이터베이스 | **미구현** | 백엔드 재시작 시 case·review·revision이 모두 사라지는 in-memory store |
@@ -182,7 +182,7 @@ PRD 기준 핵심 데모인 세 원문 업로드 → UNREVIEWED fact review → 
 | 우선 | 간극 | 완료 조건 |
 |---|---|---|
 | P0 | 실제 입력 수집 UI 배선 | SCRIPT·MASTER_CUE·STAGE_SPEC 입력이 API client를 호출해 immutable source+hash를 서버에 등록함 |
-| P0 | Upstage live smoke | 저장 Agent/Config #1로 PDF/XLSX 1건씩 실행해 `script_facts`/`cue_facts`가 decoder 계약과 일치하는지 고정함 |
+| P0 | 실제 reference fidelity | 실제 한국어 대본·17열 Master Cue의 locator, 병합 셀, 줄바꿈, critical token을 사람이 원문과 대조해 gold fact 기준으로 고정함 |
 | P0 | 프런트–백엔드 연결 | 입력→review queue→snapshot→workspace가 fixture import 없이 한 case ID로 이어짐 |
 | P0 | 검증 규칙 완성 | `VR-01`, `VR-02`, `VR-03`이 reviewed fact와 세 source evidence로 결정론적으로 실행됨 |
 | P0 | UI 계약 복구 | 현재 JSON workspace를 PRD의 두 화면·Evidence Trace·`INSUFFICIENT_EVIDENCE` 계약과 정렬함 |

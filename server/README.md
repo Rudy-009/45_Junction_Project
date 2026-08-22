@@ -48,6 +48,11 @@ npm run build
 Hero fixture에서는 승인 전 E3가 `INSUFFICIENT_EVIDENCE`, 승인 후 58–62초 대
 66–68초가 `VIOLATION`, R3 환복시간을 70초로 고치면 finding 0건과 `CONSISTENT`가 된다.
 
+2026-08-22 저장 Agent/Config #1에 합성 Script PDF와 Master Cue PDF/XLSX를 실제 전송한 live smoke도
+통과했다. 두 형식 모두 Files API, job polling, strict decoder를 거쳐 Script 12개, Master Cue 5개,
+Stage Spec 3개 fact를 만들었고 전부 `UNREVIEWED`였다. 이는 연결과 계약 검증이며 실제 공연 원본의
+추출 정확도 검증은 아니다. sanitized 결과는 `qa/upstage-live-smoke-2026-08-22.json`에 있다.
+
 ## 신뢰·보안 경계
 
 - LLM/추출기는 fact **후보만** 만든다. verdict는 `src/domain/verifier.ts`가 계산한다.
@@ -64,7 +69,7 @@ Hero fixture에서는 승인 전 E3가 `INSUFFICIENT_EVIDENCE`, 승인 후 58–
 ## 아직 없는 것
 
 - 업로드 object storage와 악성 파일/zip bomb 검사
-- 저장된 역할별 Agent/Config ID를 사용한 live smoke와 결과 schema 고정
+- 실제 한국어 대본·17열 Master Cue reference에 대한 추출 fidelity·locator 검증
 - PostgreSQL/Supabase 영속화와 row-level authorization
 - XLSX 원형 보존 export
 - 감사 로그, 보존 기간, 삭제 작업, 운영 관측성

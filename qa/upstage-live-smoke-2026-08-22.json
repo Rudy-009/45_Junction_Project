@@ -1,0 +1,74 @@
+{
+  "evidence_version": "standby.upstage-live-smoke.v1",
+  "executed_at": "2026-08-22",
+  "data_classification": "SYNTHETIC_NON_PRODUCTION",
+  "scope": "Files API -> role Agent Config #1 -> polling -> strict decoder -> UNREVIEWED gate",
+  "schema": {
+    "SCRIPT": {
+      "agent_id": "agt_7yeqpDe7zmwCGVWoMY377j",
+      "config_id": "1",
+      "raw_field_count": 14
+    },
+    "MASTER_CUE": {
+      "agent_id": "agt_FkyNiySGY4WACFvMNV5DRQ",
+      "config_id": "1",
+      "raw_field_count": 16
+    }
+  },
+  "runs": [
+    {
+      "inputs": {
+        "SCRIPT": "PDF",
+        "MASTER_CUE": "PDF",
+        "STAGE_SPEC": "JSON"
+      },
+      "ok": true,
+      "fact_counts": {
+        "SCRIPT": 12,
+        "MASTER_CUE": 5,
+        "STAGE_SPEC": 3
+      },
+      "all_unreviewed": true,
+      "jobs": {
+        "SCRIPT": {
+          "job_id": "job_YPFgaia4HoyvzmjW7W5Rtk",
+          "raw_response_sha256": "5c83da74215592f58041083316e3abe926a6472355a711f2990c9b832045f9eb"
+        },
+        "MASTER_CUE": {
+          "job_id": "job_bH8PBxZYd8mW9fzCYgbCco",
+          "raw_response_sha256": "4404bbc9e8e0ff3faa9a8f2325fe71d02dda014d050a4d1eea39ecf6d3f3ccbf"
+        }
+      }
+    },
+    {
+      "inputs": {
+        "SCRIPT": "PDF",
+        "MASTER_CUE": "XLSX",
+        "STAGE_SPEC": "JSON"
+      },
+      "ok": true,
+      "fact_counts": {
+        "SCRIPT": 12,
+        "MASTER_CUE": 5,
+        "STAGE_SPEC": 3
+      },
+      "all_unreviewed": true,
+      "jobs": {
+        "SCRIPT": {
+          "job_id": "job_5h692JBNzFCceiFzgbwDtj",
+          "raw_response_sha256": "25e7b72171ff6836e96bc8f7e7071a76198134c42e1a625161490a08639a8306"
+        },
+        "MASTER_CUE": {
+          "job_id": "job_Sa8VH787dXnmCPvbpDh3xD",
+          "raw_response_sha256": "fecb48202237edbff5cfeade6509d392467c99bd98fcd49d5ed053bc44de7306"
+        }
+      }
+    }
+  ],
+  "not_proven": [
+    "accuracy on private production documents",
+    "Korean script reading-order fidelity",
+    "17-column merged-cell and line-break fidelity",
+    "gold-fact precision or recall"
+  ]
+}
