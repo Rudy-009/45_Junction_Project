@@ -675,22 +675,29 @@ timeout 비율은 role·span별로 보고, `UPSTAGE_JOB_TIMEOUT`을 file upload 
 
 ### Config 변경 추적
 
-2026-08-22 Studio Code 패널에서 두 저장 Config의 실제 요청 body를 확인했다. Script Agent
-`agt_7yeqpDe7zmwCGVWoMY377j`와 Master Cue Agent `agt_FkyNiySGY4WACFvMNV5DRQ`는 모두
-`config_id: "1"`을 Create Job body에 포함한다. M1 adapter는 역할별 Config ID가 설정된 경우에만
-이를 전송하고 provenance에 기록하며, 값이 없으면 필드를 생략하고 `null`로 남긴다. Draft를 저장하지
-않은 상태나 임의 추정값은 절대 전송하지 않는다.
+2026-08-22 Studio Code 패널에서 Script Config #1과 Master Cue Config #1의 실제 요청 body를
+확인했다. 2026-08-23에는 실제 46행 큐시트에서 exact locator·source quote를 보존하도록 Master Cue
+Config #3을 저장하고 Table View에서 결과를 확인했다. 운영 요청은 Script `config_id: "1"`, Master
+Cue `config_id: "3"`을 사용한다. M1 adapter는 역할별 Config ID가 설정된 경우에만 이를 전송하고
+provenance에 기록하며, 값이 없으면 필드를 생략하고 `null`로 남긴다. Draft를 저장하지 않은 상태나
+임의 추정값은 절대 전송하지 않는다.
 
 현재 저장 스키마와 실제 확인 범위:
 
 - Script Config #1: Parse → Extract(Standard), `script_facts` 14개 raw 필드
-- Master Cue Config #1: Parse → Extract(Standard), `cue_facts` 16개 raw 필드
+- Master Cue Config #3: Parse → Extract(Standard), `cue_facts`와 15개 item 필드. `locator`와
+  `source_quote_raw` 필수 보존
 - Stage Spec Extractor: `agt_PxbxmhXXT8iqdzs5WmHfUz`, Config `#1` **저장 · 서버 배선 구현 · live smoke 대기**
 - Fact Normalizer: `agt_6tn639gGApNdV9SdRfAjnE`, Config `#1` **저장 · 서버 배선 구현 · live smoke 대기**
 - Storyboard Recomposer: `agt_go8aoJTVDvEwK8mwXh5gEi`, Config `#1` **저장 · 서버 배선 구현 · live smoke 대기**
 - Rehearsal Brief: `agt_9iLkb7fqwdEtaBv48t9tQA`, Config `#1` **저장 · 서버 배선 구현 · live smoke 대기**
 
 실제 Agent/Config ID와 smoke fixture의 raw response hash를 함께 보관해 Config 변경을 감시한다.
+
+2026-08-23 실제 큐시트 확인: Master Cue Config #3의 `job_6N9aeVdJ2rvT7DZD4ndcTZ`가 46개
+`cue_row`를 만들었고 46개 서로 다른 `t_0_r_*` locator와 원문 인용을 Table View에 표시했다. 이
+확인은 extraction contract와 evidence field의 존재를 검증한 것이며, 각 raw field의 의미 정확도나
+verdict 정확도를 증명하지 않는다. 기존 Config #1 합성 smoke는 아래의 역사적 근거로만 유지한다.
 
 ### 2026-08-22 합성 live smoke
 

@@ -22,8 +22,8 @@ npm run dev
 
 실제 추출에는 `.env`에 `UPSTAGE_API_KEY`, `UPSTAGE_AGENT_ID_SCRIPT`,
 `UPSTAGE_AGENT_ID_MASTER_CUE`, `UPSTAGE_CONFIG_ID_SCRIPT`,
-`UPSTAGE_CONFIG_ID_MASTER_CUE`를 설정한다. `.env.example`의 Agent/Config ID는
-2026-08-22 Studio Code 패널에서 확인한 저장 Config #1 값이다. API key나 Agent ID를
+`UPSTAGE_CONFIG_ID_MASTER_CUE`를 설정한다. `.env.example`은 Script Config #1과 실제 46행
+큐시트에서 locator·원문 인용을 확인한 Master Cue Config #3을 고정한다. API key나 Agent ID를
 브라우저 번들에 넣지 않는다.
 SCRIPT는 PDF/DOCX, MASTER_CUE는 XLSX/PDF/JSON multipart 파일을 받고 STAGE_SPEC은 JSON으로 받는다.
 MASTER_CUE JSON은 원본 bytes와 SHA-256을 그대로 보존한다. Upstage Agent 호출 때만 각 leaf를
