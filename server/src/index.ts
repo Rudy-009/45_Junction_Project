@@ -1,19 +1,9 @@
 import { buildApp } from "./app.js";
 import { UpstageAgentProvider } from "./providers/upstage-agent-provider.js";
-import { createSupabaseAuthenticator } from "./security/supabase-auth.js";
 
 const isProduction = process.env.NODE_ENV === "production";
-const supabaseUrl = process.env.SUPABASE_URL;
-const authenticateToken = supabaseUrl
-  ? createSupabaseAuthenticator({
-      projectUrl: supabaseUrl,
-      audience: process.env.SUPABASE_JWT_AUDIENCE ?? "authenticated",
-    })
-  : undefined;
+const allowAnonymous = process.env.STANDBY_ALLOW_ANONYMOUS !== "false";
 const apiToken = process.env.STANDBY_API_TOKEN ?? (isProduction ? undefined : "local-dev-token");
-if (isProduction && !authenticateToken) {
-  throw new Error("SUPABASE_URL is required in production for user JWT verification.");
-}
 
 const allowedOrigins = (process.env.STANDBY_ALLOWED_ORIGINS ?? "http://localhost:5173")
   .split(",")
@@ -49,7 +39,7 @@ const extractionProvider = process.env.UPSTAGE_API_KEY
 const app = await buildApp({
   allowedOrigins,
   logger: true,
-  ...(authenticateToken ? { authenticateToken } : {}),
+  allowAnonymous,
   ...(apiToken ? { apiToken } : {}),
   ...(extractionProvider ? { extractionProvider } : {}),
 });
