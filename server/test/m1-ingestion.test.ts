@@ -271,9 +271,11 @@ test("Upstage adapter extracts a master cue without script or stage spec", async
       createBodies.push(body);
       assert.equal(body.config_id, "cfg_cue");
       assert.equal(body.model, "agt_cue");
+      assert.equal("include" in body, false);
       return Response.json({ id: "job-cue" });
     }
     if (url.includes("job-cue")) {
+      assert.equal(url.endsWith("/v2/responses/job-cue"), true);
       return Response.json({
         id: "job-cue",
         status: "completed",
