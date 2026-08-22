@@ -16,12 +16,14 @@ export interface Revision {
 }
 
 export type Zone = '상수윙' | '무대' | '하수윙' | '하수환복소';
+export type Transition = 'ENTER' | 'EXIT';
 
 export interface StageEntity {
   id: string;
   label: string;
   kind: 'person' | 'prop';
   zone: Zone;
+  transition?: Transition;
   connector?: { to: Zone; reviewed: boolean };
 }
 

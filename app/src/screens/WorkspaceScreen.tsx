@@ -526,8 +526,14 @@ function buildStageEntities(
   upToCueId: string,
   upToEventId?: string,
 ): StageEntity[] {
-  const charState: Record<string, { on_stage: boolean; last_direction: Direction | null }> = {};
-  const propState: Record<string, { on_stage: boolean; last_direction: Direction | null }> = {};
+  type EntityState = {
+    on_stage: boolean;
+    last_direction: Direction | null;
+    transition?: StageEntity['transition'];
+  };
+
+  const charState: Record<string, EntityState> = {};
+  const propState: Record<string, EntityState> = {};
 
   for (const char of cueSheet.characters) {
     charState[char.id] = { on_stage: false, last_direction: null };
@@ -540,18 +546,23 @@ function buildStageEntities(
   for (const cue of cueSheet.cues) {
     if (done) break;
     for (const event of cue.events) {
+      for (const state of Object.values(charState)) state.transition = undefined;
+      for (const state of Object.values(propState)) state.transition = undefined;
+
       for (const action of event.actions) {
         switch (action.type) {
           case 'character_enter':
             if (action.character_id && charState[action.character_id]) {
               charState[action.character_id].on_stage = true;
               charState[action.character_id].last_direction = action.direction ?? null;
+              charState[action.character_id].transition = 'ENTER';
             }
             break;
           case 'character_exit':
             if (action.character_id && charState[action.character_id]) {
               charState[action.character_id].on_stage = false;
               charState[action.character_id].last_direction = action.direction ?? null;
+              charState[action.character_id].transition = 'EXIT';
             }
             break;
           case 'backstage_crossover':
@@ -563,12 +574,14 @@ function buildStageEntities(
             if (action.prop_id && propState[action.prop_id]) {
               propState[action.prop_id].on_stage = true;
               propState[action.prop_id].last_direction = action.direction ?? null;
+              propState[action.prop_id].transition = 'ENTER';
             }
             break;
           case 'prop_out':
             if (action.prop_id && propState[action.prop_id]) {
               propState[action.prop_id].on_stage = false;
               propState[action.prop_id].last_direction = action.direction ?? null;
+              propState[action.prop_id].transition = 'EXIT';
             }
             break;
         }
@@ -583,13 +596,20 @@ function buildStageEntities(
   for (const char of cueSheet.characters) {
     const state = charState[char.id];
     if (state.on_stage) {
-      entities.push({ id: char.id, label: char.name, kind: 'person', zone: '무대' });
+      entities.push({
+        id: char.id,
+        label: char.name,
+        kind: 'person',
+        zone: '무대',
+        transition: state.transition,
+      });
     } else if (state.last_direction) {
       entities.push({
         id: char.id,
         label: char.name,
         kind: 'person',
         zone: state.last_direction === 'stage_left' ? '상수윙' : '하수윙',
+        transition: state.transition,
       });
     }
   }
@@ -597,13 +617,20 @@ function buildStageEntities(
   for (const prop of cueSheet.props) {
     const state = propState[prop.id];
     if (state.on_stage) {
-      entities.push({ id: prop.id, label: prop.name, kind: 'prop', zone: '무대' });
+      entities.push({
+        id: prop.id,
+        label: prop.name,
+        kind: 'prop',
+        zone: '무대',
+        transition: state.transition,
+      });
     } else if (state.last_direction) {
       entities.push({
         id: prop.id,
         label: prop.name,
         kind: 'prop',
         zone: state.last_direction === 'stage_left' ? '상수윙' : '하수윙',
+        transition: state.transition,
       });
     }
   }

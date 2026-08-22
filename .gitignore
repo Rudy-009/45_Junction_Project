@@ -5,6 +5,7 @@
 .env
 .env.*
 !.env.example
+*.local
 *.key
 *.pem
 
@@ -14,6 +15,7 @@ node_modules/
 dist/
 build/
 coverage/
+tsconfig.tsbuildinfo
 
 # Python
 .venv/

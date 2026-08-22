@@ -1,0 +1,119 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://standby.local/contracts/event-graph.v1.schema.json",
+  "title": "STANDBY Event Graph v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "graph_id",
+    "source_snapshot_digest",
+    "compiler_version",
+    "events"
+  ],
+  "properties": {
+    "contract_version": { "const": "standby.event-graph.v1" },
+    "graph_id": { "type": "string", "minLength": 1 },
+    "source_snapshot_digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "compiler_version": { "type": "string", "minLength": 1 },
+    "events": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/event" }
+    }
+  },
+  "$defs": {
+    "zone": {
+      "enum": ["STAGE_RIGHT_WING", "STAGE", "STAGE_LEFT_WING", "STAGE_LEFT_CHANGE"]
+    },
+    "sourceRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_id", "role", "fact_id"],
+      "properties": {
+        "source_id": { "type": "string", "minLength": 1 },
+        "role": { "enum": ["SCRIPT", "MASTER_CUE", "STAGE_SPEC"] },
+        "fact_id": { "type": "string", "minLength": 1 }
+      }
+    },
+    "timeRange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["min_ms", "max_ms"],
+      "properties": {
+        "min_ms": { "type": "integer", "minimum": 0 },
+        "max_ms": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "action": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "entity_id", "zone", "sequence_index", "offset_ms"],
+          "properties": {
+            "type": { "enum": ["ENTER", "EXIT"] },
+            "entity_id": { "type": "string", "minLength": 1 },
+            "zone": { "$ref": "#/$defs/zone" },
+            "sequence_index": { "type": "integer", "minimum": 0 },
+            "offset_ms": { "type": "integer", "minimum": 0 }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "entity_id", "from", "to", "sequence_index", "offset_ms", "duration_ms"],
+          "properties": {
+            "type": { "const": "MOVE" },
+            "entity_id": { "type": "string", "minLength": 1 },
+            "from": { "$ref": "#/$defs/zone" },
+            "to": { "$ref": "#/$defs/zone" },
+            "sequence_index": { "type": "integer", "minimum": 0 },
+            "offset_ms": { "type": "integer", "minimum": 0 },
+            "duration_ms": { "$ref": "#/$defs/timeRange" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "actor_id", "zone", "sequence_index", "offset_ms", "duration_ms"],
+          "properties": {
+            "type": { "const": "COSTUME_CHANGE" },
+            "actor_id": { "type": "string", "minLength": 1 },
+            "zone": { "$ref": "#/$defs/zone" },
+            "sequence_index": { "type": "integer", "minimum": 0 },
+            "offset_ms": { "type": "integer", "minimum": 0 },
+            "duration_ms": { "$ref": "#/$defs/timeRange" }
+          }
+        }
+      ]
+    },
+    "event": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "event_id",
+        "sequence_index",
+        "label",
+        "time_range_ms",
+        "actions",
+        "source_refs"
+      ],
+      "properties": {
+        "event_id": { "type": "string", "minLength": 1 },
+        "sequence_index": { "type": "integer", "minimum": 0 },
+        "label": { "type": "string", "minLength": 1 },
+        "time_range_ms": { "$ref": "#/$defs/timeRange" },
+        "actions": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/action" }
+        },
+        "source_refs": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/sourceRef" }
+        }
+      }
+    }
+  }
+}
