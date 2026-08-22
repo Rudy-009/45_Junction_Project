@@ -69,7 +69,13 @@ export function projectScriptSegments(facts: FactCandidate[]): ScriptProjectionS
     const raw = objectValue(fact.raw_value, `SCRIPT fact ${factIndex}.raw_value`);
     const dialogue = firstExactString(
       raw,
-      ["dialogue_raw", "dialogue", "dialogue_text_raw", "dialogue_text"],
+      [
+        "trigger_line_raw",
+        "dialogue_raw",
+        "dialogue",
+        "dialogue_text_raw",
+        "dialogue_text",
+      ],
       `SCRIPT fact ${factIndex}`,
       MAX_TEXT_LENGTH,
     );
@@ -85,9 +91,10 @@ export function projectScriptSegments(facts: FactCandidate[]): ScriptProjectionS
       `SCRIPT fact ${factIndex}`,
       MAX_SPEAKER_LENGTH,
     );
-    const eventId = optionalExactString(
-      raw.event_id,
-      `SCRIPT fact ${factIndex}.event_id`,
+    const eventId = firstExactString(
+      raw,
+      ["event_id_raw", "event_id"],
+      `SCRIPT fact ${factIndex}`,
       MAX_EVENT_ID_LENGTH,
     );
     const rawFactSha256 = hashJson(raw);
@@ -120,6 +127,12 @@ export function projectScriptSegments(facts: FactCandidate[]): ScriptProjectionS
     // that field order when a single raw fact contains both exact excerpts.
     if (dialogue !== null) append("DIALOGUE", dialogue, speaker);
     if (stageDirection !== null) append("STAGE_DIRECTION", stageDirection, null);
+  }
+
+  if (segments.length === 0) {
+    return invalid(
+      "SCRIPT Agent output contained no displayable trigger lines or stage directions.",
+    );
   }
 
   return segments;

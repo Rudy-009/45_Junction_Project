@@ -130,18 +130,35 @@ test("DOCX projection runs through the configured Upstage Script Agent and retur
               script_facts: [
                 {
                   fact_type: "DIALOGUE",
-                  dialogue_raw: "여기가 맞아?",
-                  speaker_raw: "민",
-                  event_id: "evt_002",
                   locator: "p.2:l.4",
                   source_quote_raw: "민: 여기가 맞아?",
+                  event_id_raw: "evt_002",
+                  event_type_raw: "DIALOGUE",
+                  character_raw: "민",
+                  stage_direction_raw: "",
+                  location_raw: "",
+                  costume_state_raw: "",
+                  prop_raw: "",
+                  trigger_line_raw: "여기가 맞아?",
+                  exit_event_raw: "",
+                  next_entry_event_raw: "",
+                  section_marker_raw: "S#1",
                 },
                 {
                   fact_type: "STAGE_DIRECTION",
-                  stage_direction_raw: "민이 무대 중앙으로 들어온다.",
-                  section_marker_raw: "evt_003",
                   locator: "p.2:l.5",
                   source_quote_raw: "(민이 무대 중앙으로 들어온다.)",
+                  event_id_raw: "evt_003",
+                  event_type_raw: "STAGE_DIRECTION",
+                  character_raw: "민",
+                  stage_direction_raw: "민이 무대 중앙으로 들어온다.",
+                  location_raw: "무대 중앙",
+                  costume_state_raw: "",
+                  prop_raw: "",
+                  trigger_line_raw: "",
+                  exit_event_raw: "",
+                  next_entry_event_raw: "",
+                  section_marker_raw: "S#1",
                 },
               ],
             },
@@ -231,7 +248,7 @@ test("DOCX projection runs through the configured Upstage Script Agent and retur
           kind: "STAGE_DIRECTION",
           text: "민이 무대 중앙으로 들어온다.",
           speaker: null,
-          event_id: null,
+          event_id: "evt_003",
           locator: "p.2:l.5",
         },
       ],
@@ -398,4 +415,40 @@ test("projection never creates an event link from section labels or source text"
   const [segment] = projectScriptSegments([fact]);
   assert.ok(segment);
   assert.equal(segment.event_id, null);
+});
+
+test("projection fails closed when the live Script Agent schema has no displayable excerpt", () => {
+  const fact: FactCandidate = {
+    fact_id: "fact_script_prop_only",
+    fact_type: "PROP",
+    raw_value: {
+      fact_type: "PROP",
+      locator: "p.8:l.1",
+      source_quote_raw: "탁자 위에 편지를 둔다.",
+      event_id_raw: "evt_008",
+      event_type_raw: "PROP",
+      character_raw: "민",
+      stage_direction_raw: "",
+      location_raw: "탁자",
+      costume_state_raw: "",
+      prop_raw: "편지",
+      trigger_line_raw: "",
+      exit_event_raw: "",
+      next_entry_event_raw: "",
+      section_marker_raw: "S#3",
+    },
+    reviewed_value: null,
+    source_role: "SCRIPT",
+    source_id: "source_script",
+    locator: "p.8:l.1",
+    quote: "탁자 위에 편지를 둔다.",
+    origin: "USER_PROVIDED",
+    confidence: "NOT_PROVIDED",
+    review_status: "UNREVIEWED",
+  };
+
+  assert.throws(
+    () => projectScriptSegments([fact]),
+    /no displayable trigger lines or stage directions/,
+  );
 });
