@@ -34,7 +34,8 @@ const ZONES = [
   ['STAGE_LEFT_CHANGE', '하수 환복소'],
 ] as const;
 
-type SourceKind = 'SCRIPT' | 'MASTER_CUE';
+type SourceInputKind = 'SCRIPT' | 'MASTER_CUE_FILE' | 'MASTER_CUE_JSON';
+type MasterCueInputKind = Exclude<SourceInputKind, 'SCRIPT'>;
 type Crossover = 'UNKNOWN' | 'AVAILABLE' | 'UNAVAILABLE';
 type SubmitPhase = 'IDLE' | 'UPLOADING' | 'EXTRACTING' | 'REVIEW' | 'VERIFYING' | 'SUCCEEDED' | 'FAILED';
 
@@ -61,7 +62,7 @@ type EntityDraft = {
   zone: string;
 };
 
-const SOURCE_CONFIG: Record<SourceKind, {
+const SOURCE_CONFIG: Record<SourceInputKind, {
   label: string;
   accept: string;
   extensions: string[];
@@ -71,10 +72,15 @@ const SOURCE_CONFIG: Record<SourceKind, {
     accept: '.pdf,.docx',
     extensions: ['pdf', 'docx'],
   },
-  MASTER_CUE: {
+  MASTER_CUE_FILE: {
     label: 'MASTER CUE',
     accept: '.xlsx,.pdf',
     extensions: ['xlsx', 'pdf'],
+  },
+  MASTER_CUE_JSON: {
+    label: 'TEST JSON',
+    accept: '.json',
+    extensions: ['json'],
   },
 };
 
@@ -115,7 +121,7 @@ async function sha256(bytes: BufferSource) {
   return bytesToHex(await crypto.subtle.digest('SHA-256', bytes));
 }
 
-async function inspectSourceFile(kind: SourceKind, file: File, locale: Locale): Promise<SelectedSource> {
+async function inspectSourceFile(kind: SourceInputKind, file: File, locale: Locale): Promise<SelectedSource> {
   const config = SOURCE_CONFIG[kind];
   const extension = extensionOf(file.name);
 
@@ -131,10 +137,18 @@ async function inspectSourceFile(kind: SourceKind, file: File, locale: Locale): 
   const signature = new Uint8Array(bytes.slice(0, 5));
   const isPdf = String.fromCharCode(...signature) === '%PDF-';
   const isZip = signature[0] === 0x50 && signature[1] === 0x4b;
+  const text = new TextDecoder().decode(bytes);
 
   if (extension === 'pdf' && !isPdf) throw new Error(locale === 'ko' ? '확장자와 PDF 파일 서명이 일치하지 않습니다.' : 'The extension does not match the PDF file signature.');
   if ((extension === 'docx' || extension === 'xlsx') && !isZip) {
     throw new Error(locale === 'ko' ? '확장자와 Office 파일 서명이 일치하지 않습니다.' : 'The extension does not match the Office file signature.');
+  }
+  if (extension === 'json') {
+    try {
+      JSON.parse(text);
+    } catch {
+      throw new Error(locale === 'ko' ? 'JSON 파일 형식이 올바르지 않습니다.' : 'The JSON file format is invalid.');
+    }
   }
 
   return { file, sha256: await sha256(bytes), origin: SOURCE_ORIGIN };
@@ -147,7 +161,8 @@ export function InputScreen() {
   const clearWorkspace = useStandbyWorkspaceStore((state) => state.clear);
   const [script, setScript] = useState<SelectedSource | null>(null);
   const [masterCue, setMasterCue] = useState<SelectedSource | null>(null);
-  const [sourceErrors, setSourceErrors] = useState<Partial<Record<SourceKind, string>>>({});
+  const [masterCueInputKind, setMasterCueInputKind] = useState<MasterCueInputKind | null>(null);
+  const [sourceErrors, setSourceErrors] = useState<Partial<Record<SourceInputKind, string>>>({});
   const [crossover, setCrossover] = useState<Crossover>('UNKNOWN');
   const [minimumChangeSeconds, setMinimumChangeSeconds] = useState('60');
   const [routes, setRoutes] = useState<RouteDraft[]>([
@@ -242,7 +257,7 @@ export function InputScreen() {
     return () => { active = false; };
   }, [stageSpec]);
 
-  const selectSource = async (kind: SourceKind, file: File) => {
+  const selectSource = async (kind: SourceInputKind, file: File) => {
     setPhase('IDLE');
     setMessage(null);
     setCaseId(null);
@@ -252,10 +267,21 @@ export function InputScreen() {
     try {
       const selected = await inspectSourceFile(kind, file, locale);
       if (kind === 'SCRIPT') setScript(selected);
-      else setMasterCue(selected);
+      else {
+        setMasterCue(selected);
+        setMasterCueInputKind(kind);
+        setSourceErrors((current) => ({
+          ...current,
+          MASTER_CUE_FILE: undefined,
+          MASTER_CUE_JSON: undefined,
+        }));
+      }
     } catch (error) {
       if (kind === 'SCRIPT') setScript(null);
-      else setMasterCue(null);
+      else if (masterCueInputKind === kind) {
+        setMasterCue(null);
+        setMasterCueInputKind(null);
+      }
       setSourceErrors((current) => ({
         ...current,
         [kind]: error instanceof Error ? error.message : locale === 'ko' ? '파일을 확인할 수 없습니다.' : 'Could not inspect the file.',
@@ -377,19 +403,27 @@ export function InputScreen() {
           />
         )}
 
-        <section className="mt-6 grid items-start gap-4 lg:grid-cols-3">
+        <section className="mt-6 grid items-start gap-4 lg:grid-cols-[1fr_2fr_1fr]">
           <SourceCard
             kind="SCRIPT"
             source={script}
             error={sourceErrors.SCRIPT}
             onFile={(file) => void selectSource('SCRIPT', file)}
           />
-          <SourceCard
-            kind="MASTER_CUE"
-            source={masterCue}
-            error={sourceErrors.MASTER_CUE}
-            onFile={(file) => void selectSource('MASTER_CUE', file)}
-          />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <SourceCard
+              kind="MASTER_CUE_FILE"
+              source={masterCueInputKind === 'MASTER_CUE_FILE' ? masterCue : null}
+              error={sourceErrors.MASTER_CUE_FILE}
+              onFile={(file) => void selectSource('MASTER_CUE_FILE', file)}
+            />
+            <SourceCard
+              kind="MASTER_CUE_JSON"
+              source={masterCueInputKind === 'MASTER_CUE_JSON' ? masterCue : null}
+              error={sourceErrors.MASTER_CUE_JSON}
+              onFile={(file) => void selectSource('MASTER_CUE_JSON', file)}
+            />
+          </div>
           <StageSpecCard
             crossover={crossover}
             minimumChangeSeconds={minimumChangeSeconds}
@@ -490,7 +524,7 @@ function SourceCard({
   error,
   onFile,
 }: {
-  kind: SourceKind;
+  kind: SourceInputKind;
   source: SelectedSource | null;
   error?: string;
   onFile: (file: File) => void;
@@ -500,8 +534,12 @@ function SourceCard({
   const [dragging, setDragging] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const config = SOURCE_CONFIG[kind];
-  const Icon = kind === 'SCRIPT' ? FileText : FileSpreadsheet;
-  const helper = kind === 'SCRIPT' ? t('input.script.helper') : t('input.cue.helper');
+  const Icon = kind === 'MASTER_CUE_FILE' ? FileSpreadsheet : FileText;
+  const helper = kind === 'SCRIPT'
+    ? t('input.script.helper')
+    : kind === 'MASTER_CUE_FILE'
+      ? t('input.cue.fileHelper')
+      : t('input.cue.jsonHelper');
 
   return (
     <article className="border border-border bg-surface">
