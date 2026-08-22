@@ -142,7 +142,7 @@ function applyCueEdit(cueSheet: CueSheet, edit: CueCellEdit): CueSheet {
 // ─── Main Component ────────────────────────────────────────
 
 export function WorkspaceScreen() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const navigate = useNavigate();
   const verifiedWorkspace = useStandbyWorkspaceStore((state) => state.workspace);
   const verifiedCaseId = useStandbyWorkspaceStore((state) => state.caseId);
@@ -165,6 +165,7 @@ export function WorkspaceScreen() {
   const [cueChanges, setCueChanges] = useState<Record<string, CueEditorChange>>({});
   const [popupEventId, setPopupEventId] = useState<string | null>(null);
   const [focusTarget, setFocusTarget] = useState<{ eventId: string; requestId: number } | null>(null);
+  const [stageFirst, setStageFirst] = useState(true);
   const storyboardRequestVersion = useRef(0);
   const editorCueSheet = draftCueSheet ?? cueSheet;
 
@@ -381,6 +382,67 @@ export function WorkspaceScreen() {
     ? currentCueSheet.cues.find((cue) => cue.cue_id === popupTarget.cueId) ?? null
     : null;
 
+  const stagePanel = (
+    <>
+      <PanelHeader
+        title={t('workspace.stagePanel')}
+        right={(
+          <span className="text-[10px] text-muted-foreground">
+            {selectedCue?.scene_number}{selectedEvt ? ` · ${selectedEvt.event_id}` : ''}
+          </span>
+        )}
+      />
+      <div className="min-h-0 flex-1">
+        <StageSimulator crossover={crossoverValue} entities={entities} motion={stageMotion} />
+      </div>
+    </>
+  );
+
+  const cueSheetPanel = (
+    <CueSheetEditorPanel
+      cueSheet={currentCueSheet}
+      contradictions={validationResult?.contradictions ?? []}
+      selectedEventId={selectedEventId}
+      focusTarget={focusTarget}
+      editedKeys={new Set(Object.keys(cueChanges))}
+      changes={Object.values(cueChanges)}
+      revisions={revisions}
+      onSelectEvent={handleSelectEvent}
+      onEdit={editCueCell}
+      onDiscardAll={discardCueChanges}
+      onSave={saveCueChanges}
+      onLoadRevision={loadRevision}
+    />
+  );
+
+  const popupOverlay = popupTarget && popupCue ? (
+    <>
+      <button
+        type="button"
+        aria-label="Close event popup"
+        className="absolute inset-0 z-30 bg-black/50"
+        onClick={() => setPopupEventId(null)}
+      />
+      <CueEventPopup
+        cue={popupCue}
+        event={popupTarget.event}
+        cueSheet={currentCueSheet}
+        contradictions={validationResult?.contradictions.filter(
+          (item) => item.event_id === popupTarget.event.event_id,
+        ) ?? []}
+        onClose={() => setPopupEventId(null)}
+        onGoto={() => {
+          handleSelectEvent(popupTarget.cueId, popupTarget.event.event_id);
+          setFocusTarget({
+            eventId: popupTarget.event.event_id,
+            requestId: Date.now(),
+          });
+          setPopupEventId(null);
+        }}
+      />
+    </>
+  ) : null;
+
   return (
     <div className="flex h-[calc(100vh-56px)] flex-col">
       {/* Top bar */}
@@ -388,8 +450,16 @@ export function WorkspaceScreen() {
         <span className="mono text-[11px] text-muted-foreground">
           {currentCueSheet.metadata.title}
         </span>
-        {validationResult && (
-          <div className="flex items-center gap-3 text-[11px]">
+        <div className="flex items-center gap-3 text-[11px]">
+          <button
+            type="button"
+            onClick={() => setStageFirst((current) => !current)}
+            className="border border-border px-2 py-0.5 hover:bg-muted"
+          >
+            {locale === 'ko' ? '패널 전환' : 'Swap panels'}
+          </button>
+          {validationResult && (
+            <>
             {validationResult.errors > 0 && (
               <span className="mono border border-violation bg-violation-bg px-2 py-0.5 text-violation">
                 ERROR {validationResult.errors}
@@ -403,8 +473,9 @@ export function WorkspaceScreen() {
             {validationResult.total_contradictions === 0 && (
               <span className="mono border border-consistent/50 px-2 py-0.5 text-consistent">OK</span>
             )}
-          </div>
-        )}
+            </>
+          )}
+        </div>
       </div>
 
       <div className="flex min-h-0 flex-1">
@@ -426,61 +497,12 @@ export function WorkspaceScreen() {
         <div className="flex min-w-0 flex-1 flex-col">
           <div className="flex min-h-0 flex-1 flex-col">
             <div className="flex min-h-0 flex-1 basis-0 flex-col border-b border-border">
-              <PanelHeader
-                title={t('workspace.stagePanel')}
-                right={
-                  <span className="text-[10px] text-muted-foreground">
-                    {selectedCue?.scene_number}{selectedEvt ? ` · ${selectedEvt.event_id}` : ''}
-                  </span>
-                }
-              />
-              <div className="min-h-0 flex-1">
-                <StageSimulator crossover={crossoverValue} entities={entities} motion={stageMotion} />
-              </div>
+              {stageFirst ? stagePanel : cueSheetPanel}
             </div>
 
             <div className="relative flex min-h-0 flex-1 basis-0 flex-col border-b border-border">
-              <CueSheetEditorPanel
-                cueSheet={currentCueSheet}
-                contradictions={validationResult?.contradictions ?? []}
-                selectedEventId={selectedEventId}
-                focusTarget={focusTarget}
-                editedKeys={new Set(Object.keys(cueChanges))}
-                changes={Object.values(cueChanges)}
-                revisions={revisions}
-                onSelectEvent={handleSelectEvent}
-                onEdit={editCueCell}
-                onDiscardAll={discardCueChanges}
-                onSave={saveCueChanges}
-                onLoadRevision={loadRevision}
-              />
-              {popupTarget && popupCue && (
-                <>
-                  <button
-                    type="button"
-                    aria-label="Close event popup"
-                    className="absolute inset-0 z-30 bg-black/50"
-                    onClick={() => setPopupEventId(null)}
-                  />
-                  <CueEventPopup
-                    cue={popupCue}
-                    event={popupTarget.event}
-                    cueSheet={currentCueSheet}
-                    contradictions={validationResult?.contradictions.filter(
-                      (item) => item.event_id === popupTarget.event.event_id,
-                    ) ?? []}
-                    onClose={() => setPopupEventId(null)}
-                    onGoto={() => {
-                      handleSelectEvent(popupTarget.cueId, popupTarget.event.event_id);
-                      setFocusTarget({
-                        eventId: popupTarget.event.event_id,
-                        requestId: Date.now(),
-                      });
-                      setPopupEventId(null);
-                    }}
-                  />
-                </>
-              )}
+              {stageFirst ? cueSheetPanel : stagePanel}
+              {popupOverlay}
             </div>
           </div>
 
