@@ -14,14 +14,19 @@ type DemoEntity = {
   kind: 'person' | 'prop';
   action: 'enter' | 'exit' | 'stay';
   direction: 'stage_left' | 'stage_right';
+  carriedBy?: string; // 소지하고 있는 인물 이름
 };
 
 const DEMO: DemoEntity[] = [
   { label: '수연', kind: 'person', action: 'enter', direction: 'stage_left' },
   { label: '은비', kind: 'person', action: 'stay', direction: 'stage_left' },
   { label: '민수', kind: 'person', action: 'exit', direction: 'stage_right' },
-  { label: '마루가방', kind: 'prop', action: 'enter', direction: 'stage_right' },
+  { label: '마루가방', kind: 'prop', action: 'enter', direction: 'stage_left', carriedBy: '수연' },
+  { label: '편지', kind: 'prop', action: 'enter', direction: 'stage_left', carriedBy: '수연' },
+  { label: '장바구니', kind: 'prop', action: 'stay', direction: 'stage_left', carriedBy: '은비' },
 ];
+
+// 소지 관계는 carriedBy 필드로 표현
 
 export function ArrowCompare() {
   return (
@@ -42,8 +47,6 @@ function FullStageDemo({ title, entities }: { title: string; entities: DemoEntit
   const onStage = entities.filter((e) => e.action === 'enter' || e.action === 'stay');
   const exitedLeft = entities.filter((e) => e.action === 'exit' && e.direction === 'stage_left');
   const exitedRight = entities.filter((e) => e.action === 'exit' && e.direction === 'stage_right');
-  const enteredFromLeft = entities.filter((e) => e.action === 'enter' && e.direction === 'stage_left');
-  const enteredFromRight = entities.filter((e) => e.action === 'enter' && e.direction === 'stage_right');
 
   return (
     <section className="border border-border p-6">
@@ -72,10 +75,77 @@ function FullStageDemo({ title, entities }: { title: string; entities: DemoEntit
             무대 / STAGE
           </div>
 
-          <div className="flex flex-1 items-center justify-center gap-8 p-8">
-            {onStage.map((e) => (
-              <EntityOnStage key={e.label} entity={e} />
-            ))}
+          <div className="flex flex-1 flex-col items-center justify-center gap-0 p-6">
+            {/* 인물 줄 (상단) */}
+            <div className="flex items-center justify-center gap-10">
+              {(() => {
+                const persons = onStage.filter((e) => e.kind === 'person');
+                return persons.map((e) => (
+                  <EntityOnStage key={e.label} entity={e} />
+                ));
+              })()}
+            </div>
+
+            {/* 연결선 (인물 → 소품) */}
+            <div className="flex items-start justify-center gap-10">
+              {(() => {
+                const persons = onStage.filter((e) => e.kind === 'person');
+                return persons.map((person) => {
+                  const carriedProps = onStage.filter(
+                    (e) => e.kind === 'prop' && e.carriedBy === person.label,
+                  );
+                  return (
+                    <div key={person.label} className="flex flex-col items-center">
+                      {carriedProps.length > 0 && (
+                        <>
+                          {/* 수직 연결선 */}
+                          <div className="h-4 w-[2px] border-l-[2px] border-dotted border-prop" />
+                          {/* 소품들 - 가로 배치, 인물 중앙 기준 */}
+                          <div className="flex items-start justify-center gap-3">
+                            {carriedProps.map((prop) => (
+                              <div key={prop.label} className="flex flex-col items-center gap-1">
+                                <div
+                                  className={cn(
+                                    'flex h-9 w-9 items-center justify-center border-2',
+                                    prop.action === 'enter' ? 'border-consistent bg-consistent/15' : 'border-prop bg-prop/15',
+                                  )}
+                                />
+                                <span className="max-w-[48px] text-center text-[10px] font-bold leading-tight">{prop.label}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </>
+                      )}
+                      {carriedProps.length === 0 && (
+                        <div className="h-[60px]" />
+                      )}
+                    </div>
+                  );
+                });
+              })()}
+            </div>
+
+            {/* 소지되지 않은 소품 (스태프 세팅) */}
+            {(() => {
+              const uncarried = onStage.filter((e) => e.kind === 'prop' && !e.carriedBy);
+              if (uncarried.length === 0) return null;
+              return (
+                <div className="mt-2 flex items-center gap-4 border-t border-dashed border-border pt-2">
+                  <span className="mono text-[9px] text-muted-foreground">스태프</span>
+                  {uncarried.map((prop) => (
+                    <div key={prop.label} className="flex flex-col items-center gap-1">
+                      <div
+                        className={cn(
+                          'flex h-9 w-9 items-center justify-center border-2',
+                          prop.action === 'enter' ? 'border-consistent bg-consistent/15' : 'border-prop bg-prop/15',
+                        )}
+                      />
+                      <span className="text-[10px] font-bold">{prop.label}</span>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
           </div>
 
           {/* 백스테이지 통로 */}
@@ -132,42 +202,34 @@ function EntityOnStage({ entity }: { entity: DemoEntity }) {
   const isEnter = entity.action === 'enter';
 
   return (
-    <div className="flex items-center gap-0">
-      {/* 상수에서 등장 화살표: 왼쪽에서 인물을 향함 */}
+    <div className="flex flex-col items-center gap-1">
+      {/* 화살표 (인물 위) */}
       {isEnter && isLeft && (
-        <div className="relative mr-2 flex w-10 items-center">
+        <div className="relative flex w-10 items-center">
           <div className="h-[2px] w-full bg-consistent" />
           <div className="absolute right-0 h-0 w-0 border-y-[5px] border-l-[8px] border-y-transparent border-l-consistent" />
         </div>
       )}
-
-      {/* Entity */}
-      <div className="flex flex-col items-center gap-1">
-        <div
-          className={cn(
-            'flex h-11 w-11 items-center justify-center border-2 text-xs font-medium',
-            person ? 'rounded-full' : '',
-            isEnter ? 'border-consistent bg-consistent/15' : 'border-border bg-surface',
-            person ? 'text-person' : 'text-prop',
-          )}
-        >
-          {entity.label.length > 2 ? entity.label.charAt(0) : entity.label}
-        </div>
-        <span className="text-[11px]">{entity.label}</span>
-        {isEnter && (
-          <span className="mono text-[9px] text-consistent">
-            {isLeft ? '상수' : '하수'}에서 등장
-          </span>
-        )}
-      </div>
-
-      {/* 하수에서 등장 화살표: 오른쪽에서 인물을 향함 */}
       {isEnter && !isLeft && (
-        <div className="relative ml-2 flex w-10 items-center">
+        <div className="relative flex w-10 items-center">
           <div className="h-[2px] w-full bg-consistent" />
           <div className="absolute left-0 h-0 w-0 border-y-[5px] border-r-[8px] border-y-transparent border-r-consistent" />
         </div>
       )}
+      {entity.action === 'stay' && (
+        <div className="h-[10px]" />
+      )}
+
+      {/* Entity - 도형만, 이름 없음 */}
+      <div
+        className={cn(
+          'flex h-11 w-11 items-center justify-center border-2',
+          person ? 'rounded-full' : '',
+          isEnter ? 'border-consistent bg-consistent/15' :
+          person ? 'border-person bg-person/15' : 'border-prop bg-prop/15',
+        )}
+      />
+      <span className="text-[11px] font-bold">{entity.label}</span>
     </div>
   );
 }
@@ -178,54 +240,30 @@ function EntityInWing({ entity }: { entity: DemoEntity }) {
   const isLeft = entity.direction === 'stage_left';
 
   return (
-    <div className="flex items-center gap-0">
-      {/* 상수 퇴장: 화살표가 왼쪽 윙의 인물을 향함 (오른쪽에서 화살표 진입) */}
+    <div className="flex flex-col items-center gap-1">
+      {/* 화살표 (인물 위) - 퇴장 방향 */}
       {isLeft && (
-        <div className="flex items-center">
-          <div className="flex flex-col items-center gap-1">
-            <div
-              className={cn(
-                'flex h-11 w-11 items-center justify-center border-2 text-xs font-medium opacity-70',
-                person ? 'rounded-full' : '',
-                'border-violation bg-violation/15',
-                person ? 'text-person' : 'text-prop',
-              )}
-            >
-              {entity.label.length > 2 ? entity.label.charAt(0) : entity.label}
-            </div>
-            <span className="text-[11px] opacity-70">{entity.label}</span>
-            <span className="mono text-[9px] text-violation">상수로 퇴장</span>
-          </div>
-          <div className="relative ml-1 flex w-8 items-center">
-            <div className="h-[2px] w-full border-t-[2px] border-dashed border-violation" />
-            <div className="absolute left-0 h-0 w-0 border-y-[4px] border-r-[6px] border-y-transparent border-r-violation" />
-          </div>
+        <div className="relative flex w-10 items-center">
+          <div className="h-[2px] w-full border-t-[2px] border-dashed border-violation" />
+          <div className="absolute left-0 h-0 w-0 border-y-[4px] border-r-[6px] border-y-transparent border-r-violation" />
+        </div>
+      )}
+      {!isLeft && (
+        <div className="relative flex w-10 items-center">
+          <div className="h-[2px] w-full border-t-[2px] border-dashed border-violation" />
+          <div className="absolute right-0 h-0 w-0 border-y-[4px] border-l-[6px] border-y-transparent border-l-violation" />
         </div>
       )}
 
-      {/* 하수 퇴장: 화살표가 오른쪽 윙의 인물을 향함 (왼쪽에서 화살표 진입) */}
-      {!isLeft && (
-        <div className="flex items-center">
-          <div className="relative mr-1 flex w-8 items-center">
-            <div className="h-[2px] w-full border-t-[2px] border-dashed border-violation" />
-            <div className="absolute right-0 h-0 w-0 border-y-[4px] border-l-[6px] border-y-transparent border-l-violation" />
-          </div>
-          <div className="flex flex-col items-center gap-1">
-            <div
-              className={cn(
-                'flex h-11 w-11 items-center justify-center border-2 text-xs font-medium opacity-70',
-                person ? 'rounded-full' : '',
-                'border-violation bg-violation/15',
-                person ? 'text-person' : 'text-prop',
-              )}
-            >
-              {entity.label.length > 2 ? entity.label.charAt(0) : entity.label}
-            </div>
-            <span className="text-[11px] opacity-70">{entity.label}</span>
-            <span className="mono text-[9px] text-violation">하수로 퇴장</span>
-          </div>
-        </div>
-      )}
+      {/* Entity - 도형만 */}
+      <div
+        className={cn(
+          'flex h-11 w-11 items-center justify-center border-2 opacity-70',
+          person ? 'rounded-full' : '',
+          'border-violation bg-violation/15',
+        )}
+      />
+      <span className="text-[11px] font-bold opacity-70">{entity.label}</span>
     </div>
   );
 }

@@ -530,6 +530,7 @@ function buildStageEntities(
     on_stage: boolean;
     last_direction: Direction | null;
     transition?: StageEntity['transition'];
+    carried_by?: string;
   };
 
   const charState: Record<string, EntityState> = {};
@@ -575,6 +576,7 @@ function buildStageEntities(
               propState[action.prop_id].on_stage = true;
               propState[action.prop_id].last_direction = action.direction ?? null;
               propState[action.prop_id].transition = 'ENTER';
+              propState[action.prop_id].carried_by = action.carried_by ?? undefined;
             }
             break;
           case 'prop_out':
@@ -602,6 +604,7 @@ function buildStageEntities(
         kind: 'person',
         zone: '무대',
         transition: state.transition,
+        lastDirection: state.last_direction ?? undefined,
       });
     } else if (state.last_direction) {
       entities.push({
@@ -610,6 +613,7 @@ function buildStageEntities(
         kind: 'person',
         zone: state.last_direction === 'stage_left' ? '상수윙' : '하수윙',
         transition: state.transition,
+        lastDirection: state.last_direction,
       });
     }
   }
@@ -623,6 +627,7 @@ function buildStageEntities(
         kind: 'prop',
         zone: '무대',
         transition: state.transition,
+        carriedBy: state.carried_by ?? undefined,
       });
     } else if (state.last_direction) {
       entities.push({

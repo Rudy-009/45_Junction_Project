@@ -24,6 +24,8 @@ export interface StageEntity {
   kind: 'person' | 'prop';
   zone: Zone;
   transition?: Transition;
+  lastDirection?: Direction;
+  carriedBy?: string; // 소지하고 있는 인물 ID
   connector?: { to: Zone; reviewed: boolean };
 }
 
