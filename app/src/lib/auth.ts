@@ -1,11 +1,19 @@
 import { createClient } from '@supabase/supabase-js';
 
+function parseBoolean(value: string | undefined): boolean {
+  if (!value) return false;
+  const normalized = value.trim().toLowerCase();
+  return normalized === 'true' || normalized === '1' || normalized === 'yes' || normalized === 'on';
+}
+
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
 const publishableKey =
   (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined)
   ?? (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined);
 
-export const authBypassEnabled = import.meta.env.VITE_STANDBY_AUTH_BYPASS === 'true';
+export const authBypassEnabled = parseBoolean(import.meta.env.VITE_STANDBY_AUTH_BYPASS) ||
+  parseBoolean(import.meta.env.VITE_STANDBY_AUTH_BYPASS_MODE) ||
+  parseBoolean(import.meta.env.VITE_DEMO_BYPASS);
 export const authConfigured = Boolean(supabaseUrl && publishableKey);
 export const supabase = supabaseUrl && publishableKey
   ? createClient(supabaseUrl, publishableKey)

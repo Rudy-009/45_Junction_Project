@@ -284,7 +284,10 @@ export function InputScreen() {
   const authenticated = authBypassEnabled || Boolean(authEmail);
 
   const apiClient = () => {
-    const baseUrl = import.meta.env.VITE_STANDBY_API_BASE_URL as string | undefined;
+    const baseUrl =
+      import.meta.env.VITE_STANDBY_API_BASE_URL as string | undefined
+      ?? import.meta.env.VITE_STANDBY_API_URL as string | undefined
+      ?? import.meta.env.VITE_API_BASE_URL as string | undefined;
     return baseUrl && (import.meta.env.DEV || authBypassEnabled || authConfigured)
       ? new StandbyApi({ baseUrl, getAccessToken: getStandbyAccessToken })
       : null;
