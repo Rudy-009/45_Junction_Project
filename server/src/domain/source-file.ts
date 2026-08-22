@@ -7,7 +7,6 @@ const ALLOWED = {
   SCRIPT: new Map([
     [".pdf", "application/pdf"],
     [".docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"],
-    [".json", "application/json"],
   ]),
   MASTER_CUE: new Map([
     [".xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"],

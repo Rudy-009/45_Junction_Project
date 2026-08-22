@@ -68,8 +68,8 @@ const SOURCE_CONFIG: Record<SourceKind, {
 }> = {
   SCRIPT: {
     label: 'SCRIPT',
-    accept: '.pdf,.docx,.json',
-    extensions: ['pdf', 'docx', 'json'],
+    accept: '.pdf,.docx',
+    extensions: ['pdf', 'docx'],
   },
   MASTER_CUE: {
     label: 'MASTER CUE',
