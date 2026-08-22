@@ -381,7 +381,7 @@ Instruct는 `available < required`, route capacity, prop state transition을 계
   "origin": "REAL_REFERENCE",
   "returned_model": "document-parse-260630",
   "agent_id": "agt_...",
-  "config_id": null,
+  "config_id": "1",
   "extraction_review_status": "UNREVIEWED"
 }
 ```
@@ -532,7 +532,18 @@ Case 상태:
 
 ### Config 변경 추적
 
-2026-08-22 기준 공식 Create Job body에서 확인되는 필드는 `model`, `input`, `include`이며 `config_id`는 확인되지 않았다. 따라서 M1 adapter는 `config_id`를 전송하지 않고 provenance에 `null`로 기록한다. Studio draft 변경이 기존 실행을 암묵적으로 바꿀 위험은 Agent export와 실제 request body hash, smoke fixture 결과 hash를 함께 보관해 감시한다. 공식 API에서 별도 버전 식별자가 확인되기 전에는 임의 필드를 만들어 보내지 않는다.
+2026-08-22 Studio Code 패널에서 두 저장 Config의 실제 요청 body를 확인했다. Script Agent
+`agt_7yeqpDe7zmwCGVWoMY377j`와 Master Cue Agent `agt_FkyNiySGY4WACFvMNV5DRQ`는 모두
+`config_id: "1"`을 Create Job body에 포함한다. M1 adapter는 역할별 Config ID가 설정된 경우에만
+이를 전송하고 provenance에 기록하며, 값이 없으면 필드를 생략하고 `null`로 남긴다. Draft를 저장하지
+않은 상태나 임의 추정값은 절대 전송하지 않는다.
+
+현재 저장 스키마:
+
+- Script Config #1: Parse → Extract(Standard), `script_facts` 15개 raw 필드
+- Master Cue Config #1: Parse → Extract(Standard), `cue_facts` 16개 raw 필드
+
+실제 request body hash와 smoke fixture 결과 hash를 함께 보관해 Config 변경을 감시한다.
 
 - [Create Job](https://console.upstage.ai/api/agents/jobs/create-job)
 - [Studio 버전·배포](https://console.upstage.ai/docs/studio/deployment)

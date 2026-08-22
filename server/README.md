@@ -19,7 +19,10 @@ npm run dev
 고유한 `Idempotency-Key` 헤더도 필요하다.
 
 실제 추출에는 `.env`에 `UPSTAGE_API_KEY`, `UPSTAGE_AGENT_ID_SCRIPT`,
-`UPSTAGE_AGENT_ID_MASTER_CUE`를 설정한다. API key나 Agent ID를 브라우저 번들에 넣지 않는다.
+`UPSTAGE_AGENT_ID_MASTER_CUE`, `UPSTAGE_CONFIG_ID_SCRIPT`,
+`UPSTAGE_CONFIG_ID_MASTER_CUE`를 설정한다. `.env.example`의 Agent/Config ID는
+2026-08-22 Studio Code 패널에서 확인한 저장 Config #1 값이다. API key나 Agent ID를
+브라우저 번들에 넣지 않는다.
 SCRIPT는 PDF/DOCX, MASTER_CUE는 XLSX/PDF multipart 파일을 받고 STAGE_SPEC은 JSON으로 받는다.
 파일은 50 MiB 이하이며 확장자·MIME·signature를 모두 통과해야 한다.
 
@@ -61,7 +64,7 @@ Hero fixture에서는 승인 전 E3가 `INSUFFICIENT_EVIDENCE`, 승인 후 58–
 ## 아직 없는 것
 
 - 업로드 object storage와 악성 파일/zip bomb 검사
-- 실제 역할별 Agent ID를 사용한 live smoke와 결과 schema 고정
+- 저장된 역할별 Agent/Config ID를 사용한 live smoke와 결과 schema 고정
 - PostgreSQL/Supabase 영속화와 row-level authorization
 - XLSX 원형 보존 export
 - 감사 로그, 보존 기간, 삭제 작업, 운영 관측성

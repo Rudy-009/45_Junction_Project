@@ -18,6 +18,7 @@ type JsonObject = Record<string, unknown>;
 export type UpstageAgentProviderConfig = {
   apiKey: string;
   agentIds: Partial<Record<"SCRIPT" | "MASTER_CUE", string>>;
+  configIds?: Partial<Record<"SCRIPT" | "MASTER_CUE", string>>;
   baseUrl?: string;
   pollIntervalMs?: number;
   timeoutMs?: number;
@@ -199,7 +200,8 @@ export class UpstageAgentProvider implements ExtractionProvider {
       throw new DomainError(503, "UPSTAGE_AGENT_NOT_CONFIGURED", `${role} Agent ID is missing.`);
     }
     const fileId = await this.uploadFile(source);
-    const job = await this.createJob(agentId, fileId);
+    const configId = this.config.configIds?.[role] ?? null;
+    const job = await this.createJob(agentId, fileId, configId);
     const jobId = nonEmptyString(job.id, "Upstage job id");
     const completedJob = await this.pollJob(jobId);
     const payload = parseRolePayload(role, completedJob);
@@ -210,7 +212,7 @@ export class UpstageAgentProvider implements ExtractionProvider {
       provider: "UPSTAGE",
       provider_job_id: jobId,
       agent_id: agentId,
-      config_id: null,
+      config_id: configId,
       adapter_version: ADAPTER_VERSION,
       schema_version: "standby.extraction.v1",
       raw_response_sha256: hashJson(completedJob),
@@ -233,7 +235,11 @@ export class UpstageAgentProvider implements ExtractionProvider {
     return nonEmptyString(response.id, "Upstage file id");
   }
 
-  private async createJob(agentId: string, fileId: string): Promise<JsonObject> {
+  private async createJob(
+    agentId: string,
+    fileId: string,
+    configId: string | null,
+  ): Promise<JsonObject> {
     return this.upstageFetch("/v2/responses", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -241,6 +247,7 @@ export class UpstageAgentProvider implements ExtractionProvider {
         model: agentId,
         include: ["all"],
         input: [{ role: "user", content: [{ type: "input_file", file_id: fileId }] }],
+        ...(configId ? { config_id: configId } : {}),
       }),
     });
   }
