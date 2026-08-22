@@ -53,17 +53,6 @@ docker run --rm -p 8787:8787 \
 Vercel에는 공개값 `VITE_STANDBY_API_BASE_URL`, `VITE_SUPABASE_URL`,
 `VITE_SUPABASE_PUBLISHABLE_KEY`만 둔다. `UPSTAGE_API_KEY`와 정적 API token은 Vercel에 넣지 않는다.
 
-해커톤 데모 기간에만 로그인을 우회하려면 Vercel에
-`VITE_STANDBY_AUTH_BYPASS=true`, Railway에 `STANDBY_AUTH_BYPASS=true`를 둘 다 설정한다.
-하나만 켜지면 우회는 완성되지 않는다. 서버 플래그가 켜진 동안 모든 요청은
-공유 `demo-user`의 데이터로 처리되므로, 공개 데모가 끝나면 두 플래그를 먼저
-`false`로 되돌린 뒤 재배포한다.
-
-TEST JSON 경로만 빠르게 공개하려면 추가로 `STANDBY_ALLOW_ANON_TEST_JSON=true`를
-`/v1` 요청마다 `x-standby-anon-test=1` 헤더를 실어 보내는 클라이언트와 함께
-사용한다. 헤더는 TEST JSON 업로드 플로우에서만 세팅되며, 데모 종료 시 즉시 `false`로
-돌려주세요.
-
 ## 구현된 흐름
 
 1. `POST /v1/cases` — 검증 case 생성

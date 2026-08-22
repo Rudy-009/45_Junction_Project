@@ -20,8 +20,6 @@ declare module "fastify" {
 export type ServerConfig = {
   apiToken?: string;
   authenticateToken?: TokenAuthenticator;
-  authBypass?: boolean;
-  allowAnonymousTestJson?: boolean;
   allowedOrigins: string[];
   logger?: boolean;
   extractionProvider?: ExtractionProvider;
@@ -96,22 +94,9 @@ export async function buildApp(
   });
 
   app.decorateRequest("standbyActorId", "");
-  const isTestJsonRequest = (request: FastifyRequest): boolean => {
-    const header = request.headers["x-standby-anon-test"];
-    return header === "1" || header === "true";
-  };
-
   app.addHook("onRequest", async (request) => {
     if (request.url === "/healthz") return;
     if (!request.url.startsWith("/v1/")) return;
-    if (config.allowAnonymousTestJson && isTestJsonRequest(request)) {
-      request.standbyActorId = "demo-user";
-      return;
-    }
-    if (config.authBypass) {
-      request.standbyActorId = "demo-user";
-      return;
-    }
     const authorization = request.headers.authorization;
     const token = authorization?.startsWith("Bearer ") ? authorization.slice(7).trim() : "";
     if (!token) {
