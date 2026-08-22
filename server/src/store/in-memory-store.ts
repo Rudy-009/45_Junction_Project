@@ -1227,24 +1227,34 @@ export class InMemoryStore {
         payload = validateProductionAgentOutput(input.role, result.output, input.allowlist);
       } catch (error) {
         if (!(error instanceof DomainError)
-          || error.code !== "PRODUCTION_AGENT_RESPONSE_INVALID"
-          || error.message !== "Fact normalization contains an unsupported normalized_fact_type."
-          || input.role !== "FACT_NORMALIZER") throw error;
-        const facts = input.frozenInput.payload.facts;
-        if (!Array.isArray(facts)) throw error;
-        payload = validateProductionAgentOutput("FACT_NORMALIZER", {
-          recommendations: facts.map((value) => {
-            const fact = value as Record<string, unknown>;
-            return {
-              fact_id: fact.fact_id,
-              normalized_fact_type: fact.fact_type,
-              value: fact.raw_value,
-              confidence: "NOT_PROVIDED",
-              authority: "NON_AUTHORITATIVE",
-            };
-          }),
-          missing_evidence: [],
-        }, input.allowlist);
+          || error.code !== "PRODUCTION_AGENT_RESPONSE_INVALID") throw error;
+        if (input.role === "FACT_NORMALIZER"
+          && error.message === "Fact normalization contains an unsupported normalized_fact_type.") {
+          const facts = input.frozenInput.payload.facts;
+          if (!Array.isArray(facts)) throw error;
+          payload = validateProductionAgentOutput("FACT_NORMALIZER", {
+            recommendations: facts.map((value) => {
+              const fact = value as Record<string, unknown>;
+              return {
+                fact_id: fact.fact_id,
+                normalized_fact_type: fact.fact_type,
+                value: fact.raw_value,
+                confidence: "NOT_PROVIDED",
+                authority: "NON_AUTHORITATIVE",
+              };
+            }),
+            missing_evidence: [],
+          }, input.allowlist);
+        } else if (input.role === "REHEARSAL_BRIEF"
+          && error.message.includes("outside the frozen input")) {
+          payload = validateProductionAgentOutput("REHEARSAL_BRIEF", {
+            headline: "Deterministic findings retained because the Agent response referenced unknown evidence.",
+            sections: [],
+            missing_evidence: [],
+          }, input.allowlist);
+        } else {
+          throw error;
+        }
         fallbackReason = "UPSTAGE_RESPONSE_REJECTED";
       }
       const artifact: ProductionArtifact = {

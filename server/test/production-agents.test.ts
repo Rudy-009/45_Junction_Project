@@ -471,6 +471,57 @@ test("Storyboard and rehearsal brief use frozen workspace input and cache identi
   }
 });
 
+test("Rehearsal Brief rejects unknown event references and uses a marked deterministic fallback", async () => {
+  const invalidProvider: ProductionAgentProvider = {
+    configFingerprint: (role) => hashJson({ role, config: "unknown-event" }),
+    async run(role) {
+      return {
+        output: {
+          headline: "Agent rehearsal brief",
+          sections: [{
+            department: "STAGE_MANAGEMENT",
+            summary: "References evidence outside the frozen input.",
+            event_ids: ["E999"],
+            finding_ids: [],
+            questions: [],
+          }],
+          missing_evidence: [],
+        },
+        provider_job_id: `job_${role}`,
+        agent_id: `agt_${role}`,
+        config_id: null,
+        adapter_version: "unknown-event.v1",
+        raw_response_sha256: sha256("unknown-event"),
+      };
+    },
+  };
+  const app = await buildApp({
+    apiToken: TOKEN,
+    allowedOrigins: ["http://localhost:5173"],
+    productionAgentProvider: invalidProvider,
+  });
+  try {
+    const { caseId, facts } = await createExtractedCase(app);
+    await freezeAllFacts(app, caseId, facts);
+    const started = await app.inject({
+      method: "POST",
+      url: `/v1/cases/${caseId}/production-agent-runs`,
+      headers: auth(true),
+      payload: { role: "REHEARSAL_BRIEF" },
+    });
+    assert.equal(started.statusCode, 202, started.body);
+    const artifact = await artifactFromOperation(
+      app,
+      (started.json() as { operation_id: string }).operation_id,
+    );
+    assert.equal(artifact.fallback_reason, "UPSTAGE_RESPONSE_REJECTED");
+    assert.deepEqual((artifact.payload as { sections: unknown[] }).sections, []);
+    assert.equal(artifact.provider_job_id, "job_REHEARSAL_BRIEF");
+  } finally {
+    await app.close();
+  }
+});
+
 test("Production Agent output fails closed when it adds a verdict field", async () => {
   const invalidProvider: ProductionAgentProvider = {
     configFingerprint: (role) => hashJson({ role, config: "invalid-output" }),
