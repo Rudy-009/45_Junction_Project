@@ -41,7 +41,7 @@ export class StandbyApiError extends Error {
 
 export type StandbyApiOptions = {
   baseUrl: string;
-  getAccessToken: () => string | Promise<string>;
+  getSessionId: () => string | Promise<string>;
   fetchImpl?: typeof fetch;
 };
 
@@ -167,9 +167,9 @@ export class StandbyApi {
     path: string,
     init: RequestInit & { idempotent?: boolean } = {},
   ): Promise<T> {
-    const token = await this.options.getAccessToken();
+    const sessionId = await this.options.getSessionId();
     const headers = new Headers(init.headers);
-    headers.set("authorization", `Bearer ${token}`);
+    headers.set("x-standby-session", sessionId);
     if (typeof init.body === "string") headers.set("content-type", "application/json");
     if (init.idempotent) headers.set("idempotency-key", crypto.randomUUID());
     const response = await this.fetchImpl(`${this.baseUrl}${path}`, { ...init, headers });

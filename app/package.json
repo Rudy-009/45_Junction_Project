@@ -9,7 +9,6 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.112.3",
     "@tanstack/react-router": "^1.170.18",
     "clsx": "^2.1.1",
     "lucide-react": "^0.575.0",

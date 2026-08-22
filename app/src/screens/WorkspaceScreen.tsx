@@ -161,7 +161,12 @@ export function WorkspaceScreen() {
               ) : undefined
             }
           />
-          <div className="min-h-0 flex-1 overflow-auto p-4">
+          <div
+            className="min-h-0 flex-1 overflow-auto p-4"
+            role="region"
+            tabIndex={0}
+            aria-label={t('workspace.eventDetail')}
+          >
             {selectedEvt ? (
               <EventDetail
                 event={selectedEvt}

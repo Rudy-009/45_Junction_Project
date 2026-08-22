@@ -15,15 +15,18 @@ import {
   type SourceOrigin,
 } from '@/lib/standby-api';
 import { FactReviewPanel, type FactReviewCommand } from '@/components/domain';
-import { useStandbyWorkspaceStore } from '@/store';
+import { useCueSheetStore, useStandbyWorkspaceStore } from '@/store';
 import type { FactCandidate } from '@/types/standby';
-import { authConfigured, completeAuthCallback, getStandbyAccessToken, supabase } from '@/lib/auth';
+import type { CueSheet } from '@/types/cue-sheet';
+import { parseCueSheetJson } from '@/lib/cue-sheet-json';
 import { useI18n, type Locale } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { useNavigate } from '@tanstack/react-router';
 
 const MAX_SOURCE_BYTES = 50 * 1024 * 1024;
 const SOURCE_ORIGIN: SourceOrigin = 'USER_PROVIDED';
+const DEMO_SESSION_KEY = 'standby.demo-session.v1';
+const UUID_V4_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 const ZONES = [
   ['STAGE', '무대'],
@@ -41,6 +44,7 @@ type SelectedSource = {
   file: File;
   sha256: string;
   origin: SourceOrigin;
+  cueSheet?: CueSheet;
 };
 
 type RouteDraft = {
@@ -109,6 +113,14 @@ async function sha256(bytes: BufferSource) {
   return bytesToHex(await crypto.subtle.digest('SHA-256', bytes));
 }
 
+function getDemoSessionId() {
+  const current = localStorage.getItem(DEMO_SESSION_KEY);
+  if (current && UUID_V4_PATTERN.test(current)) return current;
+  const created = crypto.randomUUID();
+  localStorage.setItem(DEMO_SESSION_KEY, created);
+  return created;
+}
+
 async function inspectSourceFile(kind: SourceInputKind, file: File, locale: Locale): Promise<SelectedSource> {
   const config = SOURCE_CONFIG[kind];
   const extension = extensionOf(file.name);
@@ -131,23 +143,18 @@ async function inspectSourceFile(kind: SourceInputKind, file: File, locale: Loca
   if ((extension === 'docx' || extension === 'xlsx') && !isZip) {
     throw new Error(locale === 'ko' ? '확장자와 Office 파일 서명이 일치하지 않습니다.' : 'The extension does not match the Office file signature.');
   }
-  if (extension === 'json') {
-    try {
-      JSON.parse(text);
-    } catch {
-      throw new Error(locale === 'ko' ? 'JSON 파일 형식이 올바르지 않습니다.' : 'The JSON file format is invalid.');
-    }
-  }
+  const cueSheet = extension === 'json' ? parseCueSheetJson(text, locale) : undefined;
 
-  return { file, sha256: await sha256(bytes), origin: SOURCE_ORIGIN };
+  return { file, sha256: await sha256(bytes), origin: SOURCE_ORIGIN, cueSheet };
 }
 
 export function InputScreen() {
   const { locale, t } = useI18n();
-  const authFallbackMessage = t('input.error.review');
   const navigate = useNavigate();
   const setWorkspace = useStandbyWorkspaceStore((state) => state.setWorkspace);
   const clearWorkspace = useStandbyWorkspaceStore((state) => state.clear);
+  const loadCueSheet = useCueSheetStore((state) => state.loadCueSheet);
+  const clearCueSheet = useCueSheetStore((state) => state.clearCueSheet);
   const [masterCue, setMasterCue] = useState<SelectedSource | null>(null);
   const [sourceErrors, setSourceErrors] = useState<Partial<Record<SourceInputKind, string>>>({});
   const [crossover, setCrossover] = useState<Crossover>('UNKNOWN');
@@ -162,30 +169,6 @@ export function InputScreen() {
   const [message, setMessage] = useState<string | null>(null);
   const [caseId, setCaseId] = useState<string | null>(null);
   const [facts, setFacts] = useState<FactCandidate[]>([]);
-  const [authEmail, setAuthEmail] = useState<string | null>(import.meta.env.DEV ? 'local-dev' : null);
-  const [loginEmail, setLoginEmail] = useState('');
-  const [authMessage, setAuthMessage] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!supabase) return;
-    let active = true;
-    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
-      setAuthEmail(session?.user.email ?? null);
-    });
-    void completeAuthCallback()
-      .then((session) => {
-        if (active) setAuthEmail(session?.user.email ?? null);
-      })
-      .catch((error: unknown) => {
-        if (active) {
-          setAuthMessage(error instanceof Error ? error.message : authFallbackMessage);
-        }
-      });
-    return () => {
-      active = false;
-      data.subscription.unsubscribe();
-    };
-  }, [authFallbackMessage]);
 
   const stageSpec = useMemo(() => ({
     contract_version: 'standby.stage-spec.v1',
@@ -256,11 +239,16 @@ export function InputScreen() {
     setCaseId(null);
     setFacts([]);
     clearWorkspace();
+    clearCueSheet();
     setSourceErrors((current) => ({ ...current, [kind]: undefined }));
     try {
       const selected = await inspectSourceFile(kind, file, locale);
       setMasterCue(selected);
       setSourceErrors((current) => ({ ...current, MASTER_CUE: undefined }));
+      if (selected.cueSheet) {
+        loadCueSheet(selected.cueSheet);
+        await navigate({ to: '/workspace' });
+      }
     } catch (error) {
       setMasterCue(null);
       setSourceErrors((current) => ({
@@ -271,23 +259,16 @@ export function InputScreen() {
   };
 
   const ready = Boolean(masterCue);
-  const authenticated = Boolean(authEmail);
 
   const apiClient = () => {
     const baseUrl = import.meta.env.VITE_STANDBY_API_BASE_URL as string | undefined;
-    return baseUrl && (import.meta.env.DEV || authConfigured)
-      ? new StandbyApi({ baseUrl, getAccessToken: getStandbyAccessToken })
+    return baseUrl
+      ? new StandbyApi({ baseUrl, getSessionId: getDemoSessionId })
       : null;
   };
 
   const startExtraction = async () => {
     if (!masterCue) return;
-
-    if (!authenticated) {
-      setPhase('FAILED');
-      setMessage(t('input.error.login'));
-      return;
-    }
 
     const api = apiClient();
     if (!api) {
@@ -357,34 +338,16 @@ export function InputScreen() {
     }
   };
 
+  if (phase === 'UPLOADING' || phase === 'EXTRACTING') {
+    return <ExtractionLoadingScreen phase={phase} />;
+  }
+
   return (
     <main className="min-h-screen bg-background px-4 py-8 text-foreground lg:px-8">
       <div className="mx-auto max-w-[1500px]">
         <header className="border-b border-border pb-5">
           <h1 className="text-2xl font-medium">{t('input.title')}</h1>
         </header>
-
-        {!import.meta.env.DEV && (
-          <AuthPanel
-            configured={authConfigured}
-            email={authEmail}
-            loginEmail={loginEmail}
-            message={authMessage}
-            onEmail={setLoginEmail}
-            onSend={async () => {
-              if (!supabase || !loginEmail.trim()) return;
-              const { error } = await supabase.auth.signInWithOtp({
-                email: loginEmail.trim(),
-                options: { emailRedirectTo: window.location.origin },
-              });
-              setAuthMessage(error ? error.message : t('input.linkSent'));
-            }}
-            onSignOut={async () => {
-              await supabase?.auth.signOut();
-              setAuthMessage(t('input.signedOut'));
-            }}
-          />
-        )}
 
         <section className="mt-6 grid items-start gap-4 lg:grid-cols-2">
           <SourceCard
@@ -410,16 +373,15 @@ export function InputScreen() {
         <footer className="mt-5 flex justify-end border border-border bg-surface p-4">
           <button
             type="button"
-            disabled={!ready || phase === 'UPLOADING' || phase === 'EXTRACTING' || phase === 'REVIEW' || phase === 'VERIFYING'}
+            disabled={!ready || phase === 'REVIEW' || phase === 'VERIFYING'}
             onClick={() => void startExtraction()}
             className={cn(
               'flex min-w-52 items-center justify-center gap-2 border px-5 py-3 text-sm font-medium',
-              ready && phase !== 'UPLOADING' && phase !== 'EXTRACTING' && phase !== 'REVIEW' && phase !== 'VERIFYING'
+              ready && phase !== 'REVIEW' && phase !== 'VERIFYING'
                 ? 'border-foreground bg-foreground text-background hover:bg-muted-foreground'
                 : 'cursor-not-allowed border-border bg-muted text-muted-foreground',
             )}
           >
-            {(phase === 'UPLOADING' || phase === 'EXTRACTING') && <LoaderCircle className="h-4 w-4 animate-spin" />}
             {t('input.start')}
           </button>
         </footer>
@@ -439,51 +401,73 @@ export function InputScreen() {
   );
 }
 
-function AuthPanel({
-  configured,
-  email,
-  loginEmail,
-  message,
-  onEmail,
-  onSend,
-  onSignOut,
-}: {
-  configured: boolean;
-  email: string | null;
-  loginEmail: string;
-  message: string | null;
-  onEmail: (value: string) => void;
-  onSend: () => Promise<void>;
-  onSignOut: () => Promise<void>;
-}) {
+function ExtractionLoadingScreen({ phase }: { phase: 'UPLOADING' | 'EXTRACTING' }) {
   const { t } = useI18n();
-  if (!configured) {
-    return (
-      <section className="mt-5 border border-insufficient bg-insufficient/10 p-4">
-        <p className="text-sm font-medium">{t('input.authMissing')}</p>
-        <p className="mt-1 text-xs leading-5 text-muted-foreground">
-          {t('input.authMissingHelp')}
-        </p>
-      </section>
-    );
-  }
-  if (email) {
-    return (
-      <section className="mt-5 flex items-center justify-between border border-consistent bg-consistent-bg p-4">
-        <div><p className="text-sm font-medium">{t('input.authenticated')}</p><p className="mono mt-1 text-[10px] text-muted-foreground">{email}</p></div>
-        <button type="button" onClick={() => void onSignOut()} className="border border-border px-3 py-2 text-xs">{t('input.signOut')}</button>
-      </section>
-    );
-  }
   return (
-    <section className="mt-5 border border-border bg-surface p-4">
-      <p className="text-sm font-medium">{t('input.signIn')}</p>
-      <div className="mt-3 flex gap-2">
-        <input type="email" value={loginEmail} onChange={(event) => onEmail(event.target.value)} placeholder="team@example.com" className="min-w-0 flex-1 border border-border bg-background px-3 py-2 text-sm" />
-        <button type="button" disabled={!loginEmail.trim()} onClick={() => void onSend()} className="border border-foreground bg-foreground px-4 py-2 text-sm text-background disabled:border-border disabled:bg-muted disabled:text-muted-foreground">{t('input.sendLink')}</button>
+    <section
+      role="status"
+      aria-live="polite"
+      className="fixed inset-0 z-50 overflow-y-auto bg-background px-5 py-10"
+    >
+      <div className="mx-auto flex min-h-full max-w-5xl flex-col justify-center">
+        <div className="brand-mono text-sm tracking-[0.28em]">STANDBY</div>
+        <div className="mt-8 flex items-center gap-3">
+          <LoaderCircle className="h-5 w-5 animate-spin" aria-hidden="true" />
+          <h2 className="text-2xl font-medium">
+            {t(phase === 'UPLOADING' ? 'input.loading.upload' : 'input.loading.extract')}
+          </h2>
+        </div>
+        <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
+          {t('input.loading.result')}
+        </p>
+
+        <div className="mt-10 grid gap-3 md:grid-cols-3" aria-hidden="true">
+          <LoadingPreview title={t('input.loading.stage')}>
+            <div className="grid h-36 grid-cols-[42px_1fr_42px] items-stretch border border-border bg-background">
+              <div className="border-r border-border bg-muted" />
+              <div className="relative">
+                <span className="absolute left-[28%] top-[34%] h-4 w-4 rounded-full border border-person bg-person/20" />
+                <span className="absolute right-[24%] top-[55%] h-4 w-4 border border-prop bg-prop/20" />
+              </div>
+              <div className="border-l border-border bg-muted" />
+            </div>
+          </LoadingPreview>
+          <LoadingPreview title={t('input.loading.evidence')}>
+            <div className="space-y-3">
+              {[0, 1, 2].map((index) => (
+                <div key={index} className="border border-border bg-background p-3">
+                  <div className="h-2 w-20 animate-pulse bg-muted-foreground/30" />
+                  <div className="mt-3 h-2 w-full animate-pulse bg-muted" />
+                  <div className="mt-2 h-2 w-3/4 animate-pulse bg-muted" />
+                </div>
+              ))}
+            </div>
+          </LoadingPreview>
+          <LoadingPreview title={t('input.loading.timeline')}>
+            <div className="flex h-36 items-end gap-2 overflow-hidden border border-border bg-background p-3">
+              {[48, 72, 58, 92, 66].map((height, index) => (
+                <div
+                  key={index}
+                  className="min-w-12 flex-1 border border-border bg-muted"
+                  style={{ height: `${height}%` }}
+                />
+              ))}
+            </div>
+          </LoadingPreview>
+        </div>
+
+        <p className="mt-6 text-xs text-muted-foreground">{t('input.loading.wait')}</p>
       </div>
-      {message && <p className="mt-2 text-xs text-muted-foreground">{message}</p>}
     </section>
+  );
+}
+
+function LoadingPreview({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <article className="border border-border bg-surface p-4">
+      <h3 className="mb-4 text-sm font-medium">{title}</h3>
+      {children}
+    </article>
   );
 }
 
