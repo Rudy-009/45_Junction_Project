@@ -43,6 +43,11 @@ type SelectedSource = {
   batchSize: number;
 };
 
+type MasterCueBatchFile = {
+  file: File;
+  status: 'MASTER_CUE' | 'IGNORED';
+};
+
 type RouteDraft = {
   id: string;
   routeId: string;
@@ -146,7 +151,7 @@ export function InputScreen() {
   const setNormalizerError = useReviewFlowStore((state) => state.setNormalizerError);
   const clearReviewFlow = useReviewFlowStore((state) => state.clear);
   const [masterCue, setMasterCue] = useState<SelectedSource | null>(null);
-  const [ignoredMasterCueFiles, setIgnoredMasterCueFiles] = useState<string[]>([]);
+  const [masterCueBatchFiles, setMasterCueBatchFiles] = useState<MasterCueBatchFile[]>([]);
   const [sourceErrors, setSourceErrors] = useState<Partial<Record<InputErrorKind, string>>>({});
   const [crossover, setCrossover] = useState<Crossover>('UNKNOWN');
   const [minimumChangeSeconds, setMinimumChangeSeconds] = useState('60');
@@ -229,7 +234,7 @@ export function InputScreen() {
     clearWorkspace();
     clearCueSheet();
     setSourceErrors((current) => ({ ...current, [kind]: undefined }));
-    setIgnoredMasterCueFiles([]);
+    setMasterCueBatchFiles([]);
     try {
       const candidates = files.filter((file) => SOURCE_CONFIG[kind].extensions.includes(extensionOf(file.name)));
       if (candidates.length === 0) {
@@ -248,7 +253,10 @@ export function InputScreen() {
         throw new Error(locale === 'ko' ? '선택한 파일에서 유효한 큐시트를 찾지 못했습니다.' : 'No valid cue sheet was found in the selected files.');
       }
       setMasterCue({ ...selected, batchSize: files.length });
-      setIgnoredMasterCueFiles(files.filter((file) => file !== selected.file).map((file) => file.name));
+      setMasterCueBatchFiles(files.map((file) => ({
+        file,
+        status: file === selected.file ? 'MASTER_CUE' : 'IGNORED',
+      })));
       setSourceErrors((current) => ({ ...current, MASTER_CUE: undefined }));
     } catch (error) {
       setMasterCue(null);
@@ -325,7 +333,7 @@ export function InputScreen() {
       await api.waitForOperation(operation.operation_id);
       const queue = await api.getReviewQueue(createdCase.case_id);
       if (masterCue.batchSize > 1) {
-        const remaining = 8_000 - (Date.now() - extractionStartedAt);
+        const remaining = 12_000 - (Date.now() - extractionStartedAt);
         if (remaining > 0) await new Promise((resolve) => window.setTimeout(resolve, remaining));
       }
       setReviewFlowContext({
@@ -382,7 +390,7 @@ export function InputScreen() {
               kind="MASTER_CUE"
               source={masterCue}
               error={sourceErrors.MASTER_CUE}
-              ignoredFiles={ignoredMasterCueFiles}
+              batchFiles={masterCueBatchFiles}
               onFiles={(files) => void selectSources('MASTER_CUE', files)}
             />
             <RawJsonCard
@@ -574,13 +582,13 @@ function SourceCard({
   kind,
   source,
   error,
-  ignoredFiles,
+  batchFiles,
   onFiles,
 }: {
   kind: SourceInputKind;
   source: SelectedSource | null;
   error?: string;
-  ignoredFiles: string[];
+  batchFiles: MasterCueBatchFile[];
   onFiles: (files: File[]) => void;
 }) {
   const { t } = useI18n();
@@ -643,15 +651,25 @@ function SourceCard({
           </div>
         ) : source ? (
           <div className="space-y-2 text-xs">
-            <dl className="space-y-2">
-              <SourceRow label={t('input.file')} value={source.file.name} />
-              <SourceRow label={t('input.size')} value={`${(source.file.size / 1024 / 1024).toFixed(2)} MB`} />
-            </dl>
-            {ignoredFiles.length > 0 && (
-              <p className="text-[11px] leading-5 text-muted-foreground">
-                {t('input.cue.ignored', { count: ignoredFiles.length })}: {ignoredFiles.join(', ')}
-              </p>
-            )}
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-medium">{t('input.cue.files')}</span>
+              <span className="mono text-[10px] text-muted-foreground">{batchFiles.length}</span>
+            </div>
+            <div className="divide-y divide-border border border-border">
+              {batchFiles.map(({ file, status }, index) => (
+                <div key={`${file.name}:${file.size}:${index}`} className="flex items-center gap-3 p-3">
+                  <span className="border border-border p-2"><FileSpreadsheet className="h-4 w-4" /></span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-xs font-medium">{file.name}</p>
+                    <p className="mono mt-1 text-[10px] text-muted-foreground">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
+                  </div>
+                  <span className={cn(
+                    'mono border px-2 py-1 text-[9px]',
+                    status === 'MASTER_CUE' ? 'border-consistent text-consistent' : 'border-border text-muted-foreground',
+                  )}>{status}</span>
+                </div>
+              ))}
+            </div>
             <button type="button" aria-expanded={detailsOpen} onClick={() => setDetailsOpen((open) => !open)} className="ml-auto flex items-center gap-1 text-[10px] text-muted-foreground"><Info size={12} />{t('input.details')}</button>
             {detailsOpen && (
               <dl className="space-y-2 border-t border-border pt-2">
