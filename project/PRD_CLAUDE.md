@@ -315,6 +315,9 @@ loading scene을 사용한다. 이 loop는 실제 진행률이 아니며 상태�
   Upstage Script Extractor 결과를 strict `standby.script-projection.v1`으로 투영한다
 - projection과 raw fact는 현재 case ID에 귀속된다. 새 대본 연결은 기존 snapshot을 무효화하고 Fact Review로
   돌아가며, 사람이 새 snapshot을 freeze한 뒤에만 SCRIPT가 세 근거 중 하나로 사용된다
+- RAW JSON 로컬 Editor에서는 standalone Script Projection을 사용한다. 이 projection은 JSON의 exact
+  `event_id` 또는 유일한 장면명 일치로 자동 연결하고, 나머지는 사람이 현재 event에 연결한다. case review
+  authority는 얻지 않지만 연결 결과를 표준 CSV 큐시트에 대사·지문 열로 내보낼 수 있다
 - exact `event_id`가 있거나, Script Extractor가 원문에서 보존한 `section_marker`가 큐시트의 장면명과
   유일하게 일치하는 실제 `DIALOGUE`·`STAGE_DIRECTION`만 자동으로 event별 발췌에 묶는다.
   근거가 없거나 둘 이상과 일치하는 구간은 사람이 선택한 현재 event에 연결한다
@@ -459,6 +462,9 @@ XLSX in  →  Parse · Extract  →  검증 · 편집  →  XLSX out
 ACTION·CAST·LOCATION·NOTES 순서를 Word와 PDF에서 동일하게 유지하고, 값이 없는 칸은 삭제하지 않고
 밑줄 빈칸으로 남긴다. Word는 `.docx`, PDF는 같은 인쇄 HTML을 브라우저의 PDF 저장으로 출력한다.
 두 실행본에도 verdict는 포함하지 않는다.
+
+RAW JSON Editor의 표준 CSV는 같은 이벤트·액션 행에 매핑된 `SCRIPT_KIND`·`SPEAKER`·`SCRIPT_TEXT`·
+`SCRIPT_LOCATOR`를 추가한다. 자동·수동 연결이 끝난 대본 구간만 들어가며, 미연결 구간을 임의 배치하지 않는다.
 
 마지막 항목이 중요하다. 큐시트에 `VIOLATION`을 찍어 배포하면 현장이 혼란스러워진다.
 판정은 STANDBY 안에 남고, 나가는 것은 **합의된 실행 값**뿐이다.

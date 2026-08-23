@@ -36,9 +36,9 @@ UUID 세션으로 case 소유권을 분리한다. 이 값은 사용자 신원을
 | KOR/ENG i18n | **구현** | 헤더 선택 메뉴로 M3 입력·review·workspace·2D 무대 카피를 전환하고 선택을 localStorage에 보존 |
 | UI 카피 정리 | **구현** | 설명형 슬로건·면책·중복 제목을 제거하고, 선택 화면은 선택지만 남김. 오류·제약·상태와 provenance/hash는 유지하되 provenance는 요청 시 펼침 |
 | 입력 | **구현** | MASTER_CUE XLSX/PDF/JSON 한 칸과 STAGE_SPEC 폼을 받음 |
-| Script Sidebar | **case 통합 구현** | DOCX 우선·PDF 보조 파일을 현재 case의 `SCRIPT` source로 업로드한다. Upstage projection의 raw facts는 같은 review queue에 `UNREVIEWED`로 합류하고 기존 snapshot은 무효화된다. 재검토·freeze 후 세 source digest가 workspace에 반영된다 |
+| Script Sidebar | **case·RAW JSON 구현** | DOCX 우선·PDF 보조. verified case에서는 `SCRIPT` source와 review queue에 통합한다. RAW JSON Editor에서는 standalone Upstage projection을 만들고 exact event ID·유일한 장면명은 자동 연결하며 나머지는 사람이 현재 event에 연결한다 |
 | 로컬 파일 방어 | **구현** | 확장자·signature·50 MiB·SHA-256 검사. 미리 정한 파일명 없음 |
-| RAW JSON 입력 | **직접 Editor 경로 구현** | MASTER_CUE와 별도인 `RAW JSON` 섹션에서 STANDBY CueSheet JSON을 받는다. 브라우저 strict 구조 검사를 통과하면 Upstage를 호출하지 않고 즉시 로컬 CueSheet Editor와 결정론적 validator로 연다. 서버 case가 없는 이 경로에서는 Script 연결을 오류로 표시하지 않고 MASTER_CUE 추출 워크스페이스 기능임을 안내한다. 공개 CueSheet JSON에는 duration 추정 필드 없음 |
+| RAW JSON 입력 | **직접 Editor 경로 구현** | MASTER_CUE와 별도인 `RAW JSON` 섹션에서 STANDBY CueSheet JSON을 받는다. 브라우저 strict 구조 검사를 통과하면 CueSheet 자체는 Upstage를 호출하지 않고 즉시 로컬 Editor와 결정론적 validator로 연다. 이후 연결한 Script만 standalone Upstage projection으로 처리한다. 공개 CueSheet JSON에는 duration 추정 필드 없음 |
 | 비정형 JSON 전달 | **서버 호환 유지** | 서버 API로 직접 들어오는 비정형 JSON source는 원본 bytes/hash를 보존하고, Upstage가 필요한 경로에서만 JSON Pointer 행의 임시 XLSX로 변환한다. 입력 화면이 허용하는 STANDBY CueSheet JSON에는 이 경로를 쓰지 않는다 |
 | 무대 사양 | **구현** | crossover, 환복 시간, route time, route ID/capacity, 인물·소품 초기 배치 |
 | Upstage 추출 | **구현** | Agent 결과를 모두 UNREVIEWED/NON_AUTHORITATIVE로 격리한다. Sidebar 대본도 현재 case의 source·review queue·snapshot으로 수렴하며, 읽기 전용 projection은 같은 case ID를 명시한다 |
@@ -68,6 +68,7 @@ UUID 세션으로 case 소유권을 분리한다. 이 값은 사용자 신원을
 | 실제 reference fidelity | **미검증** | 합성 live smoke는 통과했지만 공연 원본 gold fact 대조는 아직 없음 |
 | XLSX 왕복·refresh | **구현·운영 배포** | 원본 bytes에서 수정 셀과 명시적 이벤트 행 추가·삭제만 적용해 새 XLSX를 만든다. 시트·서식·빈 행/열은 보존하며 동일 hash는 Upstage를 재호출하지 않고, 변경 hash의 새 fact는 UNREVIEWED로 되돌린다 |
 | 표준 실행본 export | **구현·운영 배포** | 같은 revision을 EVENT·TRIGGER·DEPARTMENT·ACTION·CAST·LOCATION·NOTES 단일 양식으로 매핑하고, 누락값은 빈칸으로 둔 Word `.docx`와 브라우저 PDF 인쇄본을 제공한다 |
+| RAW JSON 표준 CSV export | **구현** | 로컬 Editor의 현재 cue/action에 자동·수동 연결된 Script의 kind·speaker·text·locator를 합쳐 UTF-8 CSV로 내보낸다. 미연결 Script 구간과 verdict는 넣지 않는다 |
 
 ---
 

@@ -19,6 +19,7 @@ import { createStandbyBrowserApi, StandbyApiError } from '@/lib/standby-api';
 import { useNavigate } from '@tanstack/react-router';
 import { useI18n } from '@/lib/i18n';
 import { buildScriptSidebarEntries, unlinkedScriptSegments } from '@/lib/script-projection';
+import { cueSheetCsv } from '@/lib/cue-sheet-csv';
 import type { ScriptEventLinks, ScriptProjection } from '@/types/script';
 
 // ─── Helpers ───────────────────────────────────────────────
@@ -213,12 +214,19 @@ export function WorkspaceScreen() {
       setScriptError(t('workspace.scriptApiMissing'));
       return;
     }
-    if (!verifiedCaseId) {
-      setScriptError(t('workspace.scriptApiMissing'));
-      return;
-    }
     setScriptBusy(true);
     try {
+      if (!verifiedCaseId) {
+        const operation = await api.startScriptProjection(file);
+        const completed = await api.waitForOperation(operation.operation_id);
+        if (completed.resource_ref.type !== 'script_projection') {
+          throw new Error(t('workspace.scriptInvalid'));
+        }
+        const projection = await api.getScriptProjection(completed.resource_ref.id);
+        setScript(projection);
+        setScriptLinks({});
+        return;
+      }
       await api.uploadSourceFile(verifiedCaseId, 'SCRIPT', file);
       const operation = await api.startCaseScriptProjection(verifiedCaseId);
       const completed = await api.waitForOperation(operation.operation_id);
@@ -368,6 +376,19 @@ export function WorkspaceScreen() {
     setCueChanges({});
   };
 
+  const exportLocalCueSheet = () => {
+    if (!editorCueSheet) return;
+    const blob = new Blob([cueSheetCsv(editorCueSheet, script, scriptLinks)], {
+      type: 'text/csv;charset=utf-8',
+    });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `${editorCueSheet.metadata.title || 'standby-cue-sheet'}-standby.csv`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
+
   if (verifiedWorkspace) {
     return (
       <VerifiedWorkspace
@@ -466,6 +487,7 @@ export function WorkspaceScreen() {
       onEdit={editCueCell}
       onDiscardAll={discardCueChanges}
       onSave={saveCueChanges}
+      onExportCsv={exportLocalCueSheet}
       onLoadRevision={loadRevision}
     />
   );
@@ -539,7 +561,6 @@ export function WorkspaceScreen() {
           script={script}
           unlinkedSegments={unlinkedSegments}
           busy={scriptBusy}
-          connectionAvailable={Boolean(verifiedCaseId)}
           error={scriptError}
           selectedEventId={selectedEventId}
           onScriptFile={(file) => void connectScript(file)}
