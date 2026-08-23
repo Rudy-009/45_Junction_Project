@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Check, Plus, X } from 'lucide-react';
 import {
   NORMALIZED_FACT_TYPES,
@@ -230,6 +230,13 @@ export function FactReviewPanel({
       return [fact.fact_id, recommendation ? draftFor(fact.fact_id, recommendation) : null];
     })),
   );
+  useEffect(() => {
+    setCustomDrafts((current) => Object.fromEntries(facts.map((fact) => {
+      if (current[fact.fact_id]) return [fact.fact_id, current[fact.fact_id]];
+      const recommendation = recommendationByFact.get(fact.fact_id);
+      return [fact.fact_id, recommendation ? draftFor(fact.fact_id, recommendation) : null];
+    })));
+  }, [facts, recommendationByFact]);
   const [decisions, setDecisions] = useState<Record<string, ReviewDecision>>(() =>
     Object.fromEntries(facts.map((fact) => [fact.fact_id, 'PENDING'])),
   );
