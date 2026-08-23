@@ -179,6 +179,7 @@ export function CueSheetEditorPanel({
   onEdit,
   onDiscardAll,
   onSave,
+  onExportCsv,
   onLoadRevision,
 }: {
   cueSheet: CueSheet;
@@ -192,6 +193,7 @@ export function CueSheetEditorPanel({
   onEdit: (edit: CueCellEdit) => void;
   onDiscardAll: () => void;
   onSave: () => void;
+  onExportCsv?: () => void;
   onLoadRevision: (revisionId: string) => void;
 }) {
   const { locale } = useI18n();
@@ -206,6 +208,7 @@ export function CueSheetEditorPanel({
     pending: `미반영 변경 ${changes.length}건`,
     discard: '모든 변경 취소',
     save: '저장',
+    exportCsv: 'CSV 내보내기',
     history: '히스토리',
     historyEmpty: '저장된 revision이 없습니다.',
     changes: '변경',
@@ -226,6 +229,7 @@ export function CueSheetEditorPanel({
     pending: `${changes.length} UNSAVED`,
     discard: 'Discard all',
     save: 'Save',
+    exportCsv: 'Export CSV',
     history: 'History',
     historyEmpty: 'No saved revisions.',
     changes: 'changes',
@@ -370,6 +374,11 @@ export function CueSheetEditorPanel({
           <button type="button" disabled={changes.length === 0} onClick={onSave} className="border border-foreground bg-foreground px-3 py-1 text-[10px] text-background hover:bg-muted-foreground disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground">
             {copy.save}
           </button>
+          {onExportCsv && (
+            <button type="button" onClick={onExportCsv} className="border border-border px-2 py-1 text-[10px] hover:bg-muted">
+              {copy.exportCsv}
+            </button>
+          )}
           <button
             type="button"
             aria-expanded={historyOpen}
