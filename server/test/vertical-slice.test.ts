@@ -88,10 +88,48 @@ async function createHeroCase() {
 test("health is public but domain endpoints require a valid actor session", async () => {
   const health = await app.inject({ method: "GET", url: "/healthz" });
   assert.equal(health.statusCode, 200);
+  assert.deepEqual(health.json(), {
+    status: "ok",
+    commit: null,
+    deployment_id: null,
+    started_at: null,
+  });
 
   const unauthorized = await app.inject({ method: "GET", url: "/v1/cases/nope/workspace" });
   assert.equal(unauthorized.statusCode, 401);
   assert.equal((unauthorized.json() as { error: { code: string } }).error.code, "UNAUTHENTICATED");
+});
+
+test("health reports deployment identity when supplied", async () => {
+  const deploymentApp = await buildApp({
+    allowedOrigins: ["https://standby.example"],
+    deployment: {
+      commitSha: "abc123",
+      deploymentId: "deployment-1",
+      startedAt: "2026-08-23T00:00:00.000Z",
+    },
+  });
+  const health = await deploymentApp.inject({ method: "GET", url: "/healthz" });
+  assert.deepEqual(health.json(), {
+    status: "ok",
+    commit: "abc123",
+    deployment_id: "deployment-1",
+    started_at: "2026-08-23T00:00:00.000Z",
+  });
+  await deploymentApp.close();
+});
+
+test("disallowed origins return a traceable 403 instead of an opaque 500", async () => {
+  const response = await app.inject({
+    method: "OPTIONS",
+    url: "/v1/cases",
+    headers: {
+      origin: "https://unexpected.example",
+      "access-control-request-method": "POST",
+    },
+  });
+  assert.equal(response.statusCode, 403, response.body);
+  assert.equal((response.json() as { code: string }).code, "ORIGIN_NOT_ALLOWED");
 });
 
 test("reviewed facts require normalized values and failed batches are atomic", async () => {
