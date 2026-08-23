@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Check, Plus, X } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Plus, X } from 'lucide-react';
 import {
   NORMALIZED_FACT_TYPES,
   type FactCandidate,
@@ -133,8 +133,8 @@ function normalizedValue(draft: ReviewDraft): Record<string, unknown> {
 
 function validationError(draft: ReviewDraft | null, locale: Locale): string | null {
   if (!draft) return locale === 'ko'
-    ? '유효한 Upstage 추천값이 없어 승인할 수 없습니다.'
-    : 'No valid Upstage recommendation is available.';
+    ? '적용 가능한 추천값이 없습니다. 확인하면 이 항목은 판정 입력에서 제외됩니다.'
+    : 'No applicable recommendation. Confirm to exclude this fact from verification.';
   for (const [field, value] of Object.entries(draft.fields)) {
     if (BOOLEAN_FIELDS.has(field)) continue;
     const text = String(value);
@@ -240,6 +240,10 @@ export function FactReviewPanel({
   const [decisions, setDecisions] = useState<Record<string, ReviewDecision>>(() =>
     Object.fromEntries(facts.map((fact) => [fact.fact_id, 'PENDING'])),
   );
+  const [activeIndex, setActiveIndex] = useState(0);
+  useEffect(() => {
+    setActiveIndex((current) => Math.min(current, Math.max(0, facts.length - 1)));
+  }, [facts.length]);
   const activeDrafts = mode === 'RECOMMENDED' ? recommendedDrafts : customDrafts;
   const pending = Object.values(decisions).filter((decision) => decision === 'PENDING').length;
   const draftErrors = useMemo(() => Object.fromEntries(
@@ -261,6 +265,11 @@ export function FactReviewPanel({
 
   const setDecision = (factId: string, decision: ReviewDecision) => {
     setDecisions((current) => ({ ...current, [factId]: decision }));
+  };
+
+  const decideAndAdvance = (factId: string, decision: ReviewDecision) => {
+    setDecision(factId, decision);
+    setActiveIndex((current) => Math.min(current + 1, Math.max(0, facts.length - 1)));
   };
 
   const approveAllCustom = () => {
@@ -291,6 +300,13 @@ export function FactReviewPanel({
     onSubmit(reviews);
   };
 
+  const fact = facts[activeIndex] ?? null;
+  const recommendation = fact ? recommendationByFact.get(fact.fact_id) ?? null : null;
+  const draft = fact ? activeDrafts[fact.fact_id] ?? null : null;
+  const decision = fact ? decisions[fact.fact_id] ?? 'PENDING' : 'PENDING';
+  const fields = draft ? FIELD_MAP[draft.normalizedType] ?? [] : [];
+  const error = fact ? draftErrors[fact.fact_id] : null;
+
   return (
     <section className="mt-6 border border-border bg-surface">
       <div className="flex flex-wrap items-start justify-between gap-4 border-b border-border p-4">
@@ -320,17 +336,17 @@ export function FactReviewPanel({
               <Check size={12} /> {t('review.approveAll')}
             </button>
           )}
+          <div className="flex items-center border border-border">
+            <button type="button" aria-label={t('review.previous')} disabled={activeIndex === 0} onClick={() => setActiveIndex((current) => Math.max(0, current - 1))} className="border-r border-border p-1.5 disabled:opacity-30"><ChevronLeft size={14} /></button>
+            <span className="mono min-w-16 px-2 text-center text-[11px]">{facts.length === 0 ? 0 : activeIndex + 1} / {facts.length}</span>
+            <button type="button" aria-label={t('review.next')} disabled={activeIndex >= facts.length - 1} onClick={() => setActiveIndex((current) => Math.min(facts.length - 1, current + 1))} className="border-l border-border p-1.5 disabled:opacity-30"><ChevronRight size={14} /></button>
+          </div>
           <span className="mono text-[11px] text-muted-foreground">{facts.length - pending}/{facts.length} DECIDED</span>
         </div>
       </div>
 
-      <div className="divide-y divide-border">
-        {facts.map((fact) => {
-          const recommendation = recommendationByFact.get(fact.fact_id) ?? null;
-          const draft = activeDrafts[fact.fact_id] ?? null;
-          const decision = decisions[fact.fact_id] ?? 'PENDING';
-          const fields = draft ? FIELD_MAP[draft.normalizedType] ?? [] : [];
-          return (
+      <div>
+        {fact && (
             <article key={fact.fact_id} className="grid gap-4 p-4 xl:grid-cols-[220px_1fr_1fr]">
               <div>
                 <div className="mono text-[10px] text-muted-foreground">{fact.source_role}</div>
@@ -338,8 +354,14 @@ export function FactReviewPanel({
                 <div className="mono mt-2 text-[10px] text-muted-foreground">{fact.locator}</div>
                 <blockquote className="mt-2 border-l border-border-strong pl-2 text-xs leading-5">{fact.quote}</blockquote>
                 <div className="mt-3 flex gap-2">
-                  <button type="button" disabled={busy || !draft || Boolean(draftErrors[fact.fact_id])} onClick={() => setDecision(fact.fact_id, 'REVIEWED')} className={cn('flex items-center gap-1 border px-2 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-40', decision === 'REVIEWED' ? 'border-consistent text-consistent' : 'border-border')}><Check size={12} /> {t('review.approve')}</button>
-                  <button type="button" disabled={busy} onClick={() => setDecision(fact.fact_id, 'REJECTED')} className={cn('flex items-center gap-1 border px-2 py-1 text-xs disabled:opacity-40', decision === 'REJECTED' ? 'border-violation text-violation' : 'border-border')}><X size={12} /> {t('review.reject')}</button>
+                  {!draft || error ? (
+                    <button type="button" disabled={busy} onClick={() => decideAndAdvance(fact.fact_id, 'REJECTED')} className={cn('flex items-center gap-1 border px-2 py-1 text-xs disabled:opacity-40', decision === 'REJECTED' ? 'border-insufficient text-insufficient' : 'border-border')}><Check size={12} /> {t('review.confirmNext')}</button>
+                  ) : (
+                    <>
+                      <button type="button" disabled={busy} onClick={() => decideAndAdvance(fact.fact_id, 'REVIEWED')} className={cn('flex items-center gap-1 border px-2 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-40', decision === 'REVIEWED' ? 'border-consistent text-consistent' : 'border-border')}><Check size={12} /> {t('review.approve')}</button>
+                      <button type="button" disabled={busy} onClick={() => decideAndAdvance(fact.fact_id, 'REJECTED')} className={cn('flex items-center gap-1 border px-2 py-1 text-xs disabled:opacity-40', decision === 'REJECTED' ? 'border-violation text-violation' : 'border-border')}><X size={12} /> {t('review.reject')}</button>
+                    </>
+                  )}
                 </div>
               </div>
 
@@ -394,11 +416,10 @@ export function FactReviewPanel({
                     ))}
                   </div>
                 )}
-                {draftErrors[fact.fact_id] && <p className="mt-2 text-xs text-violation">{draftErrors[fact.fact_id]}</p>}
+                {error && <p className={cn('mt-2 text-xs', draft ? 'text-violation' : 'text-muted-foreground')}>{error}</p>}
               </div>
             </article>
-          );
-        })}
+        )}
       </div>
 
       <div className="flex items-center justify-between border-t border-border p-4">
