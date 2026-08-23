@@ -217,6 +217,7 @@ function ServerRevisionPanel({
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [exportStatus, setExportStatus] = useState<string | null>(null);
   const refreshInput = useRef<HTMLInputElement>(null);
   const target = finding?.target_locator ?? null;
   const canExportXlsx = workspace.sources.some((source) =>
@@ -258,6 +259,7 @@ function ServerRevisionPanel({
     if (!api) return;
     setBusy(true);
     setError(null);
+    setExportStatus(null);
     try {
       await api.createCueRevision(workspace.case_id, {
         base_revision_id: current.revision_id,
@@ -315,8 +317,19 @@ function ServerRevisionPanel({
       anchor.download = filename;
       anchor.click();
       URL.revokeObjectURL(url);
+      setExportStatus(locale === 'ko' ? '내보내기 완료' : 'Export Complete');
     } catch (exportError) {
-      setError(exportError instanceof Error ? exportError.message : 'XLSX export failed.');
+      if (!current.rows) {
+        setError(exportError instanceof Error ? exportError.message : 'XLSX export failed.');
+        return;
+      }
+      const columns = [...new Set(current.rows.flatMap((row) => Object.keys(row)))];
+      const escape = (value: unknown) => `"${String(value ?? '').replaceAll('"', '""')}"`;
+      const csv = `\uFEFF${[columns, ...current.rows.map((row) => columns.map((column) => row[column] ?? ''))]
+        .map((row) => row.map(escape).join(','))
+        .join('\r\n')}`;
+      downloadBlob(new Blob([csv], { type: 'text/csv;charset=utf-8' }), 'master-cue-standby-fallback.csv');
+      setExportStatus(locale === 'ko' ? '내보내기 완료 · CSV 대체 파일' : 'Export Complete · CSV fallback');
     } finally {
       setBusy(false);
     }
@@ -437,6 +450,7 @@ function ServerRevisionPanel({
               {locale === 'ko' ? 'XLSX 내보내기' : 'Export XLSX'}
             </button>
           )}
+          {exportStatus && <span role="status" className="text-[10px] text-consistent">{exportStatus}</span>}
           <button type="button" disabled={busy || !current} className="border border-border px-2 py-1 text-[10px]" onClick={() => void exportDocx()}>
             {locale === 'ko' ? 'Word 실행본' : 'Word handoff'}
           </button>
