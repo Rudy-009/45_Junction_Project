@@ -285,10 +285,11 @@ live smoke는 끝나지 않았으므로 운영 검증 또는 배포 완료라고
 | **Rehearsal Brief** | reviewed graph와 결정론적 finding·calculation·missing fact·evidence ref | 무대감독용 요약, event/department별 확인 질문, unknown 목록 | verifier result가 새로 만들어질 때 | verifier result hash + locale + Agent/Config ID + input hash | 새 finding·severity·안전 결론을 만들지 않음. 기존 근거를 짧게 설명하는 읽기 전용 산출물 |
 
 `추출 결과 확인(Extraction Review)`은 목록 전체에 적용되는 `추천값`과 `사용자화` 두 mode를 가진다. fact card마다 mode를
-반복하지 않고, 한 번에 한 fact만 표시해 좌우 chevron으로 이동한다. 승인·제외 뒤에는 다음 fact로 이동한다.
+반복하지 않고, 한 번에 한 fact만 표시해 Extracted Fields 옆 좌우 chevron으로 이동한다. 승인·제외 뒤에는 다음 fact로 이동한다.
 유효한 Upstage 추천이 없는 fact도 진행을 막지 않는다. 사용자가 `확인하고 다음`을 누르면 해당 fact를
 `REJECTED`로 기록해 판정 authority에서 제외하며, 빈 추천값을 임의의 normalized fact로 승인하지 않는다.
-추천 mode는 Fact Normalizer의 type·value를 읽기 전용으로 보여 준다. 사용자화 mode에서도
+추천 mode는 별도의 `Upstage Agent Recommendation` 패널을 표시하지 않고 원문 근거와 Extracted Fields만
+검토 대상으로 보여 준다. 내부적으로 사용되는 normalized 추천은 승인 record의 provenance로만 남긴다. 사용자화 mode에서는
 normalized type은 Agent가 고른 allowlist 값으로 고정하고 필드 값만 사람이 고친다. 정규화 type selector는
 두지 않으며, type이 잘못되면 다른 type을 임의 선택하지 않고 해당 추천을 거절한다. `일괄 승인`은 검증을
 통과한 사용자화 draft에만 사람이 명시적으로 누르는 bulk action이며, 각 fact의 개별 review record를 남긴다.
