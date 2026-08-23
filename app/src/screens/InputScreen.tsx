@@ -140,6 +140,9 @@ export function InputScreen() {
   const loadCueSheet = useCueSheetStore((state) => state.loadCueSheet);
   const clearCueSheet = useCueSheetStore((state) => state.clearCueSheet);
   const setReviewFlowContext = useReviewFlowStore((state) => state.setReviewContext);
+  const setNormalizerLoading = useReviewFlowStore((state) => state.setNormalizerLoading);
+  const setNormalizerArtifact = useReviewFlowStore((state) => state.setNormalizerArtifact);
+  const setNormalizerError = useReviewFlowStore((state) => state.setNormalizerError);
   const clearReviewFlow = useReviewFlowStore((state) => state.clear);
   const [masterCue, setMasterCue] = useState<SelectedSource | null>(null);
   const [sourceErrors, setSourceErrors] = useState<Partial<Record<InputErrorKind, string>>>({});
@@ -301,25 +304,33 @@ export function InputScreen() {
       const operation = await api.startExtraction(createdCase.case_id, 'UPSTAGE_AGENT');
       await api.waitForOperation(operation.operation_id);
       const queue = await api.getReviewQueue(createdCase.case_id);
-
-      setPhase('NORMALIZING');
-      setMessage(t('input.status.normalize'));
-      const normalizerOperation = await api.startProductionAgent(createdCase.case_id, 'FACT_NORMALIZER');
-      const completedNormalizer = await api.waitForOperation(normalizerOperation.operation_id);
-      if (completedNormalizer.resource_ref.type !== 'production_artifact') {
-        throw new Error(locale === 'ko'
-          ? 'Fact Normalizer 결과 위치가 올바르지 않습니다.'
-          : 'The Fact Normalizer returned an invalid result reference.');
-      }
-      const artifact = await api.getFactNormalizerArtifact(completedNormalizer.resource_ref.id);
       setReviewFlowContext({
         caseId: createdCase.case_id,
         facts: queue.items,
-        normalizerArtifact: artifact,
+        normalizerArtifact: null,
       });
       setPhase('REVIEW');
       setMessage(t('input.status.review', { count: queue.items.length }));
+      setNormalizerLoading(createdCase.case_id);
       await navigate({ to: '/review/mode' });
+      void (async () => {
+        try {
+          const normalizerOperation = await api.startProductionAgent(createdCase.case_id, 'FACT_NORMALIZER');
+          const completedNormalizer = await api.waitForOperation(normalizerOperation.operation_id);
+          if (completedNormalizer.resource_ref.type !== 'production_artifact') {
+            throw new Error(locale === 'ko'
+              ? 'Fact Normalizer 결과 위치가 올바르지 않습니다.'
+              : 'The Fact Normalizer returned an invalid result reference.');
+          }
+          const artifact = await api.getFactNormalizerArtifact(completedNormalizer.resource_ref.id);
+          setNormalizerArtifact(createdCase.case_id, artifact);
+        } catch (error) {
+          setNormalizerError(
+            createdCase.case_id,
+            error instanceof Error ? error.message : t('input.error.extract'),
+          );
+        }
+      })();
     } catch (error) {
       setPhase('FAILED');
       setMessage(

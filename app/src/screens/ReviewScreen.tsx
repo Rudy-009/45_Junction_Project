@@ -11,10 +11,12 @@ function useReviewFlowState() {
   const caseId = useReviewFlowStore((state) => state.caseId);
   const facts = useReviewFlowStore((state) => state.facts);
   const normalizerArtifact = useReviewFlowStore((state) => state.normalizerArtifact);
+  const normalizerStatus = useReviewFlowStore((state) => state.normalizerStatus);
+  const normalizerError = useReviewFlowStore((state) => state.normalizerError);
   const mode = useReviewFlowStore((state) => state.mode);
   const setWorkspace = useStandbyWorkspaceStore((state) => state.setWorkspace);
   const clearReviewFlow = useReviewFlowStore((state) => state.clear);
-  return { caseId, facts, normalizerArtifact, mode, setWorkspace, clearReviewFlow };
+  return { caseId, facts, normalizerArtifact, normalizerStatus, normalizerError, mode, setWorkspace, clearReviewFlow };
 }
 
 export function ReviewScreen() {
@@ -22,7 +24,10 @@ export function ReviewScreen() {
   const navigate = useNavigate();
   const [phase, setPhase] = useState<'IDLE' | 'VERIFYING' | 'FAILED'>('IDLE');
   const [message, setMessage] = useState<string | null>(null);
-  const { caseId, facts, normalizerArtifact, mode, setWorkspace, clearReviewFlow } = useReviewFlowState();
+  const {
+    caseId, facts, normalizerArtifact, normalizerStatus, normalizerError,
+    mode, setWorkspace, clearReviewFlow,
+  } = useReviewFlowState();
 
   const completeReview = async (reviews: FactReviewCommand[]) => {
     const api = createStandbyBrowserApi();
@@ -84,10 +89,23 @@ export function ReviewScreen() {
             agentId: normalizerArtifact.agent_id,
             configId: normalizerArtifact.config_id,
           } : null}
-          busy={phase === 'VERIFYING'}
+          busy={phase === 'VERIFYING' || normalizerStatus === 'LOADING'}
           initialMode={isCustomMode ? 'CUSTOM' : 'RECOMMENDED'}
           onSubmit={(reviews) => void completeReview(reviews)}
         />
+
+        {normalizerStatus === 'LOADING' && (
+          <div className="mt-4 flex items-center gap-3 border border-border bg-surface p-3 text-xs" role="status">
+            <LoaderCircle className="h-4 w-4 animate-spin" />
+            <span>{t('review.normalizerBackground')}</span>
+          </div>
+        )}
+        {normalizerStatus === 'FAILED' && (
+          <div className="mt-4 flex items-center gap-3 border border-review bg-review-bg p-3 text-xs text-review" role="alert">
+            <AlertTriangle className="h-4 w-4" />
+            <span>{t('review.normalizerFailed')} {normalizerError}</span>
+          </div>
+        )}
 
         {message && (
           <div className={cn(

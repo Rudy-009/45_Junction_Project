@@ -1,4 +1,5 @@
 import { useNavigate } from '@tanstack/react-router';
+import { LoaderCircle } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 import { useReviewFlowStore } from '@/store';
 
@@ -6,6 +7,7 @@ export function ReviewModeScreen() {
   const navigate = useNavigate();
   const { t } = useI18n();
   const setMode = useReviewFlowStore((state) => state.setMode);
+  const normalizerStatus = useReviewFlowStore((state) => state.normalizerStatus);
   const hasContext = useReviewFlowStore((state) =>
     Boolean(state.caseId) && state.facts.length > 0,
   );
@@ -28,6 +30,12 @@ export function ReviewModeScreen() {
       <div className="mx-auto flex max-w-5xl flex-col gap-8">
         <header>
           <h1 className="text-2xl font-medium">{t('review.modePageTitle')}</h1>
+          {normalizerStatus === 'LOADING' && (
+            <p className="mt-3 flex items-center gap-2 text-xs text-muted-foreground" role="status">
+              <LoaderCircle className="h-4 w-4 animate-spin" />
+              {t('review.normalizerBackground')}
+            </p>
+          )}
         </header>
 
         <section className="grid gap-4 md:grid-cols-2">

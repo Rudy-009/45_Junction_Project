@@ -6,6 +6,7 @@
 | 기준 브랜치 | `feat/goal-r0r6` |
 | 목적 | 현재 배포 동작과 후속 운영화를 구분한다 |
 | 제품 목표 | [PRD_CLAUDE.md](PRD_CLAUDE.md) |
+| Upstage 활용 | [UPSTAGE_USAGE_SPEC.md](UPSTAGE_USAGE_SPEC.md) |
 | UI 계약 | [`../Lo-Fi/standby/DESIGN.md`](../Lo-Fi/standby/DESIGN.md) |
 
 > 코드와 이 문서가 다르면 코드가 우선한다. 현재 공개 MVP는 로그인 없이 익명 브라우저 세션으로 실행한다.
@@ -47,7 +48,7 @@ UUID 세션으로 case 소유권을 분리한다. 이 값은 사용자 신원을
 | Storyboard Recomposer | **Studio 설정·서버 배선 구현 / 개별 live smoke 성공** | Config #1 `agt_go8aoJTVDvEwK8mwXh5gEi`. reviewed graph와 인접 snapshot으로 NON_AUTHORITATIVE transition을 비동기 생성·cache. JSON 부재 시 provenance를 보존한 정적 fallback |
 | Rehearsal Brief | **Studio 설정·서버 배선·fallback 구현 / 전체 live smoke 재확인 대기** | Config #1 `agt_9iLkb7fqwdEtaBv48t9tQA`. 결정론적 finding과 evidence를 무대감독용 확인 질문·unknown으로 요약. 허용 목록 밖 event/finding 참조는 거부하고 provenance를 남긴 빈 결정론적 brief로 격리 |
 | 인접 event semantic transition | **구현·운영 배포** | 인접한 다음 event의 바뀐 entity만 짧게 전환. jump/back·초기 로드는 정적, reduced-motion은 정적 |
-| 장시간 추출 | **구현** | 서버 최대 10분·브라우저 최대 11분 polling, 결과 미리보기와 `S T A N D B Y`가 왼쪽부터 순차 점등되는 로딩 화면 표시. reduced-motion에서는 고정 wordmark |
+| 장시간 추출 | **구현·개선** | Master Cue Extractor 완료 즉시 raw fact review로 진입하며 Fact Normalizer는 background에서 추천을 합류시킨다. 서버 최대 10분·브라우저 최대 11분 polling, 순차 점등 `S T A N D B Y`, reduced-motion 고정 wordmark를 유지한다 |
 | 촬영용 XLSX fast path | **운영 코드 제거** | 특정 SHA-256에 의한 클라이언트 분기와 8-event 로컬 fixture를 제거했다. XLSX/PDF/JSON은 모두 실제 API 경로를 사용하며 `CONTROLLED_FIXTURE`는 서버 자동 테스트에서만 사용한다 |
 | Fact review | **구현** | raw field·locator·quote를 보고 승인/제외, 13개 normalized fact와 EVENT_STATE snapshot을 구조화 편집 |
 | Review snapshot | **구현** | 현재 결정을 불변 digest로 동결. 미결정 fact는 authority를 얻지 않음 |
