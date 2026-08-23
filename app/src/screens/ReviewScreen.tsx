@@ -39,7 +39,9 @@ export function ReviewScreen() {
     try {
       setPhase('VERIFYING');
       setMessage(t('input.status.verify'));
-      await api.reviewFacts(caseId, reviews);
+      if (reviews.length > 0) {
+        await api.reviewFacts(caseId, reviews);
+      }
       await api.freezeReviewSnapshot(caseId);
       const workspace = await api.getWorkspace(caseId);
       setWorkspace(caseId, workspace);
