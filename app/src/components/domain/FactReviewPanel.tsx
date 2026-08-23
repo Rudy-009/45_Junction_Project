@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Check, Plus, X } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Plus, X } from 'lucide-react';
 import {
   NORMALIZED_FACT_TYPES,
   type FactCandidate,
@@ -133,8 +133,8 @@ function normalizedValue(draft: ReviewDraft): Record<string, unknown> {
 
 function validationError(draft: ReviewDraft | null, locale: Locale): string | null {
   if (!draft) return locale === 'ko'
-    ? '유효한 Upstage 추천값이 없어 승인할 수 없습니다.'
-    : 'No valid Upstage recommendation is available.';
+    ? '적용 가능한 추천값이 없습니다. 확인하면 이 항목은 판정 입력에서 제외됩니다.'
+    : 'No applicable recommendation. Confirm to exclude this fact from verification.';
   for (const [field, value] of Object.entries(draft.fields)) {
     if (BOOLEAN_FIELDS.has(field)) continue;
     const text = String(value);
@@ -240,6 +240,10 @@ export function FactReviewPanel({
   const [decisions, setDecisions] = useState<Record<string, ReviewDecision>>(() =>
     Object.fromEntries(facts.map((fact) => [fact.fact_id, 'PENDING'])),
   );
+  const [activeIndex, setActiveIndex] = useState(0);
+  useEffect(() => {
+    setActiveIndex((current) => Math.min(current, Math.max(0, facts.length - 1)));
+  }, [facts.length]);
   const activeDrafts = mode === 'RECOMMENDED' ? recommendedDrafts : customDrafts;
   const pending = Object.values(decisions).filter((decision) => decision === 'PENDING').length;
   const draftErrors = useMemo(() => Object.fromEntries(
@@ -261,6 +265,11 @@ export function FactReviewPanel({
 
   const setDecision = (factId: string, decision: ReviewDecision) => {
     setDecisions((current) => ({ ...current, [factId]: decision }));
+  };
+
+  const decideAndAdvance = (factId: string, decision: ReviewDecision) => {
+    setDecision(factId, decision);
+    setActiveIndex((current) => Math.min(current + 1, Math.max(0, facts.length - 1)));
   };
 
   const approveAllCustom = () => {
@@ -290,6 +299,13 @@ export function FactReviewPanel({
     });
     onSubmit(reviews);
   };
+
+  const fact = facts[activeIndex] ?? null;
+  const recommendation = fact ? recommendationByFact.get(fact.fact_id) ?? null : null;
+  const draft = fact ? activeDrafts[fact.fact_id] ?? null : null;
+  const decision = fact ? decisions[fact.fact_id] ?? 'PENDING' : 'PENDING';
+  const fields = draft ? FIELD_MAP[draft.normalizedType] ?? [] : [];
+  const error = fact ? draftErrors[fact.fact_id] : null;
 
   return (
     <section className="mt-6 border border-border bg-surface">
@@ -324,31 +340,42 @@ export function FactReviewPanel({
         </div>
       </div>
 
-      <div className="divide-y divide-border">
-        {facts.map((fact) => {
-          const recommendation = recommendationByFact.get(fact.fact_id) ?? null;
-          const draft = activeDrafts[fact.fact_id] ?? null;
-          const decision = decisions[fact.fact_id] ?? 'PENDING';
-          const fields = draft ? FIELD_MAP[draft.normalizedType] ?? [] : [];
-          return (
-            <article key={fact.fact_id} className="grid gap-4 p-4 xl:grid-cols-[220px_1fr_1fr]">
+      <div>
+        {fact && (
+            <article key={fact.fact_id} className={cn(
+              'grid gap-4 p-4',
+              mode === 'CUSTOM' ? 'xl:grid-cols-[220px_1fr_1fr]' : 'xl:grid-cols-[220px_1fr]',
+            )}>
               <div>
                 <div className="mono text-[10px] text-muted-foreground">{fact.source_role}</div>
                 <div className="mt-1 break-all text-sm font-medium">{fact.fact_type}</div>
                 <div className="mono mt-2 text-[10px] text-muted-foreground">{fact.locator}</div>
                 <blockquote className="mt-2 border-l border-border-strong pl-2 text-xs leading-5">{fact.quote}</blockquote>
                 <div className="mt-3 flex gap-2">
-                  <button type="button" disabled={busy || !draft || Boolean(draftErrors[fact.fact_id])} onClick={() => setDecision(fact.fact_id, 'REVIEWED')} className={cn('flex items-center gap-1 border px-2 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-40', decision === 'REVIEWED' ? 'border-consistent text-consistent' : 'border-border')}><Check size={12} /> {t('review.approve')}</button>
-                  <button type="button" disabled={busy} onClick={() => setDecision(fact.fact_id, 'REJECTED')} className={cn('flex items-center gap-1 border px-2 py-1 text-xs disabled:opacity-40', decision === 'REJECTED' ? 'border-violation text-violation' : 'border-border')}><X size={12} /> {t('review.reject')}</button>
+                  {!draft || error ? (
+                    <button type="button" disabled={busy} onClick={() => decideAndAdvance(fact.fact_id, 'REJECTED')} className={cn('flex items-center gap-1 border px-2 py-1 text-xs disabled:opacity-40', decision === 'REJECTED' ? 'border-insufficient text-insufficient' : 'border-border')}><Check size={12} /> {t('review.confirmNext')}</button>
+                  ) : (
+                    <>
+                      <button type="button" disabled={busy} onClick={() => decideAndAdvance(fact.fact_id, 'REVIEWED')} className={cn('flex items-center gap-1 border px-2 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-40', decision === 'REVIEWED' ? 'border-consistent text-consistent' : 'border-border')}><Check size={12} /> {t('review.approve')}</button>
+                      <button type="button" disabled={busy} onClick={() => decideAndAdvance(fact.fact_id, 'REJECTED')} className={cn('flex items-center gap-1 border px-2 py-1 text-xs disabled:opacity-40', decision === 'REJECTED' ? 'border-violation text-violation' : 'border-border')}><X size={12} /> {t('review.reject')}</button>
+                    </>
+                  )}
                 </div>
               </div>
 
               <div>
-                <div className="mono mb-2 text-[10px] text-muted-foreground">{t('review.extracted')}</div>
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <div className="mono text-[10px] text-muted-foreground">{t('review.extracted')}</div>
+                  <div className="flex items-center border border-border">
+                    <button type="button" aria-label={t('review.previous')} disabled={activeIndex === 0} onClick={() => setActiveIndex((current) => Math.max(0, current - 1))} className="border-r border-border p-1.5 disabled:opacity-30"><ChevronLeft size={14} /></button>
+                    <span className="mono min-w-16 px-2 text-center text-[11px]">{facts.length === 0 ? 0 : activeIndex + 1} / {facts.length}</span>
+                    <button type="button" aria-label={t('review.next')} disabled={activeIndex >= facts.length - 1} onClick={() => setActiveIndex((current) => Math.min(facts.length - 1, current + 1))} className="border-l border-border p-1.5 disabled:opacity-30"><ChevronRight size={14} /></button>
+                  </div>
+                </div>
                 <ExtractedFields value={fact.raw_value} />
               </div>
 
-              <div>
+              {mode === 'CUSTOM' && <div>
                 <div className="flex items-center justify-between gap-3">
                   <span className="mono text-[10px] text-muted-foreground">{t('review.agentRecommendation')}</span>
                   {recommendation?.confidence && (
@@ -367,11 +394,11 @@ export function FactReviewPanel({
                     <label key={field} className={field === 'label' || field === 'responsible_party' ? 'col-span-2' : ''}>
                       <span className="mono text-[10px] text-muted-foreground">{field}</span>
                       {BOOLEAN_FIELDS.has(field) ? (
-                        <input type="checkbox" checked={draft.fields[field] === true} disabled={busy || mode === 'RECOMMENDED'} onChange={(event) => patchCustomDraft(fact.fact_id, { fields: { ...draft.fields, [field]: event.target.checked } })} className="ml-2" />
+                        <input type="checkbox" checked={draft.fields[field] === true} disabled={busy} onChange={(event) => patchCustomDraft(fact.fact_id, { fields: { ...draft.fields, [field]: event.target.checked } })} className="ml-2" />
                       ) : ZONE_FIELDS.has(field) ? (
-                        <select value={String(draft.fields[field] ?? '')} disabled={busy || mode === 'RECOMMENDED'} onChange={(event) => patchCustomDraft(fact.fact_id, { fields: { ...draft.fields, [field]: event.target.value } })} className="mt-1 w-full border border-border bg-background px-2 py-1.5 text-xs"><option value="">zone 선택</option>{ZONES.map((zone) => <option key={zone}>{zone}</option>)}</select>
+                        <select value={String(draft.fields[field] ?? '')} disabled={busy} onChange={(event) => patchCustomDraft(fact.fact_id, { fields: { ...draft.fields, [field]: event.target.value } })} className="mt-1 w-full border border-border bg-background px-2 py-1.5 text-xs"><option value="">zone 선택</option>{ZONES.map((zone) => <option key={zone}>{zone}</option>)}</select>
                       ) : (
-                        <input type={NUMBER_FIELDS.has(field) ? 'number' : 'text'} min={NUMBER_FIELDS.has(field) ? field === 'capacity' ? 1 : 0 : undefined} max={NUMBER_FIELDS.has(field) ? Number.MAX_SAFE_INTEGER : undefined} step={NUMBER_FIELDS.has(field) ? 1 : undefined} value={String(draft.fields[field] ?? '')} disabled={busy || mode === 'RECOMMENDED'} onChange={(event) => patchCustomDraft(fact.fact_id, { fields: { ...draft.fields, [field]: event.target.value } })} className="mt-1 w-full border border-border bg-background px-2 py-1.5 text-xs" />
+                        <input type={NUMBER_FIELDS.has(field) ? 'number' : 'text'} min={NUMBER_FIELDS.has(field) ? field === 'capacity' ? 1 : 0 : undefined} max={NUMBER_FIELDS.has(field) ? Number.MAX_SAFE_INTEGER : undefined} step={NUMBER_FIELDS.has(field) ? 1 : undefined} value={String(draft.fields[field] ?? '')} disabled={busy} onChange={(event) => patchCustomDraft(fact.fact_id, { fields: { ...draft.fields, [field]: event.target.value } })} className="mt-1 w-full border border-border bg-background px-2 py-1.5 text-xs" />
                       )}
                     </label>
                   ))}
@@ -381,24 +408,23 @@ export function FactReviewPanel({
                   <div className="mt-3 border-t border-border pt-3">
                     <div className="flex items-center justify-between">
                       <span className="mono text-[10px] text-muted-foreground">{t('review.stageSnapshot')}</span>
-                      {mode === 'CUSTOM' && <button type="button" disabled={busy} onClick={() => patchCustomDraft(fact.fact_id, { entities: [...draft.entities, { id: crypto.randomUUID(), entityId: '', kind: 'PERSON', zone: 'STAGE', transition: '' }] })} className="flex items-center gap-1 border border-border px-2 py-1 text-[10px] disabled:opacity-40"><Plus size={10} /> {t('review.addEntity')}</button>}
+                      <button type="button" disabled={busy} onClick={() => patchCustomDraft(fact.fact_id, { entities: [...draft.entities, { id: crypto.randomUUID(), entityId: '', kind: 'PERSON', zone: 'STAGE', transition: '' }] })} className="flex items-center gap-1 border border-border px-2 py-1 text-[10px] disabled:opacity-40"><Plus size={10} /> {t('review.addEntity')}</button>
                     </div>
                     {draft.entities.map((entity) => (
                       <div key={entity.id} className="mt-2 grid grid-cols-[1fr_70px_1fr_90px_24px] gap-1">
-                        <input disabled={busy || mode === 'RECOMMENDED'} value={entity.entityId} placeholder="entity ID" onChange={(event) => patchCustomDraft(fact.fact_id, { entities: draft.entities.map((item) => item.id === entity.id ? { ...item, entityId: event.target.value } : item) })} className="border border-border bg-background px-2 py-1 text-xs" />
-                        <select disabled={busy || mode === 'RECOMMENDED'} value={entity.kind} onChange={(event) => patchCustomDraft(fact.fact_id, { entities: draft.entities.map((item) => item.id === entity.id ? { ...item, kind: event.target.value as EntityDraft['kind'] } : item) })} className="border border-border bg-background px-1 text-[10px]"><option>PERSON</option><option>PROP</option></select>
-                        <select disabled={busy || mode === 'RECOMMENDED'} value={entity.zone} onChange={(event) => patchCustomDraft(fact.fact_id, { entities: draft.entities.map((item) => item.id === entity.id ? { ...item, zone: event.target.value as StageZone } : item) })} className="border border-border bg-background px-1 text-[10px]">{ZONES.map((zone) => <option key={zone}>{zone}</option>)}</select>
-                        <select disabled={busy || mode === 'RECOMMENDED'} value={entity.transition} onChange={(event) => patchCustomDraft(fact.fact_id, { entities: draft.entities.map((item) => item.id === entity.id ? { ...item, transition: event.target.value as EntityDraft['transition'] } : item) })} className="border border-border bg-background px-1 text-[10px]"><option value="">{t('review.keep')}</option><option>ENTER</option><option>EXIT</option></select>
-                        {mode === 'CUSTOM' ? <button type="button" disabled={busy} onClick={() => patchCustomDraft(fact.fact_id, { entities: draft.entities.filter((item) => item.id !== entity.id) })} className="border border-border disabled:opacity-40"><X size={11} /></button> : <span />}
+                        <input disabled={busy} value={entity.entityId} placeholder="entity ID" onChange={(event) => patchCustomDraft(fact.fact_id, { entities: draft.entities.map((item) => item.id === entity.id ? { ...item, entityId: event.target.value } : item) })} className="border border-border bg-background px-2 py-1 text-xs" />
+                        <select disabled={busy} value={entity.kind} onChange={(event) => patchCustomDraft(fact.fact_id, { entities: draft.entities.map((item) => item.id === entity.id ? { ...item, kind: event.target.value as EntityDraft['kind'] } : item) })} className="border border-border bg-background px-1 text-[10px]"><option>PERSON</option><option>PROP</option></select>
+                        <select disabled={busy} value={entity.zone} onChange={(event) => patchCustomDraft(fact.fact_id, { entities: draft.entities.map((item) => item.id === entity.id ? { ...item, zone: event.target.value as StageZone } : item) })} className="border border-border bg-background px-1 text-[10px]">{ZONES.map((zone) => <option key={zone}>{zone}</option>)}</select>
+                        <select disabled={busy} value={entity.transition} onChange={(event) => patchCustomDraft(fact.fact_id, { entities: draft.entities.map((item) => item.id === entity.id ? { ...item, transition: event.target.value as EntityDraft['transition'] } : item) })} className="border border-border bg-background px-1 text-[10px]"><option value="">{t('review.keep')}</option><option>ENTER</option><option>EXIT</option></select>
+                        <button type="button" disabled={busy} onClick={() => patchCustomDraft(fact.fact_id, { entities: draft.entities.filter((item) => item.id !== entity.id) })} className="border border-border disabled:opacity-40"><X size={11} /></button>
                       </div>
                     ))}
                   </div>
                 )}
-                {draftErrors[fact.fact_id] && <p className="mt-2 text-xs text-violation">{draftErrors[fact.fact_id]}</p>}
-              </div>
+                {error && <p className={cn('mt-2 text-xs', draft ? 'text-violation' : 'text-muted-foreground')}>{error}</p>}
+              </div>}
             </article>
-          );
-        })}
+        )}
       </div>
 
       <div className="flex items-center justify-between border-t border-border p-4">

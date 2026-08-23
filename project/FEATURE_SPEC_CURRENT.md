@@ -50,7 +50,7 @@ UUID 세션으로 case 소유권을 분리한다. 이 값은 사용자 신원을
 | 인접 event semantic transition | **구현·운영 배포** | 인접한 다음 event의 바뀐 entity만 짧게 전환. jump/back·초기 로드는 정적, reduced-motion은 정적 |
 | 장시간 추출 | **구현·개선** | Master Cue Extractor 완료 즉시 raw fact review로 진입하며 Fact Normalizer는 background에서 추천을 합류시킨다. 서버 최대 10분·브라우저 최대 11분 polling, 순차 점등 `S T A N D B Y`, reduced-motion 고정 wordmark를 유지한다 |
 | 촬영용 XLSX fast path | **운영 코드 제거** | 특정 SHA-256에 의한 클라이언트 분기와 8-event 로컬 fixture를 제거했다. XLSX/PDF/JSON은 모두 실제 API 경로를 사용하며 `CONTROLLED_FIXTURE`는 서버 자동 테스트에서만 사용한다 |
-| Fact review | **구현** | raw field·locator·quote를 보고 승인/제외, 13개 normalized fact와 EVENT_STATE snapshot을 구조화 편집 |
+| Extraction Review | **구현** | 추천값 mode는 Agent Recommendation 패널 없이 Master Cue Extracted Fields 한 건만 표시하고 필드 옆 Chevron으로 이동. 승인/제외 뒤 자동으로 다음 항목 이동. 유효한 추천이 없으면 `확인하고 다음`으로 안전하게 판정 입력에서 제외. 사용자화 mode에서 13개 normalized fact와 EVENT_STATE snapshot 구조화 편집 |
 | Review snapshot | **구현** | 현재 결정을 불변 digest로 동결. 미결정 fact는 authority를 얻지 않음 |
 | Compiler | **구현** | 승인된 normalized envelope만 event graph·stage snapshot으로 변환 |
 | Verifier | **구현** | VR-01 환복, VR-02 경로 수용량, VR-03 소품 연속성을 결정론적으로 계산 |
