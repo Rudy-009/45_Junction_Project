@@ -294,6 +294,8 @@ normalized type은 Agent가 고른 allowlist 값으로 고정하고 필드 값�
 두지 않으며, type이 잘못되면 다른 type을 임의 선택하지 않고 해당 추천을 거절한다. `일괄 승인`은 검증을
 통과한 사용자화 draft에만 사람이 명시적으로 누르는 bulk action이며, 각 fact의 개별 review record를 남긴다.
 어떤 mode도 자동 승인하거나 review snapshot을 자동 freeze하지 않는다.
+Fact Normalizer의 background 상태와 미결정 fact 수는 workspace 진입을 막지 않는다. 사용자가 `큐시트로 이동`을
+누르면 현재 결정만 snapshot에 기록하고, 남은 fact는 `UNREVIEWED`로 유지해 관련 규칙이 `INSUFFICIENT_EVIDENCE`로 기권한다.
 
 Storyboard는 timeline 클릭마다 긴 Upstage job을 동기 대기하지 않는다. 클릭 순간 target snapshot을 먼저
 보여 주고, frozen input으로 비동기 재구성을 요청한다. 동일 요청은 서버 cache가 처리한다. 현재 구현은

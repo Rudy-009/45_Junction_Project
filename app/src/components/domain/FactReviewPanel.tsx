@@ -429,7 +429,7 @@ export function FactReviewPanel({
 
       <div className="flex items-center justify-between border-t border-border p-4">
         <p className="text-xs text-muted-foreground">{pending > 0 ? t('review.pending', { count: pending }) : t('review.allDecided')}</p>
-        <button type="button" disabled={busy || pending > 0 || hasErrors} onClick={submit} className="border border-foreground bg-foreground px-5 py-2.5 text-sm text-background disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground">{busy ? t('review.freezing') : t('review.run')}</button>
+        <button type="button" disabled={busy || hasErrors} onClick={submit} className="border border-foreground bg-foreground px-5 py-2.5 text-sm text-background disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground">{busy ? t('review.freezing') : t('review.run')}</button>
       </div>
     </section>
   );
