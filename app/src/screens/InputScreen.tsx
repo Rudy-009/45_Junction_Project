@@ -43,11 +43,6 @@ type SelectedSource = {
   batchSize: number;
 };
 
-type MasterCueBatchFile = {
-  file: File;
-  status: 'MASTER_CUE' | 'IGNORED';
-};
-
 type RouteDraft = {
   id: string;
   routeId: string;
@@ -151,7 +146,7 @@ export function InputScreen() {
   const setNormalizerError = useReviewFlowStore((state) => state.setNormalizerError);
   const clearReviewFlow = useReviewFlowStore((state) => state.clear);
   const [masterCue, setMasterCue] = useState<SelectedSource | null>(null);
-  const [masterCueBatchFiles, setMasterCueBatchFiles] = useState<MasterCueBatchFile[]>([]);
+  const [masterCueBatchFiles, setMasterCueBatchFiles] = useState<File[]>([]);
   const [sourceErrors, setSourceErrors] = useState<Partial<Record<InputErrorKind, string>>>({});
   const [crossover, setCrossover] = useState<Crossover>('UNKNOWN');
   const [minimumChangeSeconds, setMinimumChangeSeconds] = useState('60');
@@ -253,10 +248,7 @@ export function InputScreen() {
         throw new Error(locale === 'ko' ? '선택한 파일에서 유효한 큐시트를 찾지 못했습니다.' : 'No valid cue sheet was found in the selected files.');
       }
       setMasterCue({ ...selected, batchSize: files.length });
-      setMasterCueBatchFiles(files.map((file) => ({
-        file,
-        status: file === selected.file ? 'MASTER_CUE' : 'IGNORED',
-      })));
+      setMasterCueBatchFiles(files);
       setSourceErrors((current) => ({ ...current, MASTER_CUE: undefined }));
     } catch (error) {
       setMasterCue(null);
@@ -588,7 +580,7 @@ function SourceCard({
   kind: SourceInputKind;
   source: SelectedSource | null;
   error?: string;
-  batchFiles: MasterCueBatchFile[];
+  batchFiles: File[];
   onFiles: (files: File[]) => void;
 }) {
   const { t } = useI18n();
@@ -656,17 +648,13 @@ function SourceCard({
               <span className="mono text-[10px] text-muted-foreground">{batchFiles.length}</span>
             </div>
             <div className="divide-y divide-border border border-border">
-              {batchFiles.map(({ file, status }, index) => (
+              {batchFiles.map((file, index) => (
                 <div key={`${file.name}:${file.size}:${index}`} className="flex items-center gap-3 p-3">
                   <span className="border border-border p-2"><FileSpreadsheet className="h-4 w-4" /></span>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-xs font-medium">{file.name}</p>
                     <p className="mono mt-1 text-[10px] text-muted-foreground">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
                   </div>
-                  <span className={cn(
-                    'mono border px-2 py-1 text-[9px]',
-                    status === 'MASTER_CUE' ? 'border-consistent text-consistent' : 'border-border text-muted-foreground',
-                  )}>{status}</span>
                 </div>
               ))}
             </div>
