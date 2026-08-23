@@ -17,6 +17,7 @@ import type { StageEntity, Zone } from '@/types/ui';
 import { cn } from '@/lib/utils';
 import { useI18n, type MessageKey } from '@/lib/i18n';
 import type { ScriptProjection, ScriptProjectionSegment, ScriptSidebarEntry } from '@/types/script';
+import type { ScriptLinkRecommendation } from '@/lib/script-projection';
 
 const ZONE_LABEL: Record<StageZone, Zone> = {
   STAGE_RIGHT_WING: '상수윙',
@@ -55,9 +56,11 @@ export function VerifiedWorkspace({
   script,
   scriptEntries,
   unlinkedScriptSegments,
+  scriptRecommendations,
   scriptBusy,
   scriptError,
   onLinkScriptSegment,
+  onApplyScriptRecommendations,
   onScriptFile,
   storyboardState,
   onStoryboardRequest,
@@ -68,9 +71,11 @@ export function VerifiedWorkspace({
   script: ScriptProjection | null;
   scriptEntries: ScriptSidebarEntry[];
   unlinkedScriptSegments: ScriptProjectionSegment[];
+  scriptRecommendations: ScriptLinkRecommendation[];
   scriptBusy: boolean;
   scriptError: string | null;
   onLinkScriptSegment: (segmentId: string, eventId: string) => void;
+  onApplyScriptRecommendations: () => void;
   onScriptFile: (file: File) => void;
   storyboardState?: StoryboardAgentState;
   onStoryboardRequest?: (eventId: string) => void;
@@ -144,11 +149,13 @@ export function VerifiedWorkspace({
           entries={scriptEntries}
           script={script}
           unlinkedSegments={unlinkedScriptSegments}
+          recommendations={scriptRecommendations}
           busy={scriptBusy}
           error={scriptError}
           selectedEventId={selectedEventId}
           onScriptFile={onScriptFile}
           onLinkSegment={onLinkScriptSegment}
+          onApplyRecommendations={onApplyScriptRecommendations}
           onSelectEvent={handleSelectEvent}
         />
 

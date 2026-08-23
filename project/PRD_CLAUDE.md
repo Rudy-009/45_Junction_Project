@@ -318,6 +318,8 @@ loading scene을 사용한다. 이 loop는 실제 진행률이 아니며 상태�
 - RAW JSON 로컬 Editor에서는 standalone Script Projection을 사용한다. 이 projection은 JSON의 exact
   `event_id` 또는 유일한 장면명 일치로 자동 연결하고, 나머지는 사람이 현재 event에 연결한다. case review
   authority는 얻지 않지만 연결 결과를 표준 CSV 큐시트에 대사·지문 열로 내보낼 수 있다
+- 자동 연결되지 않은 projection 구간은 장면 표기·화자·대사/트리거 토큰·공연 순서를 조합한 추천 event와
+  신뢰도·근거를 표시한다. `추천 모두 적용`은 사람이 명시적으로 누른 bulk mapping이며 자동 승인이 아니다
 - exact `event_id`가 있거나, Script Extractor가 원문에서 보존한 `section_marker`가 큐시트의 장면명과
   유일하게 일치하는 실제 `DIALOGUE`·`STAGE_DIRECTION`만 자동으로 event별 발췌에 묶는다.
   근거가 없거나 둘 이상과 일치하는 구간은 사람이 선택한 현재 event에 연결한다
