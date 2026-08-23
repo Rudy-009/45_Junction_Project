@@ -342,12 +342,18 @@ export function InputScreen() {
         </header>
 
         <section className="mt-6 grid items-start gap-4 lg:grid-cols-2">
-          <SourceCard
-            kind="MASTER_CUE"
-            source={masterCue}
-            error={sourceErrors.MASTER_CUE}
-            onFile={(file) => void selectSource('MASTER_CUE', file)}
-          />
+          <div className="grid gap-4">
+            <SourceCard
+              kind="MASTER_CUE"
+              source={masterCue}
+              error={sourceErrors.MASTER_CUE}
+              onFile={(file) => void selectSource('MASTER_CUE', file)}
+            />
+            <RawJsonCard
+              error={sourceErrors.RAW_JSON}
+              onFile={(file) => void openRawJson(file)}
+            />
+          </div>
           <StageSpecCard
             crossover={crossover}
             minimumChangeSeconds={minimumChangeSeconds}
@@ -359,10 +365,6 @@ export function InputScreen() {
             onMinimumChange={setMinimumChangeSeconds}
             onRoutes={setRoutes}
             onEntities={setEntities}
-          />
-          <RawJsonCard
-            error={sourceErrors.RAW_JSON}
-            onFile={(file) => void openRawJson(file)}
           />
         </section>
 
@@ -394,7 +396,7 @@ function RawJsonCard({ error, onFile }: { error?: string; onFile: (file: File) =
   const [dragging, setDragging] = useState(false);
 
   return (
-    <article className="border border-border bg-surface lg:col-span-2">
+    <article className="border border-border bg-surface">
       <div className="flex items-start justify-between border-b border-border p-4">
         <div className="flex gap-3">
           <div className="border border-border p-2"><FileSpreadsheet className="h-4 w-4" /></div>
