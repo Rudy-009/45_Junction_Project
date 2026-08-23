@@ -1,7 +1,8 @@
 import { AlertTriangle, LoaderCircle } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { FactReviewPanel, type FactReviewCommand } from '@/components/domain';
+import { recommendedFactReviews } from '@/components/domain/FactReviewPanel';
 import { StandbyApiError, createStandbyBrowserApi } from '@/lib/standby-api';
 import { useI18n } from '@/lib/i18n';
 import { useStandbyWorkspaceStore, useReviewFlowStore } from '@/store';
@@ -20,10 +21,11 @@ function useReviewFlowState() {
 }
 
 export function ReviewScreen() {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const navigate = useNavigate();
   const [phase, setPhase] = useState<'IDLE' | 'VERIFYING' | 'FAILED'>('IDLE');
   const [message, setMessage] = useState<string | null>(null);
+  const [openWhenRecommendationsReady, setOpenWhenRecommendationsReady] = useState(false);
   const {
     caseId, facts, normalizerArtifact, normalizerStatus, normalizerError,
     mode, setWorkspace, clearReviewFlow,
@@ -36,11 +38,24 @@ export function ReviewScreen() {
       setMessage(t('input.error.noCase'));
       return;
     }
+    if (mode === 'RECOMMENDED' && reviews.length === 0 && !normalizerArtifact) {
+      if (normalizerStatus === 'LOADING') {
+        setOpenWhenRecommendationsReady(true);
+        setMessage(t('review.preparingApprovals'));
+        return;
+      }
+    }
+    const effectiveReviews = mode === 'RECOMMENDED'
+      ? [
+          ...reviews.filter((review) => review.decision === 'REJECTED'),
+          ...recommendedFactReviews(facts, normalizerArtifact?.payload.recommendations ?? [], locale),
+        ].filter((review, index, all) => all.findIndex((candidate) => candidate.fact_id === review.fact_id) === index)
+      : reviews;
     try {
       setPhase('VERIFYING');
       setMessage(t('input.status.verify'));
-      if (reviews.length > 0) {
-        await api.reviewFacts(caseId, reviews);
+      if (effectiveReviews.length > 0) {
+        await api.reviewFacts(caseId, effectiveReviews);
       }
       await api.freezeReviewSnapshot(caseId);
       const workspace = await api.getWorkspace(caseId);
@@ -56,6 +71,19 @@ export function ReviewScreen() {
       );
     }
   };
+
+  useEffect(() => {
+    if (!openWhenRecommendationsReady || !normalizerArtifact) return;
+    setOpenWhenRecommendationsReady(false);
+    void completeReview([]);
+  }, [normalizerArtifact, openWhenRecommendationsReady]);
+
+  useEffect(() => {
+    if (!openWhenRecommendationsReady || normalizerStatus !== 'FAILED') return;
+    setOpenWhenRecommendationsReady(false);
+    setPhase('FAILED');
+    setMessage(t('review.normalizerFailed'));
+  }, [normalizerStatus, openWhenRecommendationsReady, t]);
 
   if (!caseId || facts.length === 0) {
     return (
