@@ -89,7 +89,7 @@ export function ReviewScreen() {
             agentId: normalizerArtifact.agent_id,
             configId: normalizerArtifact.config_id,
           } : null}
-          busy={phase === 'VERIFYING' || normalizerStatus === 'LOADING'}
+          busy={phase === 'VERIFYING'}
           initialMode={isCustomMode ? 'CUSTOM' : 'RECOMMENDED'}
           onSubmit={(reviews) => void completeReview(reviews)}
         />
