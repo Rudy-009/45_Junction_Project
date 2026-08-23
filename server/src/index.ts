@@ -2,6 +2,7 @@ import { buildApp } from "./app.js";
 import { UpstageAgentProvider } from "./providers/upstage-agent-provider.js";
 
 const isProduction = process.env.NODE_ENV === "production";
+const startedAt = new Date().toISOString();
 const allowAnonymous = process.env.STANDBY_ALLOW_ANONYMOUS !== "false";
 const apiToken = process.env.STANDBY_API_TOKEN ?? (isProduction ? undefined : "local-dev-token");
 const upstageAgentDefaults = {
@@ -107,6 +108,11 @@ const app = await buildApp({
   allowedOrigins,
   logger: true,
   allowAnonymous,
+  deployment: {
+    commitSha: process.env.RAILWAY_GIT_COMMIT_SHA ?? process.env.GIT_COMMIT_SHA ?? null,
+    deploymentId: process.env.RAILWAY_DEPLOYMENT_ID ?? null,
+    startedAt,
+  },
   ...(apiToken ? { apiToken } : {}),
   ...(upstageProvider
     ? {

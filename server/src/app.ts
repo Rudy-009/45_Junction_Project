@@ -40,6 +40,11 @@ export type ServerConfig = {
   extractionProvider?: ExtractionProvider;
   productionAgentProvider?: ProductionAgentProvider;
   scriptProjectionProvider?: ScriptProjectionProvider;
+  deployment?: {
+    commitSha: string | null;
+    deploymentId: string | null;
+    startedAt: string;
+  };
 };
 
 const SOURCE_ROLES = new Set<SourceRole>(["SCRIPT", "MASTER_CUE", "STAGE_SPEC"]);
@@ -115,7 +120,7 @@ export async function buildApp(
         callback(null, true);
         return;
       }
-      callback(new Error("Origin not allowed"), false);
+      callback(new DomainError(403, "ORIGIN_NOT_ALLOWED", "Origin is not allowed."), false);
     },
   });
   await app.register(rateLimit, {
@@ -178,6 +183,25 @@ export async function buildApp(
       });
       return;
     }
+    if (
+      error instanceof Error
+      && "statusCode" in error
+      && typeof error.statusCode === "number"
+      && error.statusCode >= 400
+      && error.statusCode < 500
+    ) {
+      const httpError = error as Error & { statusCode: number; code?: string };
+      void reply.status(httpError.statusCode).send({
+        error: {
+          code: typeof httpError.code === "string" ? httpError.code : "REQUEST_REJECTED",
+          message: httpError.message,
+          request_id: request.id,
+          retryable: httpError.statusCode === 429,
+          details: {},
+        },
+      });
+      return;
+    }
     request.log.error({ err: error }, "Unhandled request error");
     void reply.status(500).send({
       error: {
@@ -190,7 +214,12 @@ export async function buildApp(
     });
   });
 
-  app.get("/healthz", async () => ({ status: "ok" }));
+  app.get("/healthz", async () => ({
+    status: "ok",
+    commit: config.deployment?.commitSha ?? null,
+    deployment_id: config.deployment?.deploymentId ?? null,
+    started_at: config.deployment?.startedAt ?? null,
+  }));
 
   app.post(
     "/v1/script-projections",
