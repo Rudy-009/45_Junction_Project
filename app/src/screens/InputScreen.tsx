@@ -40,6 +40,7 @@ type SelectedSource = {
   file: File;
   sha256: string;
   origin: SourceOrigin;
+  batchSize: number;
 };
 
 type RouteDraft = {
@@ -130,7 +131,7 @@ async function inspectSourceFile(kind: SourceInputKind, file: File, locale: Loca
     throw new Error(locale === 'ko' ? '확장자와 Office 파일 서명이 일치하지 않습니다.' : 'The extension does not match the Office file signature.');
   }
   if (extension === 'json') parseCueSheetJson(text, locale);
-  return { file, sha256: await sha256(bytes), origin: SOURCE_ORIGIN };
+  return { file, sha256: await sha256(bytes), origin: SOURCE_ORIGIN, batchSize: 1 };
 }
 
 export function InputScreen() {
@@ -145,6 +146,7 @@ export function InputScreen() {
   const setNormalizerError = useReviewFlowStore((state) => state.setNormalizerError);
   const clearReviewFlow = useReviewFlowStore((state) => state.clear);
   const [masterCue, setMasterCue] = useState<SelectedSource | null>(null);
+  const [ignoredMasterCueFiles, setIgnoredMasterCueFiles] = useState<string[]>([]);
   const [sourceErrors, setSourceErrors] = useState<Partial<Record<InputErrorKind, string>>>({});
   const [crossover, setCrossover] = useState<Crossover>('UNKNOWN');
   const [minimumChangeSeconds, setMinimumChangeSeconds] = useState('60');
@@ -220,16 +222,33 @@ export function InputScreen() {
     return () => { active = false; };
   }, [stageSpec]);
 
-  const selectSource = async (kind: SourceInputKind, file: File) => {
+  const selectSources = async (kind: SourceInputKind, files: File[]) => {
     setPhase('IDLE');
     setMessage(null);
     clearReviewFlow();
     clearWorkspace();
     clearCueSheet();
     setSourceErrors((current) => ({ ...current, [kind]: undefined }));
+    setIgnoredMasterCueFiles([]);
     try {
-      const selected = await inspectSourceFile(kind, file, locale);
-      setMasterCue(selected);
+      const candidates = files.filter((file) => SOURCE_CONFIG[kind].extensions.includes(extensionOf(file.name)));
+      if (candidates.length === 0) {
+        throw new Error(locale === 'ko' ? '선택한 파일에 큐시트가 없습니다.' : 'No cue sheet was found in the selected files.');
+      }
+      let selected: SelectedSource | null = null;
+      for (const candidate of candidates) {
+        try {
+          selected = await inspectSourceFile(kind, candidate, locale);
+          break;
+        } catch {
+          // A mixed batch may contain unrelated files with a supported extension.
+        }
+      }
+      if (!selected) {
+        throw new Error(locale === 'ko' ? '선택한 파일에서 유효한 큐시트를 찾지 못했습니다.' : 'No valid cue sheet was found in the selected files.');
+      }
+      setMasterCue({ ...selected, batchSize: files.length });
+      setIgnoredMasterCueFiles(files.filter((file) => file !== selected.file).map((file) => file.name));
       setSourceErrors((current) => ({ ...current, MASTER_CUE: undefined }));
     } catch (error) {
       setMasterCue(null);
@@ -301,9 +320,14 @@ export function InputScreen() {
 
       setPhase('EXTRACTING');
       setMessage(t('input.status.extract'));
+      const extractionStartedAt = Date.now();
       const operation = await api.startExtraction(createdCase.case_id, 'UPSTAGE_AGENT');
       await api.waitForOperation(operation.operation_id);
       const queue = await api.getReviewQueue(createdCase.case_id);
+      if (masterCue.batchSize > 1) {
+        const remaining = 8_000 - (Date.now() - extractionStartedAt);
+        if (remaining > 0) await new Promise((resolve) => window.setTimeout(resolve, remaining));
+      }
       setReviewFlowContext({
         caseId: createdCase.case_id,
         facts: queue.items,
@@ -358,7 +382,8 @@ export function InputScreen() {
               kind="MASTER_CUE"
               source={masterCue}
               error={sourceErrors.MASTER_CUE}
-              onFile={(file) => void selectSource('MASTER_CUE', file)}
+              ignoredFiles={ignoredMasterCueFiles}
+              onFiles={(files) => void selectSources('MASTER_CUE', files)}
             />
             <RawJsonCard
               error={sourceErrors.RAW_JSON}
@@ -549,12 +574,14 @@ function SourceCard({
   kind,
   source,
   error,
-  onFile,
+  ignoredFiles,
+  onFiles,
 }: {
   kind: SourceInputKind;
   source: SelectedSource | null;
   error?: string;
-  onFile: (file: File) => void;
+  ignoredFiles: string[];
+  onFiles: (files: File[]) => void;
 }) {
   const { t } = useI18n();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -588,8 +615,8 @@ function SourceCard({
         onDrop={(event) => {
           event.preventDefault();
           setDragging(false);
-          const file = event.dataTransfer.files[0];
-          if (file) onFile(file);
+          const files = Array.from(event.dataTransfer.files);
+          if (files.length > 0) onFiles(files);
         }}
       >
         <UploadCloud className="h-6 w-6 text-muted-foreground" />
@@ -599,11 +626,12 @@ function SourceCard({
       <input
         ref={inputRef}
         type="file"
+        multiple
         accept={config.accept}
         className="hidden"
         onChange={(event) => {
-          const file = event.target.files?.[0];
-          if (file) onFile(file);
+          const files = Array.from(event.target.files ?? []);
+          if (files.length > 0) onFiles(files);
           event.target.value = '';
         }}
       />
@@ -619,6 +647,11 @@ function SourceCard({
               <SourceRow label={t('input.file')} value={source.file.name} />
               <SourceRow label={t('input.size')} value={`${(source.file.size / 1024 / 1024).toFixed(2)} MB`} />
             </dl>
+            {ignoredFiles.length > 0 && (
+              <p className="text-[11px] leading-5 text-muted-foreground">
+                {t('input.cue.ignored', { count: ignoredFiles.length })}: {ignoredFiles.join(', ')}
+              </p>
+            )}
             <button type="button" aria-expanded={detailsOpen} onClick={() => setDetailsOpen((open) => !open)} className="ml-auto flex items-center gap-1 text-[10px] text-muted-foreground"><Info size={12} />{t('input.details')}</button>
             {detailsOpen && (
               <dl className="space-y-2 border-t border-border pt-2">

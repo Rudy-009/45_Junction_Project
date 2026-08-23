@@ -36,7 +36,7 @@ UUID 세션으로 case 소유권을 분리한다. 이 값은 사용자 신원을
 | 두 화면 라우팅 | **구현** | `/` 입력, `/workspace` 워크스페이스만 존재 |
 | KOR/ENG i18n | **구현** | 헤더 선택 메뉴로 M3 입력·review·workspace·2D 무대 카피를 전환하고 선택을 localStorage에 보존 |
 | UI 카피 정리 | **구현** | 설명형 슬로건·면책·중복 제목을 제거하고, 선택 화면은 선택지만 남김. 오류·제약·상태와 provenance/hash는 유지하되 provenance는 요청 시 펼침 |
-| 입력 | **구현** | MASTER_CUE XLSX/PDF/JSON 한 칸과 STAGE_SPEC 폼을 받음 |
+| 입력 | **구현** | MASTER_CUE는 다중 선택·드롭을 허용하되 단일 authority 계약에 따라 첫 번째 유효 XLSX/PDF/JSON만 정본으로 사용하고 나머지 파일명을 `무시됨`으로 표시. 다중 선택은 실제 추출을 수행하면서 최소 8초 loading scene을 보장. STAGE_SPEC은 폼으로 받음 |
 | Script Sidebar | **case·RAW JSON 구현** | DOCX 우선·PDF 보조. verified case에서는 `SCRIPT` source와 review queue에 통합한다. RAW JSON Editor에서는 standalone Upstage projection을 만들고 exact event ID·유일한 장면명은 자동 연결한다. 나머지는 장면·화자·대사/트리거·공연 순서 기반 추천과 신뢰도·근거를 표시하며, 개별 적용 또는 사람이 누르는 `추천 모두 적용`으로 확정한다 |
 | 로컬 파일 방어 | **구현** | 확장자·signature·50 MiB·SHA-256 검사. 미리 정한 파일명 없음 |
 | RAW JSON 입력 | **직접 Editor 경로 구현** | MASTER_CUE와 별도인 `RAW JSON` 섹션에서 STANDBY CueSheet JSON을 받는다. 브라우저 strict 구조 검사를 통과하면 CueSheet 자체는 Upstage를 호출하지 않고 즉시 로컬 Editor와 결정론적 validator로 연다. 이후 연결한 Script만 standalone Upstage projection으로 처리한다. 공개 CueSheet JSON에는 duration 추정 필드 없음 |
@@ -68,7 +68,7 @@ UUID 세션으로 case 소유권을 분리한다. 이 값은 사용자 신원을
 | 서체 | **구현** | 본문·라벨은 시스템 기본 서체, STANDBY 로고·추출 loading wordmark만 JetBrains Mono |
 | 데이터 영속성 | **미구현** | 프로세스 재시작 시 case·review·snapshot이 사라짐 |
 | 실제 reference fidelity | **미검증** | 합성 live smoke는 통과했지만 공연 원본 gold fact 대조는 아직 없음 |
-| XLSX 왕복·refresh | **구현·운영 배포** | 원본 bytes에서 수정 셀과 명시적 이벤트 행 추가·삭제만 적용해 새 XLSX를 만든다. 시트·서식·빈 행/열은 보존하며 동일 hash는 Upstage를 재호출하지 않고, 변경 hash의 새 fact는 UNREVIEWED로 되돌린다 |
+| XLSX 왕복·refresh | **구현·운영 배포** | 원본 bytes에서 수정 셀과 명시적 이벤트 행 추가·삭제만 적용해 새 XLSX를 만든다. 시트·서식·빈 행/열은 보존하며 동일 hash는 Upstage를 재호출하지 않고, 변경 hash의 새 fact는 UNREVIEWED로 되돌린다. XLSX 생성 실패 시 현재 revision 행을 실제 UTF-8 CSV로 내려받은 뒤에만 `Export Complete · CSV fallback`을 표시 |
 | 표준 실행본 export | **구현·운영 배포** | 같은 revision을 EVENT·TRIGGER·DEPARTMENT·ACTION·CAST·LOCATION·NOTES 단일 양식으로 매핑하고, 누락값은 빈칸으로 둔 Word `.docx`와 브라우저 PDF 인쇄본을 제공한다 |
 | RAW JSON 표준 CSV export | **구현** | 로컬 Editor의 현재 cue/action에 자동·수동 연결된 Script의 kind·speaker·text·locator를 합쳐 UTF-8 CSV로 내보낸다. 미연결 Script 구간과 verdict는 넣지 않는다 |
 
