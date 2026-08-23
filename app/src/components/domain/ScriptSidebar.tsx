@@ -8,6 +8,7 @@ import type {
   ScriptProjectionSegment,
   ScriptSidebarEntry,
 } from '@/types/script';
+import type { ScriptLinkRecommendation } from '@/lib/script-projection';
 
 const SCRIPT_KIND_LABEL: Record<ScriptExcerptLine['kind'], MessageKey> = {
   DIALOGUE: 'workspace.scriptKind.dialogue',
@@ -18,24 +19,28 @@ export function ScriptSidebar({
   entries,
   script,
   unlinkedSegments,
+  recommendations,
   busy,
   error,
   selectedEventId,
   onSelectEvent,
   onScriptFile,
   onLinkSegment,
+  onApplyRecommendations,
 }: {
   entries: ScriptSidebarEntry[];
   script: ScriptProjection | null;
   unlinkedSegments: ScriptProjectionSegment[];
+  recommendations: ScriptLinkRecommendation[];
   busy: boolean;
   error: string | null;
   selectedEventId: string | null;
   onSelectEvent: (eventId: string) => void;
   onScriptFile: (file: File) => void;
   onLinkSegment: (segmentId: string, eventId: string) => void;
+  onApplyRecommendations: () => void;
 }) {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const [open, setOpen] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -58,6 +63,10 @@ export function ScriptSidebar({
   const unlinkedSegmentIds = useMemo(
     () => new Set(unlinkedSegments.map((segment) => segment.segment_id)),
     [unlinkedSegments],
+  );
+  const recommendationBySegmentId = useMemo(
+    () => new Map(recommendations.map((recommendation) => [recommendation.segmentId, recommendation])),
+    [recommendations],
   );
 
   useEffect(() => {
@@ -162,6 +171,21 @@ export function ScriptSidebar({
               {error && <p className="mt-2 text-xs leading-5 text-violation" role="alert">{error}</p>}
             </div>
 
+            {recommendations.length > 0 && (
+              <div className="flex items-center justify-between gap-2 border-b border-review bg-review-bg px-3 py-2">
+                <span className="text-[10px] font-semibold text-review">
+                  {t('workspace.scriptRecommendations', { count: recommendations.length })}
+                </span>
+                <button
+                  type="button"
+                  className="border border-review px-2 py-1 text-[10px] text-review hover:bg-review/10"
+                  onClick={onApplyRecommendations}
+                >
+                  {t('workspace.scriptApplyAll')}
+                </button>
+              </div>
+            )}
+
             {linkedBySegmentId.size === 0 && (
               <p className="border-b border-border px-3 py-3 text-xs leading-5 text-muted-foreground">
                 {t('workspace.scriptNoLinkedEvents')}
@@ -176,6 +200,7 @@ export function ScriptSidebar({
               const startsGroup = index === 0 || linked?.eventId !== previous?.eventId;
               const selected = linked?.eventId === selectedEventId;
               const unlinked = unlinkedSegmentIds.has(segment.segment_id);
+              const recommendation = recommendationBySegmentId.get(segment.segment_id);
 
               return (
                 <div key={segment.segment_id}>
@@ -193,7 +218,9 @@ export function ScriptSidebar({
                           )}
                         </button>
                       ) : (
-                        <span className="text-[10px] font-semibold">{t('workspace.scriptPending')}</span>
+                        <span className="text-[10px] font-semibold">
+                          {recommendation ? t('workspace.scriptRecommended') : t('workspace.scriptPending')}
+                        </span>
                       )}
                     </div>
                   )}
@@ -215,17 +242,40 @@ export function ScriptSidebar({
                     <article className="border-b border-border px-3 py-3">
                       <ScriptLine line={segment} />
                       {unlinked && (
-                        <button
-                          type="button"
-                          disabled={!selectedEventId}
-                          className="mt-2 flex items-center gap-1.5 border border-border px-2 py-1 text-[10px] hover:border-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
-                          onClick={() => selectedEventId && onLinkSegment(segment.segment_id, selectedEventId)}
-                        >
-                          <Link2 size={11} aria-hidden="true" />
-                          {selectedEventId
-                            ? t('workspace.scriptLinkCurrent', { event: selectedEventId })
-                            : t('workspace.scriptSelectEvent')}
-                        </button>
+                        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                          {recommendation && (
+                            <button
+                              type="button"
+                              className="flex items-center gap-1.5 border border-review bg-review-bg px-2 py-1 text-[10px] text-review hover:bg-review/10"
+                              onClick={() => onLinkSegment(segment.segment_id, recommendation.eventId)}
+                            >
+                              <Link2 size={11} aria-hidden="true" />
+                              {t('workspace.scriptApplyRecommendation', { event: recommendation.eventId })}
+                              <span className="mono">{recommendation.confidence}</span>
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            disabled={!selectedEventId}
+                            className="flex items-center gap-1.5 border border-border px-2 py-1 text-[10px] hover:border-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
+                            onClick={() => selectedEventId && onLinkSegment(segment.segment_id, selectedEventId)}
+                          >
+                            <Link2 size={11} aria-hidden="true" />
+                            {selectedEventId
+                              ? t('workspace.scriptLinkCurrent', { event: selectedEventId })
+                              : t('workspace.scriptSelectEvent')}
+                          </button>
+                          {recommendation && (
+                            <span className="text-[9px] text-muted-foreground">
+                              {recommendation.reasons.map((reason) => ({
+                                SCENE: locale === 'ko' ? '장면' : 'scene',
+                                SPEAKER: locale === 'ko' ? '화자' : 'speaker',
+                                DIALOGUE: locale === 'ko' ? '대사' : 'dialogue',
+                                SEQUENCE: locale === 'ko' ? '순서' : 'sequence',
+                              })[reason]).join(' · ')}
+                            </span>
+                          )}
+                        </div>
                       )}
                     </article>
                   )}

@@ -18,7 +18,11 @@ import { cn } from '@/lib/utils';
 import { createStandbyBrowserApi, StandbyApiError } from '@/lib/standby-api';
 import { useNavigate } from '@tanstack/react-router';
 import { useI18n } from '@/lib/i18n';
-import { buildScriptSidebarEntries, unlinkedScriptSegments } from '@/lib/script-projection';
+import {
+  buildScriptSidebarEntries,
+  recommendScriptEventLinks,
+  unlinkedScriptSegments,
+} from '@/lib/script-projection';
 import { cueSheetCsv } from '@/lib/cue-sheet-csv';
 import type { ScriptEventLinks, ScriptProjection } from '@/types/script';
 
@@ -192,6 +196,11 @@ export function WorkspaceScreen() {
     : editorCueSheet?.cues.flatMap((cue) => cue.events.map((event) => ({
       eventId: event.event_id,
       sceneLabel: cue.scene_number,
+      triggerText: event.trigger.description,
+      entityNames: [
+        event.trigger.character_id,
+        ...event.actions.map((action) => action.character_id ?? action.prop_id),
+      ].filter((value): value is string => Boolean(value)),
     }))) ?? [], [editorCueSheet, verifiedWorkspace]);
   const scriptEntries = useMemo(
     () => buildScriptSidebarEntries(script, scriptTimelineEvents, scriptLinks),
@@ -199,6 +208,10 @@ export function WorkspaceScreen() {
   );
   const unlinkedSegments = useMemo(
     () => unlinkedScriptSegments(script, scriptTimelineEvents, scriptLinks),
+    [script, scriptLinks, scriptTimelineEvents],
+  );
+  const scriptRecommendations = useMemo(
+    () => recommendScriptEventLinks(script, scriptTimelineEvents, scriptLinks),
     [script, scriptLinks, scriptTimelineEvents],
   );
 
@@ -292,6 +305,13 @@ export function WorkspaceScreen() {
 
   const linkScriptSegment = (segmentId: string, eventId: string) => {
     setScriptLinks((current) => ({ ...current, [segmentId]: eventId }));
+  };
+
+  const applyScriptRecommendations = () => {
+    setScriptLinks((current) => ({
+      ...current,
+      ...Object.fromEntries(scriptRecommendations.map((item) => [item.segmentId, item.eventId])),
+    }));
   };
   const entities = useMemo<StageEntity[]>(() => {
     if (!editorCueSheet || !selectedCue) return [];
@@ -396,9 +416,11 @@ export function WorkspaceScreen() {
         script={script}
         scriptEntries={scriptEntries}
         unlinkedScriptSegments={unlinkedSegments}
+        scriptRecommendations={scriptRecommendations}
         scriptBusy={scriptBusy}
         scriptError={scriptError}
         onLinkScriptSegment={linkScriptSegment}
+        onApplyScriptRecommendations={applyScriptRecommendations}
         onScriptFile={(file) => void connectScript(file)}
         storyboardState={storyboardState}
         onStoryboardRequest={(eventId) => void requestStoryboard(eventId)}
@@ -560,11 +582,13 @@ export function WorkspaceScreen() {
           entries={scriptEntries}
           script={script}
           unlinkedSegments={unlinkedSegments}
+          recommendations={scriptRecommendations}
           busy={scriptBusy}
           error={scriptError}
           selectedEventId={selectedEventId}
           onScriptFile={(file) => void connectScript(file)}
           onLinkSegment={linkScriptSegment}
+          onApplyRecommendations={applyScriptRecommendations}
           onSelectEvent={(eventId) => {
             const target = timelineEvents.find((item) => item.event.event_id === eventId);
             if (target) handleSelectEvent(target.cueId, eventId);
